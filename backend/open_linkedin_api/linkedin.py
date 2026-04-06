@@ -350,7 +350,7 @@ class Linkedin(object):
                 self.logger.warning("[SEARCH] No searchDashClustersByAll found. inner keys: %s, data.data keys: %s",
                                     list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__,
                                     list(data.get("data", {}).keys()) if isinstance(data.get("data"), dict) else "N/A")
-                return []
+                break  # Don't wipe accumulated results — just stop paginating
 
             # Accept both _type and $type fields
             cluster_type = data_clusters.get("_type") or data_clusters.get("$type", "")
@@ -361,7 +361,7 @@ class Linkedin(object):
             ):
                 # Also accept if paging exists (valid response structure)
                 if not data_clusters.get("paging"):
-                    return []
+                    break
 
             new_elements = []
             for it in data_clusters.get("elements", []):
