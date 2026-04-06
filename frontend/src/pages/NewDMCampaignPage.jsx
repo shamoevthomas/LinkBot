@@ -23,8 +23,6 @@ export default function NewDMCampaignPage() {
   const [extracting, setExtracting] = useState(false);
   const [useAi, setUseAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [maxPerDay, setMaxPerDay] = useState(connectionConfig?.max_per_day || 25);
-  const [spreadDays, setSpreadDays] = useState(connectionConfig?.spread_over_days || 5);
   const [delayMinutes, setDelayMinutes] = useState(2);
 
   // Step 2
@@ -195,9 +193,7 @@ export default function NewDMCampaignPage() {
         use_ai: mode === 'full' ? true : useAi,
         full_personalize: mode === 'full',
         messages: msgPayload,
-        total_target: connectionConfig?.total_target || totalContacts,
-        max_per_day: maxPerDay,
-        spread_over_days: spreadDays,
+        total_target: totalContacts,
         delay_minutes: delayMinutes,
       };
       if (connectionConfig) {
@@ -274,24 +270,12 @@ export default function NewDMCampaignPage() {
                 {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Delai entre actions</label>
-                <div className="flex items-center gap-2">
-                  <input type="number" value={delayMinutes} onChange={(e) => setDelayMinutes(Math.max(1, parseInt(e.target.value) || 2))}
-                    min={1} max={60} className="input-glass w-full" />
-                  <span className="text-sm text-gray-500 whitespace-nowrap">min</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Max / jour</label>
-                <input type="number" value={maxPerDay} onChange={(e) => setMaxPerDay(parseInt(e.target.value) || 25)}
-                  min={1} className="input-glass w-full" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Etaler sur (jours)</label>
-                <input type="number" value={spreadDays} onChange={(e) => setSpreadDays(parseInt(e.target.value) || 5)}
-                  min={1} className="input-glass w-full" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Delai entre actions</label>
+              <div className="flex items-center gap-2">
+                <input type="number" value={delayMinutes} onChange={(e) => setDelayMinutes(Math.max(1, parseInt(e.target.value) || 2))}
+                  min={1} max={60} className="input-glass w-24" />
+                <span className="text-sm text-gray-500 whitespace-nowrap">minutes</span>
               </div>
             </div>
           </div>

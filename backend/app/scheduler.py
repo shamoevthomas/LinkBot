@@ -152,8 +152,6 @@ def _job_id(campaign_id: int) -> str:
 def schedule_campaign_job(
     campaign_id: int,
     campaign_type: str,
-    total_target: int,
-    spread_over_days: int,
     interval_seconds: Optional[int] = None,
 ) -> None:
     """Register (or replace) an interval job for the given campaign.
@@ -168,31 +166,31 @@ def schedule_campaign_job(
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
 
-    # Check if schedule mode is enabled — use window-based random interval
-    schedule_interval = _get_schedule_interval(
-        total_target // max(1, spread_over_days) if not interval_seconds else
-        total_target // max(1, spread_over_days)
-    )
+    # Determine global daily limit for this campaign type
+    from app.database import SessionLocal
+    from app.models import AppSettings
+    db = SessionLocal()
+    try:
+        limit_key = "max_dms_per_day" if campaign_type in ("dm",) else "max_connections_per_day"
+        row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
+        daily_limit = int(row.value) if row else 25
 
-    if schedule_interval and not interval_seconds:
-        interval = schedule_interval
-        # 50% jitter for truly random human-like behavior
-        jitter = max(15, int(interval * 0.5))
-    else:
-        # Fallback: use global delay_between_actions or calculate
-        if not interval_seconds:
-            from app.database import SessionLocal
-            from app.models import AppSettings
-            db = SessionLocal()
-            try:
+        # Check if schedule mode is enabled — use window-based random interval
+        schedule_interval = _get_schedule_interval(daily_limit)
+
+        if schedule_interval and not interval_seconds:
+            interval = schedule_interval
+            jitter = max(15, int(interval * 0.5))
+        else:
+            if not interval_seconds:
                 row = db.query(AppSettings).filter(AppSettings.key == "delay_between_actions").first()
                 if row:
                     interval_seconds = int(row.value) * 60
-            finally:
-                db.close()
 
-        interval = interval_seconds or _calculate_interval_seconds(total_target, spread_over_days)
-        jitter = max(10, int(interval * 0.3))
+            interval = interval_seconds or 120  # default 2 min
+            jitter = max(10, int(interval * 0.3))
+    finally:
+        db.close()
 
     # Import runners lazily to avoid circular imports.
     if campaign_type == "search":
@@ -290,6 +288,29 @@ def is_within_schedule(db_session=None) -> bool:
         else:
             # Overnight window (e.g. 22:00 -> 06:00)
             return current_minutes >= start_minutes or current_minutes < end_minutes
+    finally:
+        if not db_session:
+            db.close()
+
+
+def get_global_actions_today(action_types: list, db_session=None) -> int:
+    """Count today's successful actions across ALL campaigns."""
+    from datetime import datetime, date as _date
+    from sqlalchemy import func
+    from app.database import SessionLocal
+    from app.models import CampaignAction
+
+    db = db_session or SessionLocal()
+    try:
+        today_start = datetime.combine(_date.today(), datetime.min.time())
+        count = db.query(func.count(CampaignAction.id)).filter(
+            CampaignAction.action_type.in_(action_types),
+            CampaignAction.status == "success",
+            CampaignAction.created_at >= today_start,
+        ).scalar() or 0
+        return count
+    except Exception:
+        return 0
     finally:
         if not db_session:
             db.close()

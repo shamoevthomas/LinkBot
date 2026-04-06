@@ -8,12 +8,12 @@ target is reached.
 """
 
 import logging
-from datetime import date, datetime
+from datetime import datetime
 
 from app.database import SessionLocal
 from app.models import Campaign, CampaignAction, Contact, AppSettings, User, Blacklist
 from app.linkedin_service import get_linkedin_client, search_people
-from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit
+from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
 
 logger = logging.getLogger(__name__)
 
@@ -38,20 +38,14 @@ async def run_search_campaign(campaign_id: int) -> None:
         if not is_within_schedule(db):
             return
 
-        # --- daily limit check ---
-        today = date.today()
-        if campaign.last_action_date != today:
-            campaign.actions_today = 0
-            campaign.last_action_date = today
-
-        raw_limit = campaign.max_per_day
-        if not raw_limit:
-            row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
-            raw_limit = int(row.value) if row else 50
+        # --- global daily limit check ---
+        row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
+        raw_limit = int(row.value) if row else 50
         max_per_day = get_effective_daily_limit(raw_limit, db)
 
-        if campaign.actions_today >= max_per_day:
-            logger.info("Campaign %d hit daily limit (%d), skipping", campaign_id, max_per_day)
+        global_today = get_global_actions_today(["search_add"], db)
+        if global_today >= max_per_day:
+            logger.info("Global search limit reached (%d/%d), skipping campaign %d", global_today, max_per_day, campaign_id)
             return
 
         # --- total target check ---
@@ -75,7 +69,7 @@ async def run_search_campaign(campaign_id: int) -> None:
 
         # --- perform search ---
         remaining = (campaign.total_target or 50) - (campaign.total_succeeded or 0)
-        batch = min(_BATCH_SIZE, remaining, max_per_day - campaign.actions_today)
+        batch = min(_BATCH_SIZE, remaining, max_per_day - global_today)
         if batch <= 0:
             return
 
@@ -153,7 +147,6 @@ async def run_search_campaign(campaign_id: int) -> None:
         campaign.total_processed = (campaign.total_processed or 0) + added + skipped
         campaign.total_succeeded = (campaign.total_succeeded or 0) + added
         campaign.total_skipped = (campaign.total_skipped or 0) + skipped
-        campaign.actions_today = (campaign.actions_today or 0) + added
 
         # Check completion
         if campaign.total_target and campaign.total_succeeded >= campaign.total_target:

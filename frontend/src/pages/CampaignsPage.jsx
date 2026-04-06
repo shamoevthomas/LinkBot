@@ -23,7 +23,7 @@ export default function CampaignsPage() {
   const [showNew, setShowNew] = useState(null); // 'search' | 'dm' | 'connection' | null
   const [showDropdown, setShowDropdown] = useState(false);
   const [crms, setCrms] = useState([]);
-  const [form, setForm] = useState({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, max_per_day: 25, spread_over_days: 5, targetMode: 'spread', withDM: false });
+  const [form, setForm] = useState({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false });
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ export default function CampaignsPage() {
 
   const openNew = async (type) => {
     setCrms(await getCRMs());
-    setForm({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, max_per_day: type === 'dm' ? 50 : 25, spread_over_days: 5, targetMode: 'spread' });
+    setForm({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100 });
     setShowNew(type);
     setShowDropdown(false);
   };
@@ -52,22 +52,11 @@ export default function CampaignsPage() {
     e.preventDefault();
     setCreating(true);
     try {
-      const maxDay = parseInt(form.max_per_day) || 25;
-      const spreadDays = parseInt(form.spread_over_days) || 5;
-      const totalTarget = form.targetMode === 'spread'
-        ? maxDay * spreadDays
-        : parseInt(form.total_target) || 100;
-      const computedSpread = form.targetMode === 'total'
-        ? Math.ceil(totalTarget / maxDay)
-        : spreadDays;
-
       await createCampaign({
         ...form,
         type: showNew,
         crm_id: form.crm_id ? parseInt(form.crm_id) : null,
-        total_target: totalTarget,
-        max_per_day: maxDay,
-        spread_over_days: computedSpread,
+        total_target: parseInt(form.total_target) || 100,
         use_ai: form.use_ai,
       });
       toast.success('Campagne créée et lancée');
@@ -247,56 +236,10 @@ export default function CampaignsPage() {
             </label>
           )}
 
-          {/* Target mode switch */}
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-            <button type="button" onClick={() => set('targetMode', 'spread')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                form.targetMode === 'spread' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}>Étalement</button>
-            <button type="button" onClick={() => set('targetMode', 'total')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                form.targetMode === 'total' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}>Total</button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max par jour</label>
-              <input type="number" value={form.max_per_day} onChange={(e) => set('max_per_day', e.target.value)}
-                className="input-glass" min={1} />
-            </div>
-            {form.targetMode === 'spread' ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Étaler sur (jours)</label>
-                <input type="number" value={form.spread_over_days} onChange={(e) => set('spread_over_days', e.target.value)}
-                  className="input-glass" min={1} />
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Total à envoyer</label>
-                <input type="number" value={form.total_target} onChange={(e) => set('total_target', e.target.value)}
-                  className="input-glass" min={1} />
-              </div>
-            )}
-          </div>
-
-          {/* Computed summary */}
-          <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-            {form.targetMode === 'spread'
-              ? <>Total : <strong>{(parseInt(form.max_per_day) || 0) * (parseInt(form.spread_over_days) || 0)}</strong> actions ({form.max_per_day}/j pendant {form.spread_over_days} jours)</>
-              : <>Durée : <strong>{Math.ceil((parseInt(form.total_target) || 0) / (parseInt(form.max_per_day) || 1))}</strong> jours ({form.total_target} actions à {form.max_per_day}/j)</>
-            }
-          </p>
-
           {showNew === 'connection' && form.withDM ? (
             <button type="button" onClick={() => {
               if (!form.name.trim()) return toast.error('Donne un nom à la campagne');
               if (!form.crm_id) return toast.error('Sélectionne un CRM');
-              const maxDay = parseInt(form.max_per_day) || 25;
-              const spreadDays = parseInt(form.spread_over_days) || 5;
-              const totalTarget = form.targetMode === 'spread'
-                ? maxDay * spreadDays
-                : parseInt(form.total_target) || 100;
               setShowNew(null);
               navigate('/dashboard/campaigns/new-dm', {
                 state: {
@@ -304,9 +247,6 @@ export default function CampaignsPage() {
                     name: form.name,
                     keywords: form.keywords,
                     crm_id: parseInt(form.crm_id),
-                    total_target: totalTarget,
-                    max_per_day: maxDay,
-                    spread_over_days: form.targetMode === 'total' ? Math.ceil(totalTarget / maxDay) : spreadDays,
                   },
                 },
               });

@@ -168,7 +168,6 @@ def create_campaign(
         )
 
     total_target = body.total_target or 50
-    spread_over_days = body.spread_over_days or 5
 
     campaign = Campaign(
         name=body.name,
@@ -179,8 +178,6 @@ def create_campaign(
         message_template=body.message_template,
         use_ai=body.use_ai,
         total_target=total_target,
-        max_per_day=body.max_per_day,
-        spread_over_days=spread_over_days,
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -191,8 +188,6 @@ def create_campaign(
     schedule_campaign_job(
         campaign_id=campaign.id,
         campaign_type=campaign.type,
-        total_target=total_target,
-        spread_over_days=spread_over_days,
     )
 
     return _campaign_to_response(campaign, db)
@@ -242,7 +237,6 @@ def create_dm_campaign(
         main_template = ""
 
     total_target = body.total_target or 50
-    spread_over_days = body.spread_over_days or 5
 
     followup_count = len(body.messages) - 1 if body.messages else 0
 
@@ -260,8 +254,6 @@ def create_dm_campaign(
         context_text=body.context_text,
         ai_prompt=body.ai_prompt,
         total_target=total_target,
-        max_per_day=body.max_per_day,
-        spread_over_days=spread_over_days,
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -285,8 +277,6 @@ def create_dm_campaign(
     schedule_campaign_job(
         campaign_id=campaign.id,
         campaign_type=campaign_type,
-        total_target=total_target,
-        spread_over_days=spread_over_days,
         interval_seconds=delay_seconds,
     )
 
@@ -539,8 +529,6 @@ def duplicate_campaign(
         context_text=original.context_text,
         ai_prompt=original.ai_prompt,
         total_target=original.total_target,
-        max_per_day=original.max_per_day,
-        spread_over_days=original.spread_over_days,
     )
     db.add(new_campaign)
     db.flush()

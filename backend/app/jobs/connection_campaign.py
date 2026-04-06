@@ -8,14 +8,14 @@ request (optionally with a personalised note).
 
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import datetime
 
 from app.database import SessionLocal
 from app.models import Campaign, CampaignAction, Contact, AppSettings, User, Blacklist
 from app.linkedin_service import get_linkedin_client, send_connection_request
 from app.utils.template_engine import render_template
 from app.utils.ai_message import generate_personalized_message
-from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit
+from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +37,14 @@ async def run_connection_campaign(campaign_id: int) -> None:
         if not is_within_schedule(db):
             return
 
-        # --- daily limit check ---
-        today = date.today()
-        if campaign.last_action_date != today:
-            campaign.actions_today = 0
-            campaign.last_action_date = today
-
-        raw_limit = campaign.max_per_day
-        if not raw_limit:
-            row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
-            raw_limit = int(row.value) if row else 25
+        # --- global daily limit check ---
+        row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
+        raw_limit = int(row.value) if row else 25
         max_per_day = get_effective_daily_limit(raw_limit, db)
 
-        if campaign.actions_today >= max_per_day:
-            logger.info("Campaign %d hit daily connection limit (%d), skipping", campaign_id, max_per_day)
+        global_today = get_global_actions_today(["connection_request"], db)
+        if global_today >= max_per_day:
+            logger.info("Global connection limit reached (%d/%d), skipping campaign %d", global_today, max_per_day, campaign_id)
             return
 
         # --- total target check ---
@@ -164,7 +158,6 @@ async def run_connection_campaign(campaign_id: int) -> None:
         _log_action(db, campaign.id, contact.id, "connection_request", "success")
         campaign.total_processed = (campaign.total_processed or 0) + 1
         campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
-        campaign.actions_today = (campaign.actions_today or 0) + 1
 
         # Check completion
         if campaign.total_target and campaign.total_processed >= campaign.total_target:

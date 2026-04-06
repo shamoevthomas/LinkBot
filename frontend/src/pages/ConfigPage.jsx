@@ -359,7 +359,8 @@ export default function ConfigPage() {
           <div className="max-w-lg space-y-6">
             {/* Limites */}
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Limites quotidiennes</h3>
+              <h3 className="font-semibold text-gray-900 mb-1">Limites quotidiennes</h3>
+              <p className="text-xs text-gray-500 mb-3">Ces limites s'appliquent au total de toutes les campagnes actives combinées.</p>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Max connexions par jour</label>
@@ -371,12 +372,6 @@ export default function ConfigPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Max messages par jour</label>
                   <input type="number" value={settings.max_dms_per_day || ''}
                     onChange={(e) => setSettings({ ...settings, max_dms_per_day: e.target.value })}
-                    className="input-glass w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Étalement par défaut (jours)</label>
-                  <input type="number" value={settings.default_spread_days || ''}
-                    onChange={(e) => setSettings({ ...settings, default_spread_days: e.target.value })}
                     className="input-glass w-full" />
                 </div>
               </div>
@@ -506,7 +501,7 @@ export default function ConfigPage() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={blacklistSearch} onChange={(e) => { setBlacklistSearch(e.target.value); setBlacklistPage(1); }}
                 placeholder="Rechercher..."
-                className="input-glass w-full pl-9" />
+                className="input-glass w-full pl-10" />
             </div>
 
             {blacklistItems.length === 0 ? (

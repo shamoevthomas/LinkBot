@@ -45,6 +45,7 @@ export default function CRMDetailPage() {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
   const [exporting, setExporting] = useState(false);
+  const [allSelected, setAllSelected] = useState(false);
 
   // Add contact state
   const [addMode, setAddMode] = useState('search'); // 'search' | 'url'
@@ -87,11 +88,30 @@ export default function CRMDetailPage() {
     const s = new Set(selected);
     s.has(cid) ? s.delete(cid) : s.add(cid);
     setSelected(s);
+    setAllSelected(false);
   };
 
   const toggleAll = () => {
-    if (selected.size === contacts.length) setSelected(new Set());
-    else setSelected(new Set(contacts.map((c) => c.id)));
+    if (selected.size === contacts.length) {
+      setSelected(new Set());
+      setAllSelected(false);
+    } else {
+      setSelected(new Set(contacts.map((c) => c.id)));
+    }
+  };
+
+  const selectAllContacts = async () => {
+    try {
+      const params = { page: 1, per_page: 10000, search, connection_status: statusFilter };
+      if (headlineSearch) params.headline_search = headlineSearch;
+      if (locationSearch) params.location_search = locationSearch;
+      if (addedAfter) params.added_after = addedAfter;
+      if (addedBefore) params.added_before = addedBefore;
+      if (tagFilter) params.tag_id = tagFilter;
+      const data = await getContacts(id, params);
+      setSelected(new Set((data.contacts || []).map((c) => c.id)));
+      setAllSelected(true);
+    } catch { /* ignore */ }
   };
 
   const handleDelete = async () => {
@@ -321,7 +341,7 @@ export default function CRMDetailPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Rechercher un contact..."
-            className="input-glass w-full pl-9 pr-3 py-2 text-sm" />
+            className="input-glass w-full pl-10 pr-3 py-2 text-sm" />
         </div>
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="input-glass px-2 py-2 text-sm max-w-[140px]">
@@ -369,6 +389,24 @@ export default function CRMDetailPage() {
       )}
 
       {!showFilters && <div className="mb-4" />}
+
+      {/* Select all banner */}
+      {selected.size === contacts.length && contacts.length > 0 && total > perPage && !allSelected && (
+        <div className="text-center py-2 mb-2 rounded-lg text-sm" style={{ background: 'rgba(0,132,255,0.06)', color: 'var(--blue)' }}>
+          Les {contacts.length} contacts de cette page sont sélectionnés.{' '}
+          <button onClick={selectAllContacts} className="font-semibold underline cursor-pointer" style={{ background: 'none', border: 'none', color: 'var(--blue)' }}>
+            Sélectionner les {total} contacts
+          </button>
+        </div>
+      )}
+      {allSelected && (
+        <div className="text-center py-2 mb-2 rounded-lg text-sm font-medium" style={{ background: 'rgba(0,132,255,0.06)', color: 'var(--blue)' }}>
+          Les {selected.size} contacts sont sélectionnés.{' '}
+          <button onClick={() => { setSelected(new Set()); setAllSelected(false); }} className="font-semibold underline cursor-pointer" style={{ background: 'none', border: 'none', color: 'var(--blue)' }}>
+            Annuler
+          </button>
+        </div>
+      )}
 
       {/* Bulk actions */}
       {selected.size > 0 && (

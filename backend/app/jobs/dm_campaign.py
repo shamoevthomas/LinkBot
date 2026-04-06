@@ -11,7 +11,7 @@ Each tick:
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from app.database import SessionLocal
 from app.models import (
@@ -26,7 +26,7 @@ from app.utils.template_engine import render_template
 from app.utils.ai_message import (
     generate_compliment, generate_full_personalized_messages, extract_post_texts,
 )
-from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit
+from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
 
 logger = logging.getLogger(__name__)
 
@@ -49,17 +49,13 @@ async def run_dm_campaign(campaign_id: int) -> None:
         if not is_within_schedule(db):
             return
 
-        # --- daily limit ---
-        today = date.today()
-        if campaign.last_action_date != today:
-            campaign.actions_today = 0
-            campaign.last_action_date = today
-
-        raw_limit = campaign.max_per_day
-        if not raw_limit:
-            row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
-            raw_limit = int(row.value) if row else 50
+        # --- global daily limit ---
+        row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
+        raw_limit = int(row.value) if row else 50
         max_per_day = get_effective_daily_limit(raw_limit, db)
+
+        dm_action_types = ["dm_send"] + [f"followup_{i}" for i in range(1, 8)]
+        global_today = get_global_actions_today(dm_action_types, db)
 
         # --- get LinkedIn client ---
         user = db.query(User).first()
@@ -119,7 +115,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 2: Send follow-ups where delay has been reached
         # =====================================================================
-        if campaign.actions_today < max_per_day and followups:
+        if global_today < max_per_day and followups:
             for cc in (
                 db.query(CampaignContact)
                 .filter(
@@ -130,7 +126,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 .order_by(CampaignContact.last_sent_at.asc())
                 .all()
             ):
-                if campaign.actions_today >= max_per_day:
+                if get_global_actions_today(dm_action_types, db) >= max_per_day:
                     break
 
                 next_seq = cc.last_sequence_sent + 1
@@ -177,7 +173,6 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     cc.last_sequence_sent = next_seq
                     cc.last_sent_at = datetime.utcnow()
                     cc.status = f"relance_{next_seq}"
-                    campaign.actions_today = (campaign.actions_today or 0) + 1
                     contact.last_interaction_at = datetime.utcnow()
                     _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "success")
                     logger.info("Campaign %d: followup %d sent to contact %d", campaign_id, next_seq, contact.id)
@@ -227,7 +222,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 4: Send main message to next unprocessed contact
         # =====================================================================
-        if campaign.actions_today < max_per_day:
+        if get_global_actions_today(dm_action_types, db) < max_per_day:
             total_sent = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
             ).count()
@@ -279,7 +274,6 @@ async def run_dm_campaign(campaign_id: int) -> None:
                             last_sent_at=datetime.utcnow(),
                         )
                         db.add(cc)
-                        campaign.actions_today = (campaign.actions_today or 0) + 1
                         campaign.total_processed = (campaign.total_processed or 0) + 1
                         contact.last_interaction_at = datetime.utcnow()
                         _log_action(db, campaign_id, contact.id, "dm_send", "success")

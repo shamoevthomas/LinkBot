@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Rocket, Settings, LogOut, Link } from 'lucide-react';
+import { LayoutDashboard, Users, Rocket, Settings, Link } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getNotifications } from '../../api/dashboard';
+import UserPopup from '../ui/UserPopup';
 
 const links = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', end: true },
@@ -12,7 +13,7 @@ const links = [
 ];
 
 export default function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [notifs, setNotifs] = useState({});
 
   useEffect(() => {
@@ -86,27 +87,9 @@ export default function Sidebar() {
           ))}
         </div>
 
-        {/* User */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 8 }}>
-          {user?.profile_picture_path ? (
-            <img src={user.profile_picture_path} alt="" style={{ width: 32, height: 32, borderRadius: 99, objectFit: 'cover' }} />
-          ) : (
-            <div style={{
-              width: 32, height: 32, borderRadius: 99,
-              background: 'rgba(0,132,255,0.1)', color: 'var(--blue)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 700,
-            }}>
-              {user?.first_name?.[0] || 'U'}{user?.last_name?.[0] || ''}
-            </div>
-          )}
-          <button onClick={logout} style={{
-            padding: 6, borderRadius: 10, border: 'none',
-            background: 'transparent', cursor: 'pointer', color: 'var(--text3)',
-            display: 'flex', alignItems: 'center',
-          }}>
-            <LogOut size={17} />
-          </button>
+        {/* User popup */}
+        <div style={{ marginLeft: 8 }}>
+          <UserPopup />
         </div>
       </div>
     </nav>
