@@ -412,7 +412,29 @@ export default function ConfigPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500">Désactivé — les campagnes tournent en continu. Le délai entre les actions est calculé automatiquement à partir de vos limites quotidiennes.</p>
+                <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-xs text-gray-500">Les campagnes tournent en continu. Définissez l'intervalle entre chaque action (un délai aléatoire dans cette fourchette sera appliqué pour simuler un comportement humain).</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Min (minutes)</label>
+                      <input type="number" min="1" value={settings.action_interval_min || ''}
+                        onChange={(e) => setSettings({ ...settings, action_interval_min: e.target.value })}
+                        placeholder="2"
+                        className="input-glass w-full" />
+                    </div>
+                    <span className="text-gray-400 mt-5">—</span>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Max (minutes)</label>
+                      <input type="number" min="1" value={settings.action_interval_max || ''}
+                        onChange={(e) => setSettings({ ...settings, action_interval_max: e.target.value })}
+                        placeholder="5"
+                        className="input-glass w-full" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Une action toutes les {settings.action_interval_min || 2} à {settings.action_interval_max || 5} minutes
+                  </p>
+                </div>
               )}
             </div>
 

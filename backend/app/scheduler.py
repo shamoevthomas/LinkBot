@@ -207,8 +207,15 @@ def schedule_campaign_job(
             interval = schedule_interval
             jitter = max(15, int(interval * 0.5))
         else:
-            interval = max(30, 86400 // max(1, daily_limit))
-            jitter = max(10, int(interval * 0.3))
+            # Use user-configured interval range (in minutes)
+            min_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_min").first()
+            max_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_max").first()
+            interval_min = int(min_row.value) * 60 if min_row and min_row.value else 120  # 2 min default
+            interval_max = int(max_row.value) * 60 if max_row and max_row.value else 300  # 5 min default
+            if interval_max < interval_min:
+                interval_max = interval_min
+            interval = interval_min
+            jitter = max(0, interval_max - interval_min)
     finally:
         db.close()
 

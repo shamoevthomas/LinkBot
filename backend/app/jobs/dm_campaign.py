@@ -230,85 +230,101 @@ async def run_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 4: Send main message to next unprocessed contact
         # =====================================================================
-        if get_global_actions_today(dm_action_types, db) < max_per_day:
+        while get_global_actions_today(dm_action_types, db) < max_per_day:
             total_sent = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
             ).count()
 
-            if not campaign.total_target or total_sent < campaign.total_target:
-                already_ids = (
-                    db.query(CampaignContact.contact_id)
-                    .filter(CampaignContact.campaign_id == campaign_id)
-                    .subquery()
+            if campaign.total_target and total_sent >= campaign.total_target:
+                break
+
+            already_ids = (
+                db.query(CampaignContact.contact_id)
+                .filter(CampaignContact.campaign_id == campaign_id)
+                .subquery()
+            )
+            contact = (
+                db.query(Contact)
+                .filter(
+                    Contact.crm_id == campaign.crm_id,
+                    ~Contact.id.in_(already_ids),
                 )
-                contact = (
-                    db.query(Contact)
-                    .filter(
-                        Contact.crm_id == campaign.crm_id,
-                        ~Contact.id.in_(already_ids),
-                    )
-                    .order_by(Contact.added_at.asc())
-                    .first()
+                .order_by(Contact.added_at.asc())
+                .first()
+            )
+
+            if not contact:
+                break
+
+            # Skip if already in this campaign (race condition guard)
+            already = db.query(CampaignContact).filter(
+                CampaignContact.campaign_id == campaign_id,
+                CampaignContact.contact_id == contact.id,
+            ).first()
+            if already:
+                continue
+
+            # Blacklist check — skip and continue immediately
+            if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id).first():
+                _log_action(db, campaign_id, contact.id, "dm_send", "skipped", "Blacklisted")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_skipped = (campaign.total_skipped or 0) + 1
+                # Mark in CampaignContact so it won't be picked again
+                db.add(CampaignContact(
+                    campaign_id=campaign_id, contact_id=contact.id,
+                    status="perdu", last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                ))
+                db.commit()
+                continue
+
+            # Resolve URN if missing or potentially invalid
+            resolved_urn = await resolve_contact_urn(client, contact)
+            if not resolved_urn:
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Could not resolve LinkedIn URN")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.add(CampaignContact(
+                    campaign_id=campaign_id, contact_id=contact.id,
+                    status="perdu", last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                ))
+                db.commit()
+                continue
+
+            template = campaign.message_template or ""
+            message_body = await _render_message(campaign, template, contact, client)
+
+            try:
+                success = await send_message(client, contact.urn_id, message_body)
+            except Exception as exc:
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", str(exc)[:500])
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.commit()
+                break  # Stop on error — wait for next tick
+
+            if success:
+                cc = CampaignContact(
+                    campaign_id=campaign_id,
+                    contact_id=contact.id,
+                    status="envoye",
+                    last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(),
+                    last_sent_at=datetime.utcnow(),
                 )
+                db.add(cc)
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                contact.last_interaction_at = datetime.utcnow()
+                _log_action(db, campaign_id, contact.id, "dm_send", "success")
+                logger.info("Campaign %d: main DM sent to contact %d", campaign_id, contact.id)
+            else:
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", "LinkedIn returned error")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
 
-                if contact:
-                    # Skip if already in this campaign (race condition guard)
-                    already = db.query(CampaignContact).filter(
-                        CampaignContact.campaign_id == campaign_id,
-                        CampaignContact.contact_id == contact.id,
-                    ).first()
-                    if already:
-                        return
-
-                    # Resolve URN if missing or potentially invalid
-                    resolved_urn = await resolve_contact_urn(client, contact)
-                    if not resolved_urn:
-                        _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Could not resolve LinkedIn URN")
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        campaign.total_failed = (campaign.total_failed or 0) + 1
-                        db.commit()
-                        return
-
-                    # Blacklist check
-                    if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id).first():
-                        _log_action(db, campaign_id, contact.id, "dm_send", "skipped", "Blacklisted")
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        campaign.total_skipped = (campaign.total_skipped or 0) + 1
-                        db.commit()
-                        return
-
-                    template = campaign.message_template or ""
-                    message_body = await _render_message(campaign, template, contact, client)
-
-                    try:
-                        success = await send_message(client, contact.urn_id, message_body)
-                    except Exception as exc:
-                        _log_action(db, campaign_id, contact.id, "dm_send", "failed", str(exc)[:500])
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        campaign.total_failed = (campaign.total_failed or 0) + 1
-                        db.commit()
-                        return
-
-                    if success:
-                        cc = CampaignContact(
-                            campaign_id=campaign_id,
-                            contact_id=contact.id,
-                            status="envoye",
-                            last_sequence_sent=0,
-                            main_sent_at=datetime.utcnow(),
-                            last_sent_at=datetime.utcnow(),
-                        )
-                        db.add(cc)
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        contact.last_interaction_at = datetime.utcnow()
-                        _log_action(db, campaign_id, contact.id, "dm_send", "success")
-                        logger.info("Campaign %d: main DM sent to contact %d", campaign_id, contact.id)
-                    else:
-                        _log_action(db, campaign_id, contact.id, "dm_send", "failed", "LinkedIn returned error")
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        campaign.total_failed = (campaign.total_failed or 0) + 1
-
-                    db.commit()
+            db.commit()
+            break  # Sent one real message — wait for next tick
 
         # =====================================================================
         # PHASE 5: Check campaign completion

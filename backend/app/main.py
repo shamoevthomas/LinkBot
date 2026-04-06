@@ -47,6 +47,8 @@ def seed_db():
             "warmup_target_limit": "25",
             "warmup_days": "7",
             "warmup_started_at": "",
+            "action_interval_min": "2",
+            "action_interval_max": "5",
         }
         for key, value in defaults.items():
             existing = db.query(AppSettings).filter(AppSettings.key == key).first()

@@ -203,6 +203,8 @@ class SettingsUpdate(BaseModel):
     warmup_start_limit: Optional[int] = None
     warmup_target_limit: Optional[int] = None
     warmup_days: Optional[int] = None
+    action_interval_min: Optional[int] = None  # minutes
+    action_interval_max: Optional[int] = None  # minutes
 
 class SendMessageRequest(BaseModel):
     message: str

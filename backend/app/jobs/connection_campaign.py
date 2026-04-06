@@ -67,126 +67,143 @@ async def run_connection_campaign(campaign_id: int) -> None:
 
         client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
 
-        # --- pick next contact ---
-        already_requested_ids = (
-            db.query(CampaignAction.contact_id)
-            .filter(
-                CampaignAction.campaign_id == campaign_id,
-                CampaignAction.action_type == "connection_request",
-                CampaignAction.status.in_(["success", "skipped"]),
-            )
-            .subquery()
-        )
+        # --- pick next contact (loop to skip already-processed contacts) ---
+        while True:
+            # Check daily limit each iteration
+            global_today = get_global_actions_today(["connection_request"], db)
+            if global_today >= max_per_day:
+                logger.info("Global connection limit reached (%d/%d), stopping campaign %d", global_today, max_per_day, campaign_id)
+                break
 
-        contact = (
-            db.query(Contact)
-            .filter(
-                Contact.crm_id == campaign.crm_id,
-                ~Contact.id.in_(already_requested_ids),
-            )
-            .order_by(Contact.added_at.asc())
-            .first()
-        )
+            # Check total target
+            if campaign.total_target and campaign.total_processed >= campaign.total_target:
+                campaign.status = "completed"
+                campaign.completed_at = datetime.utcnow()
+                db.commit()
+                cancel_campaign_job(campaign_id)
+                break
 
-        if contact:
+            already_requested_ids = (
+                db.query(CampaignAction.contact_id)
+                .filter(
+                    CampaignAction.campaign_id == campaign_id,
+                    CampaignAction.action_type == "connection_request",
+                    CampaignAction.status.in_(["success", "skipped"]),
+                )
+                .subquery()
+            )
+
+            contact = (
+                db.query(Contact)
+                .filter(
+                    Contact.crm_id == campaign.crm_id,
+                    ~Contact.id.in_(already_requested_ids),
+                )
+                .order_by(Contact.added_at.asc())
+                .first()
+            )
+
+            if not contact:
+                campaign.status = "completed"
+                campaign.completed_at = datetime.utcnow()
+                campaign.error_message = "No more contacts to request"
+                db.commit()
+                cancel_campaign_job(campaign_id)
+                break
+
             # Race condition guard
             from app.models import CampaignContact as _CC
             if db.query(_CC).filter(_CC.campaign_id == campaign_id, _CC.contact_id == contact.id).first():
-                return
+                continue
 
-        if not contact:
-            campaign.status = "completed"
-            campaign.completed_at = datetime.utcnow()
-            campaign.error_message = "No more contacts to request"
-            db.commit()
-            cancel_campaign_job(campaign_id)
-            return
+            # --- blacklist check (skip and continue immediately) ---
+            if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id).first():
+                _log_action(db, campaign.id, contact.id, "connection_request", "skipped", "Blacklisted")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_skipped = (campaign.total_skipped or 0) + 1
+                db.commit()
+                continue
 
-        # --- resolve URN ---
-        resolved_urn = await resolve_contact_urn(client, contact)
-        if not resolved_urn:
-            _log_action(db, campaign.id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
-            campaign.total_processed = (campaign.total_processed or 0) + 1
-            campaign.total_failed = (campaign.total_failed or 0) + 1
-            db.commit()
-            return
+            # --- skip if already connected (continue immediately) ---
+            if contact.connection_status in ("DISTANCE_1", "connected"):
+                _log_action(db, campaign.id, contact.id, "connection_request", "skipped", "Already connected")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_skipped = (campaign.total_skipped or 0) + 1
+                db.commit()
+                continue
 
-        # --- blacklist check ---
-        if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id).first():
-            _log_action(db, campaign.id, contact.id, "connection_request", "skipped", "Blacklisted")
-            campaign.total_processed = (campaign.total_processed or 0) + 1
-            campaign.total_skipped = (campaign.total_skipped or 0) + 1
-            db.commit()
-            return
+            # --- resolve URN ---
+            resolved_urn = await resolve_contact_urn(client, contact)
+            if not resolved_urn:
+                _log_action(db, campaign.id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.commit()
+                continue
 
-        # --- skip if already connected ---
-        if contact.connection_status == "DISTANCE_1":
-            _log_action(db, campaign.id, contact.id, "connection_request", "skipped", "Already connected")
-            campaign.total_processed = (campaign.total_processed or 0) + 1
-            campaign.total_skipped = (campaign.total_skipped or 0) + 1
-            db.commit()
-            return
+            # --- render optional message ---
+            message = None
+            if campaign.message_template:
+                contact_data = {
+                    "first_name": contact.first_name,
+                    "last_name": contact.last_name,
+                    "headline": contact.headline,
+                    "location": contact.location,
+                }
+                if campaign.use_ai:
+                    ai_msg = await asyncio.to_thread(
+                        generate_personalized_message, campaign.message_template, contact_data, 300
+                    )
+                    message = ai_msg if ai_msg else render_template(campaign.message_template, contact_data)
+                else:
+                    message = render_template(campaign.message_template, contact_data)
+                # LinkedIn limits connection request messages to 300 chars
+                if len(message) > 300:
+                    message = message[:297] + "..."
 
-        # --- render optional message ---
-        message = None
-        if campaign.message_template:
-            contact_data = {
-                "first_name": contact.first_name,
-                "last_name": contact.last_name,
-                "headline": contact.headline,
-                "location": contact.location,
-            }
-            if campaign.use_ai:
-                ai_msg = await asyncio.to_thread(
-                    generate_personalized_message, campaign.message_template, contact_data, 300
+            # --- send connection request ---
+            try:
+                result = await send_connection_request(client, contact.urn_id, message)
+            except Exception as exc:
+                logger.exception(
+                    "Connection request failed for contact %d in campaign %d",
+                    contact.id, campaign_id,
                 )
-                message = ai_msg if ai_msg else render_template(campaign.message_template, contact_data)
-            else:
-                message = render_template(campaign.message_template, contact_data)
-            # LinkedIn limits connection request messages to 300 chars
-            if len(message) > 300:
-                message = message[:297] + "..."
+                _log_action(db, campaign.id, contact.id, "connection_request", "failed", str(exc)[:500])
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.commit()
+                # Stop on error — wait for next tick
+                break
 
-        # --- send connection request ---
-        try:
-            result = await send_connection_request(client, contact.urn_id, message)
-        except Exception as exc:
-            logger.exception(
-                "Connection request failed for contact %d in campaign %d",
-                contact.id, campaign_id,
-            )
-            _log_action(db, campaign.id, contact.id, "connection_request", "failed", str(exc)[:500])
+            # Update contact status
+            invitation_id = None
+            if isinstance(result, dict):
+                invitation_id = result.get("invitation_id") or result.get("invitationId")
+
+            contact.connection_status = "pending"
+            if invitation_id:
+                contact.invitation_id = str(invitation_id)
+            contact.last_interaction_at = datetime.utcnow()
+
+            _log_action(db, campaign.id, contact.id, "connection_request", "success")
             campaign.total_processed = (campaign.total_processed or 0) + 1
-            campaign.total_failed = (campaign.total_failed or 0) + 1
+            campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
+
+            # Check completion
+            if campaign.total_target and campaign.total_processed >= campaign.total_target:
+                campaign.status = "completed"
+                campaign.completed_at = datetime.utcnow()
+                cancel_campaign_job(campaign_id)
+
             db.commit()
-            return
-
-        # Update contact status
-        invitation_id = None
-        if isinstance(result, dict):
-            invitation_id = result.get("invitation_id") or result.get("invitationId")
-
-        contact.connection_status = "pending"
-        if invitation_id:
-            contact.invitation_id = str(invitation_id)
-        contact.last_interaction_at = datetime.utcnow()
-
-        _log_action(db, campaign.id, contact.id, "connection_request", "success")
-        campaign.total_processed = (campaign.total_processed or 0) + 1
-        campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
-
-        # Check completion
-        if campaign.total_target and campaign.total_processed >= campaign.total_target:
-            campaign.status = "completed"
-            campaign.completed_at = datetime.utcnow()
-            cancel_campaign_job(campaign_id)
-
-        db.commit()
-        logger.info(
-            "Campaign %d: connection request sent to contact %d | processed %d/%d",
-            campaign_id, contact.id,
-            campaign.total_processed, campaign.total_target or 0,
-        )
+            logger.info(
+                "Campaign %d: connection request sent to contact %d | processed %d/%d",
+                campaign_id, contact.id,
+                campaign.total_processed, campaign.total_target or 0,
+            )
+            # Sent one real request — stop and wait for next tick
+            break
 
     except Exception as exc:
         logger.exception("Unexpected error in connection campaign %d", campaign_id)
