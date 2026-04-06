@@ -43,16 +43,28 @@ def init_scheduler() -> AsyncIOScheduler:
 
 
 def _schedule_sync_connections() -> None:
-    """Register the periodic connection sync job (every 6 hours)."""
+    """Register the periodic connection sync job (every 6 hours)
+    and run once at startup after a short delay."""
     from app.jobs.sync_connections import sync_new_connections
 
+    # Recurring every 6 hours
     _scheduler.add_job(
         sync_new_connections,
         trigger=CronTrigger(hour="*/6"),
         id="sync_connections",
         replace_existing=True,
     )
-    logger.info("Scheduled sync_connections CRON (every 6h)")
+
+    # Run once 30s after startup to catch up on missed connections
+    from datetime import datetime, timedelta
+    _scheduler.add_job(
+        sync_new_connections,
+        trigger="date",
+        run_date=datetime.now() + timedelta(seconds=30),
+        id="sync_connections_startup",
+        replace_existing=True,
+    )
+    logger.info("Scheduled sync_connections CRON (every 6h) + startup run")
 
 
 def get_scheduler() -> AsyncIOScheduler:

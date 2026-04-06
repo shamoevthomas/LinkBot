@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import CORS_ORIGINS, UPLOADS_DIR
 from app.database import init_db, SessionLocal
-from app.models import User, AppSettings
+from app.models import User, AppSettings, CRM
 from app.auth import hash_password
 
 
@@ -38,6 +38,10 @@ def seed_db():
             existing = db.query(AppSettings).filter(AppSettings.key == key).first()
             if not existing:
                 db.add(AppSettings(key=key, value=value))
+
+        # Ensure "Mon Réseau" CRM always exists
+        if not db.query(CRM).filter(CRM.name == "Mon Réseau").first():
+            db.add(CRM(name="Mon Réseau", description="Toutes vos connexions LinkedIn"))
 
         db.commit()
     finally:

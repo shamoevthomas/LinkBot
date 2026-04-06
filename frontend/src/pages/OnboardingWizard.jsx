@@ -12,7 +12,6 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [importNetwork, setImportNetwork] = useState(true);
   const [form, setForm] = useState({
     first_name: '', last_name: '', job_role: '', reason_for_using: '',
     linkedin_profile_url: '', li_at: '', jsessionid: '', profile_picture: null,
@@ -37,11 +36,8 @@ export default function OnboardingWizard() {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
-      fd.append('import_network', importNetwork ? 'true' : 'false');
       await submitOnboarding(fd);
-      toast.success(importNetwork
-        ? 'Configuration terminée ! Import du réseau en cours...'
-        : 'Configuration terminée !');
+      toast.success('Configuration terminée ! Import du réseau en cours...');
       await refreshUser();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur lors de la configuration');
@@ -189,28 +185,24 @@ export default function OnboardingWizard() {
                 <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(0,132,255,0.08)' }}>
                   <Users size={28} style={{ color: 'var(--blue)' }} />
                 </div>
-                <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Importer votre réseau</h3>
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Import de votre réseau</h3>
                 <p className="text-sm mt-1" style={{ color: 'var(--text3)' }}>
-                  Importez toutes vos connexions LinkedIn dans un CRM dédié.
-                  Les nouvelles connexions seront ajoutées automatiquement.
+                  Toutes vos connexions LinkedIn seront importées dans le CRM "Mon Réseau".
+                  Les nouvelles connexions seront synchronisées automatiquement toutes les 6h.
                 </p>
               </div>
 
-              <label className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors" style={{ background: 'rgba(0,132,255,0.06)', border: '2px solid rgba(0,132,255,0.18)' }}>
-                <input type="checkbox" checked={importNetwork} onChange={(e) => setImportNetwork(e.target.checked)}
-                  className="w-5 h-5 rounded-lg" style={{ accentColor: 'var(--blue)' }} />
+              <div className="flex items-center gap-4 p-4 rounded-xl" style={{ background: 'rgba(0,132,255,0.06)', border: '2px solid rgba(0,132,255,0.18)' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(0,132,255,0.12)' }}>
+                  <Check size={20} style={{ color: 'var(--blue)' }} />
+                </div>
                 <div className="flex-1">
-                  <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Importer mon réseau LinkedIn</span>
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Import automatique activé</span>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text2)' }}>
-                    Un CRM "Mon Réseau" sera créé avec toutes vos connexions. Synchronisation automatique toutes les 6h.
+                    Vos connexions seront importées dès la fin de la configuration.
                   </p>
                 </div>
-                <Users size={20} style={{ color: 'rgba(0,132,255,0.5)' }} />
-              </label>
-
-              <p className="text-xs text-center" style={{ color: 'var(--text3)' }}>
-                Cette étape est optionnelle. Vous pourrez toujours importer votre réseau plus tard depuis la Configuration.
-              </p>
+              </div>
 
               <div className="flex gap-3">
                 <button onClick={() => setStep(2)}
@@ -222,7 +214,7 @@ export default function OnboardingWizard() {
                   className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
                   style={{ padding: '10px 16px', fontSize: '14px' }}>
                   {loading ? <Loader2 size={18} className="animate-spin" /> : null}
-                  {loading ? 'Validation...' : 'Terminer'}
+                  {loading ? 'Import en cours...' : 'Lancer l\'import'}
                 </button>
               </div>
             </div>

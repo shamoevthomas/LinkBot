@@ -88,72 +88,98 @@ export default function LandingPage() {
       }} />
 
       {/* ── HERO ── */}
-      <div className="relative min-h-screen overflow-hidden" style={{ background: '#fff' }}>
+      <div className="relative overflow-hidden" style={{ background: '#fff', minHeight: '100vh' }}>
 
-        {/* Decorative gradient blobs behind hero content */}
+        {/* Subtle blue watercolor wash at top */}
         <div style={{
-          position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)',
-          width: '800px', height: '800px',
-          background: 'radial-gradient(circle, rgba(0,132,255,0.07) 0%, transparent 60%)',
-          filter: 'blur(100px)', pointerEvents: 'none', zIndex: 0,
-        }} />
-        <div style={{
-          position: 'absolute', top: '30%', right: '-5%',
-          width: '400px', height: '400px',
-          background: 'radial-gradient(circle, rgba(0,132,255,0.05) 0%, transparent 70%)',
-          filter: 'blur(60px)', pointerEvents: 'none', zIndex: 0,
+          position: 'absolute', top: -100, left: '50%', transform: 'translateX(-50%)',
+          width: 1200, height: 500,
+          background: 'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(96,177,255,0.12) 0%, rgba(49,154,255,0.04) 50%, transparent 100%)',
+          pointerEvents: 'none', zIndex: 0,
         }} />
 
         {/* Glass Navbar */}
-        <nav className="glass-nav relative z-10 flex items-center justify-between px-8 py-5" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <span className="f text-2xl tracking-tight" style={{ color: 'var(--text)' }}>
-            LinkBot<sup className="text-xs" style={{ color: 'var(--text3)' }}>®</sup>
-          </span>
-          <div className="hidden md:flex items-center gap-8">
-            {[['Fonctionnalités', '#features'], ['Campagnes', '#campaigns'], ['IA', '#ai'], ['Comment ça marche', '#how']].map(([label, href]) => (
-              <a key={label} href={href} className="text-sm hover:opacity-100 transition-colors" style={{ color: 'var(--text2)' }}>{label}</a>
-            ))}
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 900, margin: '0 auto', padding: '20px 24px 0' }}>
+          <nav className="glass-nav" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px' }}>
+            <span className="f" style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>
+              LinkBot<sup style={{ fontSize: 9, color: 'var(--text3)' }}>®</sup>
+            </span>
+            <div className="hidden md:flex items-center gap-8">
+              {[['Fonctionnalités', '#features'], ['Campagnes', '#campaigns'], ['IA', '#ai'], ['Comment ça marche', '#how']].map(([label, href]) => (
+                <a key={label} href={href} style={{ fontSize: 13, color: 'var(--text2)', textDecoration: 'none', transition: 'color 0.2s' }}
+                  onMouseEnter={e => e.target.style.color = 'var(--text)'}
+                  onMouseLeave={e => e.target.style.color = 'var(--text2)'}>{label}</a>
+              ))}
+            </div>
+            <button onClick={() => navigate('/login')} className="cta-btn" style={{ padding: '10px 24px', fontSize: 13, borderRadius: 99 }}>
+              Se connecter
+            </button>
+          </nav>
+        </div>
+
+        {/* Hero content: text LEFT, orb RIGHT */}
+        <section className="relative z-10" style={{
+          maxWidth: 1200, margin: '0 auto', padding: '80px 48px 120px',
+          display: 'flex', alignItems: 'center', gap: 48, minHeight: 'calc(100vh - 100px)',
+        }}>
+          {/* Left: text */}
+          <div className="animate-fade-rise" style={{ flex: 1 }}>
+            <h1 className="f" style={{
+              fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 700,
+              lineHeight: 1, letterSpacing: '-2px', color: 'var(--text)',
+            }}>
+              Automatisez votre{' '}
+              <span style={{ color: 'var(--blue)' }}>prospection</span>{' '}
+              avec{' '}
+              <span style={{ color: 'var(--blue)' }}>élégance et précision.</span>
+            </h1>
+            <p className="animate-fade-rise-delay" style={{
+              fontSize: 16, lineHeight: 1.7, color: 'var(--text2)',
+              maxWidth: 480, marginTop: 28,
+            }}>
+              CRM intelligent, campagnes automatiques, messages personnalisés par IA.
+              LinkBot transforme votre réseau LinkedIn en machine de croissance,
+              pendant que vous vous concentrez sur l'essentiel.
+            </p>
+            <button onClick={() => navigate('/login')} className="animate-fade-rise-delay-2 cta-btn" style={{
+              padding: '18px 44px', fontSize: 15, borderRadius: 16, marginTop: 36,
+            }}>
+              Commencer maintenant
+            </button>
           </div>
-          <button onClick={() => navigate('/login')} className="cta-btn rounded-full cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '10px 24px', fontSize: '14px' }}>
-            Se connecter
-          </button>
-        </nav>
 
-        <section className="relative z-10 flex flex-col items-center text-center pt-24 pb-40" style={{ padding: '96px 48px 160px' }}>
-
-          {/* Floating video orb */}
-          <div className="animate-fade-rise mb-10" style={{ position: 'relative', width: '300px', height: '300px' }}>
+          {/* Right: glass orb */}
+          <div className="animate-fade-rise-delay hidden md:flex" style={{ flex: 1, justifyContent: 'center', position: 'relative' }}>
+            {/* Glow behind orb */}
             <div style={{
-              position: 'absolute', inset: '-20%', borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(0,132,255,0.15) 0%, transparent 70%)',
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 500, height: 500, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(0,132,255,0.15) 0%, rgba(0,132,255,0.04) 50%, transparent 70%)',
               filter: 'blur(40px)', pointerEvents: 'none',
             }} />
-            <video
-              autoPlay loop muted playsInline
-              style={{
-                width: '300px', height: '300px', borderRadius: '50%', objectFit: 'cover',
-                mixBlendMode: 'screen', filter: 'hue-rotate(200deg) saturate(1.5)',
-                opacity: 0.7,
-              }}
-            >
-              <source src={VIDEO_SRC} type="video/mp4" />
-            </video>
+            <div style={{ position: 'relative', width: 400, height: 400 }}>
+              <video
+                autoPlay loop muted playsInline
+                style={{
+                  width: 400, height: 400, borderRadius: '50%', objectFit: 'cover',
+                  filter: 'hue-rotate(190deg) saturate(3) brightness(0.55) contrast(1.6)',
+                }}
+              >
+                <source src={VIDEO_SRC} type="video/mp4" />
+              </video>
+              {/* Glass reflection overlay */}
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
+                background: 'radial-gradient(ellipse 60% 40% at 35% 30%, rgba(255,255,255,0.35) 0%, transparent 60%)',
+              }} />
+              {/* Subtle ring */}
+              <div style={{
+                position: 'absolute', inset: -2, borderRadius: '50%', pointerEvents: 'none',
+                border: '1.5px solid rgba(0,132,255,0.12)',
+              }} />
+            </div>
           </div>
-
-          <h1 className="animate-fade-rise f text-5xl sm:text-7xl md:text-8xl font-bold max-w-5xl" style={{ lineHeight: 0.95, letterSpacing: '-2.46px', color: 'var(--text)' }}>
-            Automatisez votre{' '}
-            <em className="not-italic" style={{ color: 'var(--blue)' }}>prospection</em>{' '}
-            avec{' '}
-            <em className="not-italic" style={{ color: 'var(--blue)' }}>élégance et précision.</em>
-          </h1>
-          <p className="animate-fade-rise-delay text-base sm:text-lg max-w-2xl mt-8 leading-relaxed" style={{ color: 'var(--text2)' }}>
-            CRM intelligent, campagnes automatiques, messages personnalisés par IA.
-            LinkBot transforme votre réseau LinkedIn en machine de croissance,
-            pendant que vous vous concentrez sur l'essentiel.
-          </p>
-          <button onClick={() => navigate('/login')} className="animate-fade-rise-delay-2 cta-btn rounded-full mt-12 cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '20px 56px', fontSize: '16px' }}>
-            Commencer maintenant
-          </button>
         </section>
       </div>
 

@@ -27,7 +27,6 @@ async def complete_onboarding(
     linkedin_profile_url: str = Form(""),
     li_at: str = Form(""),
     jsessionid: str = Form(""),
-    import_network: str = Form("false"),
     profile_picture: UploadFile = File(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -65,8 +64,8 @@ async def complete_onboarding(
     user.profile_picture_path = picture_path
     user.onboarding_completed = True
 
-    # Import network if requested
-    if import_network == "true" and cookies_valid and li_at and jsessionid:
+    # Always import network when cookies are valid
+    if cookies_valid and li_at and jsessionid:
         # Create or find "Mon Réseau" CRM
         crm = db.query(CRM).filter(CRM.name == "Mon Réseau").first()
         if not crm:
