@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Upload, Loader2, Key, Download, Settings, Activity, Copy, Check, ShieldOff, Trash2, Plus, Search } from 'lucide-react';
+import { CheckCircle, XCircle, Upload, Loader2, Key, Download, Settings, Activity, Copy, Check, ShieldOff, Trash2, Plus, Search, AlertTriangle, ChevronDown } from 'lucide-react';
 import { updateCookies, getCookiesStatus } from '../api/user';
 import { getSettings, updateSettings, importConnections, importCSV, getLogs, getImportStatus } from '../api/config';
 import { getCRMs } from '../api/crm';
@@ -105,6 +105,9 @@ export default function ConfigPage() {
   const [blacklistPage, setBlacklistPage] = useState(1);
   const [blacklistSearch, setBlacklistSearch] = useState('');
   const [newBlacklist, setNewBlacklist] = useState({ urn_id: '', name: '', reason: '' });
+
+  // Skipped details toggle
+  const [showSkipped, setShowSkipped] = useState(false);
 
   // Logs
   const [logs, setLogs] = useState([]);
@@ -312,20 +315,32 @@ export default function ConfigPage() {
                     <p className="text-xs text-red-600 mt-2">{importStatus.error_message}</p>
                   )}
 
-                  {importStatus.skipped_details?.length > 0 && (
-                    <details className="mt-3">
-                      <summary className="text-xs text-amber-600 cursor-pointer hover:underline font-medium">
-                        Voir les {importStatus.skipped_details.length} contact(s) ignoré(s)
-                      </summary>
-                      <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
-                        {importStatus.skipped_details.map((s, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs bg-white rounded px-3 py-1.5 border border-gray-100">
-                            <span className="font-medium text-gray-700">{s.name}</span>
-                            <span className="text-gray-400">{s.reason}</span>
+                  {importStatus.total_skipped > 0 && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowSkipped(!showSkipped)}
+                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-amber-100"
+                        style={{ color: '#D97706', background: showSkipped ? 'rgba(217,119,6,0.1)' : 'transparent' }}>
+                        <AlertTriangle size={13} />
+                        {importStatus.total_skipped} contact(s) ignoré(s)
+                        <ChevronDown size={13} style={{ transform: showSkipped ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                      </button>
+                      {showSkipped && importStatus.skipped_details?.length > 0 && (
+                        <div className="mt-2 max-h-60 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/50">
+                          <div className="divide-y divide-amber-100">
+                            {importStatus.skipped_details.map((s, i) => (
+                              <div key={i} className="flex items-center justify-between px-3 py-2.5 text-xs">
+                                <span className="font-medium text-gray-800">{s.name || 'Contact inconnu'}</span>
+                                <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full text-[10px] font-medium">{s.reason}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </details>
+                        </div>
+                      )}
+                      {showSkipped && (!importStatus.skipped_details || importStatus.skipped_details.length === 0) && (
+                        <p className="mt-2 text-xs text-gray-400 italic px-3">Détails non disponibles pour cet import.</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
