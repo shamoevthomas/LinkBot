@@ -32,8 +32,6 @@ export default function Sidebar() {
       <div className="glass-nav" style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '8px 12px',
-        overflowX: 'auto',
-        WebkitOverflowScrolling: 'touch',
       }}>
         {/* Logo */}
         <NavLink to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', marginRight: 16 }}>
