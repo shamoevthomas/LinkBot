@@ -169,7 +169,7 @@ export default function CampaignsPage() {
               placeholder="Ex: Prospection Marketing Managers" />
           </div>
 
-          {(showNew === 'search' || showNew === 'connection') && (
+          {showNew === 'search' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mots-clés de recherche</label>
               <input value={form.keywords} onChange={(e) => set('keywords', e.target.value)}
@@ -178,11 +178,17 @@ export default function CampaignsPage() {
             </div>
           )}
 
+          {showNew === 'connection' && (
+            <p className="text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
+              Les demandes de connexion seront envoyees aux contacts du CRM selectionne ci-dessous.
+            </p>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">CRM de destination</label>
             <select value={form.crm_id} onChange={(e) => set('crm_id', e.target.value)}
               className="input-glass"
-              required={showNew === 'search' || showNew === 'dm'}>
+              required={showNew === 'search' || showNew === 'dm' || showNew === 'connection'}>
               <option value="">Sélectionner un CRM...</option>
               {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
             </select>
