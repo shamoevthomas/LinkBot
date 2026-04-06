@@ -27,6 +27,7 @@ from app.utils.ai_message import (
     generate_compliment, generate_full_personalized_messages, extract_post_texts,
 )
 from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
+from app.routers.notifications import create_notification
 
 logger = logging.getLogger(__name__)
 
@@ -112,10 +113,18 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 pass
 
             if accepted:
-                # Connection accepted → send main DM
                 contact.connection_status = "connected"
-                _log_action(db, campaign_id, contact.id, "connection_accepted", "success")
-                logger.info("Campaign %d: connection accepted by contact %d", campaign_id, contact.id)
+
+                if not cc.connection_accepted_at:
+                    cc.connection_accepted_at = datetime.utcnow()
+                    _log_action(db, campaign_id, contact.id, "connection_accepted", "success")
+                    logger.info("Campaign %d: connection accepted by contact %d", campaign_id, contact.id)
+
+                # Check if delay after acceptance has passed
+                dm_delay = timedelta(hours=campaign.dm_delay_hours or 0)
+                if datetime.utcnow() - cc.connection_accepted_at < dm_delay:
+                    db.commit()
+                    continue  # Not yet time to send DM
 
                 if get_global_actions_today(dm_action_types, db) < dm_limit:
                     template = campaign.message_template or ""
@@ -221,6 +230,9 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
                 contact.last_interaction_at = datetime.utcnow()
                 _log_action(db, campaign_id, contact.id, "reply_detected", "success")
+                create_notification(db, campaign.user_id, "reply_received",
+                    f"{contact.first_name} {contact.last_name} a repondu",
+                    f"Campagne \"{campaign.name}\"")
                 logger.info("Campaign %d: reply detected from contact %d", campaign_id, contact.id)
 
         db.commit()
@@ -266,6 +278,9 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     cc.replied_at = datetime.utcnow()
                     campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
                     _log_action(db, campaign_id, contact.id, "reply_detected", "success")
+                    create_notification(db, campaign.user_id, "reply_received",
+                        f"{contact.first_name} {contact.last_name} a repondu",
+                        f"Campagne \"{campaign.name}\"")
                     db.commit()
                     continue
 
@@ -456,6 +471,9 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         if all_done:
             campaign.status = "completed"
             campaign.completed_at = datetime.utcnow()
+            create_notification(db, campaign.user_id, "campaign_completed",
+                f"Campagne \"{campaign.name}\" terminee",
+                f"{total_reussi} reponse(s), {total_final - total_reussi} perdu(s)")
             db.commit()
             cancel_campaign_job(campaign_id)
             logger.info("Campaign %d completed", campaign_id)

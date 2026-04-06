@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
-from app.models import User, CRM, Contact, Campaign, CampaignAction, CampaignContact, AppSettings
+from app.models import User, CRM, Contact, Campaign, CampaignAction, CampaignContact, AppSettings, Notification
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -16,7 +16,7 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
     user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
     user_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id).all()]
 
-    total_contacts = db.query(func.count(Contact.id)).filter(Contact.crm_id.in_(user_crm_ids)).scalar() or 0 if user_crm_ids else 0
+    total_contacts = db.query(func.count(func.distinct(Contact.urn_id))).filter(Contact.crm_id.in_(user_crm_ids)).scalar() or 0 if user_crm_ids else 0
     total_crms = len(user_crm_ids)
     active_campaigns = db.query(func.count(Campaign.id)).filter(Campaign.user_id == _user.id, Campaign.status == "running").scalar() or 0
 
@@ -134,7 +134,89 @@ def get_notifications(db: Session = Depends(get_db), user: User = Depends(get_cu
         Campaign.status.in_(["completed", "failed"]),
         Campaign.completed_at >= cutoff,
     ).scalar() or 0
+    unread_count = db.query(func.count(Notification.id)).filter(
+        Notification.user_id == user.id, Notification.read == False
+    ).scalar() or 0
     return {
         "campaigns_attention": campaigns_attention,
         "cookies_invalid": not user.cookies_valid,
+        "unread_notifications": unread_count,
+    }
+
+
+@router.get("/analytics")
+def get_analytics(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
+    """Campaign analytics: per-template rates, hourly reply distribution, 14-day trend."""
+    from sqlalchemy import extract, cast, Date as SqlDate
+
+    user_campaign_ids = [c.id for c in db.query(Campaign.id).filter(
+        Campaign.user_id == _user.id, Campaign.type.in_(["dm", "connection_dm"])
+    ).all()]
+
+    # Per-template reply rates
+    template_stats = []
+    if user_campaign_ids:
+        campaigns = db.query(Campaign).filter(Campaign.id.in_(user_campaign_ids)).all()
+        template_map = {}
+        for camp in campaigns:
+            tpl = (camp.message_template or "")[:50] or "(vide)"
+            if tpl not in template_map:
+                template_map[tpl] = {"sent": 0, "replied": 0}
+            sent = db.query(CampaignContact).filter(
+                CampaignContact.campaign_id == camp.id,
+                CampaignContact.status != "pending",
+            ).count()
+            replied = db.query(CampaignContact).filter(
+                CampaignContact.campaign_id == camp.id,
+                CampaignContact.status == "reussi",
+            ).count()
+            template_map[tpl]["sent"] += sent
+            template_map[tpl]["replied"] += replied
+
+        for tpl, data in template_map.items():
+            rate = round(data["replied"] / data["sent"] * 100, 1) if data["sent"] > 0 else 0
+            template_stats.append({"template": tpl, "sent": data["sent"], "replied": data["replied"], "rate": rate})
+        template_stats.sort(key=lambda x: x["rate"], reverse=True)
+
+    # Hourly reply distribution (0-23)
+    hourly = [0] * 24
+    if user_campaign_ids:
+        rows = (
+            db.query(extract("hour", CampaignContact.replied_at), func.count(CampaignContact.id))
+            .filter(
+                CampaignContact.campaign_id.in_(user_campaign_ids),
+                CampaignContact.replied_at.isnot(None),
+            )
+            .group_by(extract("hour", CampaignContact.replied_at))
+            .all()
+        )
+        for hour, count in rows:
+            if hour is not None:
+                hourly[int(hour)] = count
+
+    # 14-day trend
+    trend = []
+    if user_campaign_ids:
+        cutoff = datetime.utcnow() - timedelta(days=14)
+        rows = (
+            db.query(
+                cast(CampaignAction.created_at, SqlDate),
+                func.count(CampaignAction.id),
+                func.count(CampaignAction.id).filter(CampaignAction.status == "success"),
+            )
+            .filter(
+                CampaignAction.campaign_id.in_(user_campaign_ids),
+                CampaignAction.created_at >= cutoff,
+            )
+            .group_by(cast(CampaignAction.created_at, SqlDate))
+            .order_by(cast(CampaignAction.created_at, SqlDate))
+            .all()
+        )
+        for day, total, successes in rows:
+            trend.append({"date": str(day), "actions": total, "successes": successes})
+
+    return {
+        "template_stats": template_stats,
+        "hourly_replies": hourly,
+        "trend": trend,
     }

@@ -9,8 +9,11 @@ import asyncio
 import logging
 
 from app.database import SessionLocal
-from app.models import CRM, Contact, User
-from app.linkedin_service import get_linkedin_client
+from app.models import CRM, Campaign, Contact, User
+from app.linkedin_service import get_linkedin_client, validate_cookies
+from app.routers.notifications import create_notification
+from app.scheduler import pause_campaign_job
+from app.utils.sync_lock import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,23 @@ async def sync_new_connections() -> None:
     try:
         users = db.query(User).filter(User.cookies_valid == True, User.li_at_cookie.isnot(None)).all()
         for user in users:
+            # Proactive cookie validation
+            valid = await validate_cookies(user.li_at_cookie, user.jsessionid_cookie)
+            if not valid:
+                logger.warning("Cookies expired for user %d, pausing campaigns", user.id)
+                user.cookies_valid = False
+                create_notification(db, user.id, "cookies_expired",
+                    "Cookies LinkedIn expires",
+                    "Vos cookies LinkedIn ne sont plus valides. Mettez-les a jour dans la configuration.")
+                # Pause all running campaigns
+                running = db.query(Campaign).filter(
+                    Campaign.user_id == user.id, Campaign.status == "running"
+                ).all()
+                for c in running:
+                    c.status = "paused"
+                    pause_campaign_job(c.id)
+                db.commit()
+                continue
             await _sync_user_connections(user.id, user.li_at_cookie, user.jsessionid_cookie)
     finally:
         db.close()
@@ -29,6 +49,9 @@ async def sync_new_connections() -> None:
 
 async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> None:
     """Sync connections for a single user using dedicated connections endpoint."""
+    if not acquire_lock(user_id, "syncing"):
+        print(f"[SYNC] User {user_id}: skipped, lock held", flush=True)
+        return
     db = SessionLocal()
     try:
         crm = db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user_id).first()
@@ -82,11 +105,15 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
         logger.exception("sync_connections: unexpected error for user %d", user_id)
         db.rollback()
     finally:
+        release_lock(user_id)
         db.close()
 
 
 async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = None) -> None:
     """Manual sync: import new connections to user's 'Mon Réseau' + update statuses across user's CRMs."""
+    if user_id and not acquire_lock(user_id, "syncing"):
+        print(f"[SYNC] Manual sync skipped for user {user_id}: lock held", flush=True)
+        return
     print(f"[SYNC] Manual sync_and_update_statuses started for user {user_id}", flush=True)
     db = SessionLocal()
     try:
@@ -166,4 +193,6 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
         logger.exception("sync_and_update: unexpected error")
         db.rollback()
     finally:
+        if user_id:
+            release_lock(user_id)
         db.close()

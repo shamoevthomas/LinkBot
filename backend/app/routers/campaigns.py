@@ -320,6 +320,7 @@ def create_dm_campaign(
         context_text=body.context_text,
         ai_prompt=body.ai_prompt,
         total_target=total_target,
+        dm_delay_hours=body.dm_delay_hours if body.is_connection_dm else 0,
         started_at=datetime.utcnow(),
     )
     db.add(campaign)

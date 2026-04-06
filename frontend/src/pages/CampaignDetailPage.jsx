@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer } from 'lucide-react';
+import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3 } from 'lucide-react';
 import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, runCampaignNow, getCampaignActions, getCampaignContacts } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
@@ -38,6 +38,7 @@ export default function CampaignDetailPage() {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('contacts'); // 'contacts' | 'actions'
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'kanban'
   const [selectedContact, setSelectedContact] = useState(null);
   const [diagnosis, setDiagnosis] = useState(null);
 
@@ -357,20 +358,81 @@ export default function CampaignDetailPage() {
 
       {/* Tabs */}
       {contacts.length > 0 && (
-        <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
-          <button onClick={() => setTab('contacts')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'contacts' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            Contacts ({contacts.length})
-          </button>
-          <button onClick={() => setTab('actions')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'actions' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            Journal
-          </button>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+            <button onClick={() => setTab('contacts')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'contacts' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              Contacts ({contacts.length})
+            </button>
+            <button onClick={() => setTab('actions')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'actions' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              Journal
+            </button>
+          </div>
+          {tab === 'contacts' && (
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+              <button onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md ${viewMode === 'table' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}>
+                <List size={16} />
+              </button>
+              <button onClick={() => setViewMode('kanban')}
+                className={`p-1.5 rounded-md ${viewMode === 'kanban' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}>
+                <Columns3 size={16} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Contacts tab */}
-      {tab === 'contacts' && contacts.length > 0 && (
+      {/* Kanban view */}
+      {tab === 'contacts' && viewMode === 'kanban' && contacts.length > 0 && (() => {
+        const columns = [
+          { key: 'en_attente', label: 'En attente', color: '#eab308', bg: '#fefce8', filter: c => c.status === 'en_attente' },
+          { key: 'envoye', label: 'Envoye', color: '#3b82f6', bg: '#eff6ff', filter: c => c.status === 'envoye' },
+          { key: 'relance', label: 'En relance', color: '#f59e0b', bg: '#fffbeb', filter: c => c.status?.startsWith('relance_') },
+          { key: 'reussi', label: 'Repondu', color: '#10b981', bg: '#ecfdf5', filter: c => c.status === 'reussi' },
+          { key: 'perdu', label: 'Perdu', color: '#6b7280', bg: '#f9fafb', filter: c => c.status === 'perdu' },
+        ];
+        return (
+          <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 300 }}>
+            {columns.map(col => {
+              const items = contacts.filter(col.filter);
+              return (
+                <div key={col.key} className="flex-1 min-w-[200px] max-w-[260px]">
+                  <div className="flex items-center gap-2 mb-2 px-2">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: col.color }} />
+                    <span className="text-xs font-semibold text-gray-700">{col.label}</span>
+                    <span className="text-xs text-gray-400 ml-auto">{items.length}</span>
+                  </div>
+                  <div className="space-y-2" style={{ maxHeight: 500, overflowY: 'auto' }}>
+                    {items.map(cc => (
+                      <div key={cc.id} onClick={() => setSelectedContact(cc)}
+                        className="p-3 rounded-xl border border-gray-200 bg-white hover:shadow-sm cursor-pointer transition-shadow">
+                        <div className="flex items-center gap-2 mb-1">
+                          {cc.contact_profile_picture_url ? (
+                            <img src={cc.contact_profile_picture_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
+                              {initials(cc)}
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-gray-900 truncate">{cc.contact_first_name} {cc.contact_last_name}</span>
+                        </div>
+                        {cc.contact_headline && <p className="text-[10px] text-gray-400 truncate">{cc.contact_headline}</p>}
+                        <div className="mt-1.5"><ContactStatusBadge status={cc.status} /></div>
+                      </div>
+                    ))}
+                    {items.length === 0 && <p className="text-xs text-gray-300 text-center py-4">Aucun contact</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* Contacts table */}
+      {tab === 'contacts' && viewMode === 'table' && contacts.length > 0 && (
         <div className="g-card overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -471,10 +533,10 @@ export default function CampaignDetailPage() {
       {selectedContact && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedContact(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="relative rounded-t-2xl p-6 pb-16" style={{ background: 'linear-gradient(to right, var(--blue), #2563eb)' }}>
+            <div className="relative rounded-t-2xl p-4 pb-14">
               <button onClick={() => setSelectedContact(null)}
-                className="absolute top-4 right-4 p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors">
-                <X size={18} className="text-white" />
+                className="absolute top-4 right-4 p-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
+                <X size={18} className="text-gray-500" />
               </button>
             </div>
             <div className="flex justify-center -mt-12">

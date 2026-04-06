@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Rocket, Activity, Zap, Plus, ArrowRight, Loader2, MessageSquare, UserPlus, RefreshCw } from 'lucide-react';
-import { getDashboardStats } from '../api/dashboard';
+import { Users, Rocket, Activity, Zap, Plus, ArrowRight, Loader2, MessageSquare, UserPlus, RefreshCw, BarChart3 } from 'lucide-react';
+import { getDashboardStats, getAnalytics } from '../api/dashboard';
 import { syncConnections } from '../api/config';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
@@ -9,14 +9,16 @@ import toast from 'react-hot-toast';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    getDashboardStats()
-      .then(setStats)
-      .finally(() => setLoading(false));
+    Promise.all([
+      getDashboardStats().then(setStats),
+      getAnalytics().then(setAnalytics).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -137,6 +139,83 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Analytics section */}
+      {analytics && (analytics.template_stats?.length > 0 || analytics.trend?.length > 0) && (
+        <div className="mt-8">
+          <h2 className="font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text)' }}>
+            <BarChart3 size={18} style={{ color: 'var(--blue)' }} /> Analytics
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Template performance */}
+            {analytics.template_stats?.length > 0 && (
+              <div className="g-card p-5">
+                <h3 className="text-sm font-medium text-gray-500 mb-3">Performance par template</h3>
+                <div className="space-y-2">
+                  {analytics.template_stats.slice(0, 5).map((t, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-700 truncate">{t.template}</p>
+                        <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(t.rate, 100)}%`, background: 'var(--blue)' }} />
+                        </div>
+                      </div>
+                      <span className="text-xs font-medium text-gray-600 shrink-0 w-16 text-right">
+                        {t.rate}% ({t.replied}/{t.sent})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Hourly reply distribution */}
+            {analytics.hourly_replies?.some(v => v > 0) && (
+              <div className="g-card p-5">
+                <h3 className="text-sm font-medium text-gray-500 mb-3">Heures de reponse</h3>
+                <div className="flex items-end gap-[2px]" style={{ height: 80 }}>
+                  {analytics.hourly_replies.map((count, h) => {
+                    const max = Math.max(...analytics.hourly_replies, 1);
+                    return (
+                      <div key={h} className="flex-1 flex flex-col items-center gap-1">
+                        <div className="w-full rounded-t" style={{
+                          height: `${(count / max) * 60}px`,
+                          background: count > 0 ? 'var(--blue)' : '#e5e7eb',
+                          minHeight: 2,
+                        }} />
+                        {h % 4 === 0 && <span className="text-[9px] text-gray-400">{h}h</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 14-day trend */}
+            {analytics.trend?.length > 0 && (
+              <div className="g-card p-5 lg:col-span-2">
+                <h3 className="text-sm font-medium text-gray-500 mb-3">Activite (14 derniers jours)</h3>
+                <div className="flex items-end gap-1" style={{ height: 60 }}>
+                  {analytics.trend.map((d, i) => {
+                    const max = Math.max(...analytics.trend.map(t => t.actions), 1);
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1" title={`${d.date}: ${d.actions} actions, ${d.successes} succes`}>
+                        <div className="w-full rounded-t" style={{
+                          height: `${(d.actions / max) * 48}px`,
+                          background: 'var(--blue)',
+                          opacity: 0.7,
+                          minHeight: 2,
+                        }} />
+                        {i % 3 === 0 && <span className="text-[9px] text-gray-400">{d.date.slice(5)}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 }

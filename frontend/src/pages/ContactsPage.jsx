@@ -11,23 +11,29 @@ export default function ContactsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [crmFilter, setCrmFilter] = useState('');
   const [crms, setCrms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const perPage = 25;
+  const [perPage, setPerPage] = useState(() => parseInt(localStorage.getItem('linkbot_perPage')) || 25);
 
   useEffect(() => { getCRMs().then(setCrms).catch(() => {}); }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { page, per_page: perPage, search: search || undefined, connection_status: statusFilter || undefined, crm_id: crmFilter || undefined };
+      const params = { page, per_page: perPage, search: debouncedSearch || undefined, connection_status: statusFilter || undefined, crm_id: crmFilter || undefined };
       const data = await getAllContacts(params);
       setContacts(data.contacts || []);
       setTotal(data.total || 0);
     } finally { setLoading(false); }
-  }, [page, search, statusFilter, crmFilter]);
+  }, [page, perPage, debouncedSearch, statusFilter, crmFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -133,20 +139,30 @@ export default function ContactsPage() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {totalPages >= 1 && (
         <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-gray-500">{total} contact{total > 1 ? 's' : ''}</span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
-              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-30">
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-sm text-gray-700">{page} / {totalPages}</span>
-            <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
-              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-30">
-              <ChevronRight size={16} />
-            </button>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-500">{total} contact{total > 1 ? 's' : ''}</span>
+            <select value={perPage} onChange={(e) => { setPerPage(parseInt(e.target.value)); localStorage.setItem('linkbot_perPage', e.target.value); setPage(1); }}
+              className="text-xs border border-gray-300 rounded px-2 py-1 bg-white">
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+            </select>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-30">
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm text-gray-700">{page} / {totalPages}</span>
+              <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-30">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </PageWrapper>

@@ -10,20 +10,24 @@ from datetime import datetime
 from app.database import SessionLocal
 from app.models import Contact, ImportJob
 from app.linkedin_service import get_linkedin_client
+from app.utils.sync_lock import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
 
 
-def run_import_connections(crm_id: int, li_at: str, jsessionid: str, import_job_id: int) -> None:
+def run_import_connections(crm_id: int, li_at: str, jsessionid: str, import_job_id: int, user_id: int = None) -> None:
     """Synchronous entry point for BackgroundTasks."""
     loop = asyncio.new_event_loop()
     try:
-        loop.run_until_complete(_async_import(crm_id, li_at, jsessionid, import_job_id))
+        loop.run_until_complete(_async_import(crm_id, li_at, jsessionid, import_job_id, user_id))
     finally:
         loop.close()
 
 
-async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id: int) -> None:
+async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id: int, user_id: int = None) -> None:
+    if user_id and not acquire_lock(user_id, "importing"):
+        logger.warning("Import skipped for CRM %d: lock held for user %d", crm_id, user_id)
+        return
     db = SessionLocal()
     try:
         job = db.query(ImportJob).filter(ImportJob.id == import_job_id).first()
@@ -157,6 +161,8 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
         except Exception:
             pass
     finally:
+        if user_id:
+            release_lock(user_id)
         db.close()
 
 

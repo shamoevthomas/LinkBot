@@ -22,7 +22,7 @@ export default function NewDMCampaignPage() {
   const [extracting, setExtracting] = useState(false);
   const [useAi, setUseAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-
+  const [dmDelayHours, setDmDelayHours] = useState(connectionConfig ? 2 : 0);
 
   // Messages
   const [mode, setMode] = useState('template');
@@ -191,6 +191,7 @@ export default function NewDMCampaignPage() {
       if (connectionConfig) {
         payload.keywords = connectionConfig.keywords || '';
         payload.is_connection_dm = true;
+        payload.dm_delay_hours = dmDelayHours;
       }
       const { data } = await client.post('/campaigns/dm', payload);
       toast.success('Campagne lancee !');
@@ -252,6 +253,16 @@ export default function NewDMCampaignPage() {
                 {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count})</option>)}
               </select>
             </div>
+            {connectionConfig && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Delai avant DM (apres acceptation)</label>
+                <div className="flex items-center gap-2">
+                  <input type="number" min={0} max={168} value={dmDelayHours} onChange={(e) => setDmDelayHours(parseInt(e.target.value) || 0)}
+                    className="input-glass w-20" style={{ fontSize: 13 }} />
+                  <span className="text-xs text-gray-500">heure(s)</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Context */}

@@ -15,6 +15,7 @@ from time import sleep
 from urllib.parse import urlencode, quote
 from typing import Dict, Union, Optional, List, Literal
 
+import requests as _requests
 from bs4 import BeautifulSoup
 
 from open_linkedin_api.exceptions import (
@@ -103,25 +104,46 @@ class Linkedin(object):
             else:
                 self.client.authenticate(username, password)
 
+    def _request_with_retry(self, method, uri, evade=default_evade, base_request=False, **kwargs):
+        """Execute an HTTP request with retry on 429 and transient errors."""
+        _logger = logging.getLogger(__name__)
+        max_retries = 3
+        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
+
+        for attempt in range(max_retries + 1):
+            self.client.rate_limiter.wait()
+            evade()
+
+            try:
+                res = getattr(self.client.session, method)(url, **kwargs)
+            except (_requests.ConnectionError, _requests.Timeout) as e:
+                if attempt < max_retries:
+                    delay = 5 * (3 ** attempt)  # 5s, 15s, 45s
+                    _logger.warning("Connection error on %s %s, retry %d in %ds: %s", method.upper(), uri, attempt + 1, delay, e)
+                    time.sleep(delay)
+                    continue
+                raise
+
+            if res.status_code == 401:
+                raise UnauthorizedException()
+
+            if res.status_code == 429:
+                if attempt < 2:
+                    _logger.warning("429 rate limited on %s %s, waiting 60s before retry", method.upper(), uri)
+                    time.sleep(60)
+                    continue
+                raise LinkedInRequestException(res.status_code, res.text)
+
+            if not (200 <= res.status_code < 300):
+                raise LinkedInRequestException(res.status_code, res.text)
+
+            return res
+
+        raise LinkedInRequestException(0, "Max retries exceeded")
+
     def _fetch(self, uri: str, evade=default_evade, base_request=False, **kwargs):
         """GET request to Linkedin API"""
-        # Apply rate limiting before making request
-        self.client.rate_limiter.wait()
-
-        evade()
-
-        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
-        res = self.client.session.get(url, **kwargs)
-
-        if res.status_code == 401:
-            raise UnauthorizedException()
-
-        if not (
-            200 <= res.status_code < 300
-        ):  # I don't know all status_codes successfully of LkIn
-            raise LinkedInRequestException(res.status_code, res.text)
-
-        return res
+        return self._request_with_retry("get", uri, evade=evade, base_request=base_request, **kwargs)
 
     def _cookies(self):
         """Return client cookies"""
@@ -133,49 +155,11 @@ class Linkedin(object):
 
     def _post(self, uri: str, evade=default_evade, base_request=False, **kwargs):
         """POST request to Linkedin API"""
-        # Apply rate limiting before making request
-        self.client.rate_limiter.wait()
-
-        evade()
-
-        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
-
-        res = self.client.session.post(url, **kwargs)
-        if res.status_code == 401:
-            raise UnauthorizedException()
-
-        if not (
-            200 <= res.status_code < 300
-        ):  # I don't know all status_codes successfully of LkIn
-            raise LinkedInRequestException(res.status_code, res.text)
-
-        return res
+        return self._request_with_retry("post", uri, evade=evade, base_request=base_request, **kwargs)
 
     def _put(self, uri: str, evade=default_evade, base_request=False, **kwargs):
-        """PUT request to Linkedin API
-
-        Note: This method is currently not used for CDN image uploads (see schedule_post).
-        Image uploads use self.client.session.put() directly because they go to an external
-        CDN URL, not the LinkedIn API endpoint, and therefore don't need rate limiting or evade.
-        This method is kept for potential future PUT operations to LinkedIn API endpoints.
-        """
-        # Apply rate limiting before making request
-        self.client.rate_limiter.wait()
-
-        evade()
-
-        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
-
-        res = self.client.session.put(url, **kwargs)
-        if res.status_code == 401:
-            raise UnauthorizedException()
-
-        if not (
-            200 <= res.status_code < 300
-        ):  # I don't know all status_codes successfully of LkIn
-            raise LinkedInRequestException(res.status_code, res.text)
-
-        return res
+        """PUT request to Linkedin API"""
+        return self._request_with_retry("put", uri, evade=evade, base_request=base_request, **kwargs)
 
     def get_profile_posts(
         self,

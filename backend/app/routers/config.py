@@ -95,6 +95,13 @@ def import_connections(
             detail="An import is already running.",
         )
 
+    from app.utils.sync_lock import is_locked
+    if is_locked(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Une synchronisation est en cours, veuillez patienter.",
+        )
+
     # Create import job for tracking
     job = ImportJob(crm_id=body.crm_id, status="running")
     db.add(job)
@@ -109,6 +116,7 @@ def import_connections(
         li_at=user.li_at_cookie,
         jsessionid=user.jsessionid_cookie,
         import_job_id=job.id,
+        user_id=user.id,
     )
     return {"message": "Connection import started", "crm_id": body.crm_id, "job_id": job.id}
 

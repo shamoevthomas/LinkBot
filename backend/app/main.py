@@ -117,6 +117,7 @@ from app.routers import config as config_router
 from app.routers import dashboard as dashboard_router
 from app.routers import blacklist as blacklist_router
 from app.routers import tags as tags_router
+from app.routers import notifications as notifications_router
 
 app.include_router(auth_router.router)
 app.include_router(user_router.router)
@@ -127,6 +128,7 @@ app.include_router(config_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(blacklist_router.router)
 app.include_router(tags_router.router)
+app.include_router(notifications_router.router)
 
 
 @app.get("/api/health")

@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, Date, ForeignKey, UniqueConstraint
+    Column, Integer, String, Text, Boolean, DateTime, Date, ForeignKey, UniqueConstraint, Index
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -43,7 +43,11 @@ class CRM(Base):
 
 class Contact(Base):
     __tablename__ = "contact"
-    __table_args__ = (UniqueConstraint("crm_id", "urn_id", name="uq_crm_urn"),)
+    __table_args__ = (
+        UniqueConstraint("crm_id", "urn_id", name="uq_crm_urn"),
+        Index("ix_contact_crm_id", "crm_id"),
+        Index("ix_contact_urn_id", "urn_id"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     crm_id = Column(Integer, ForeignKey("crm.id", ondelete="CASCADE"), nullable=False)
@@ -60,6 +64,8 @@ class Contact(Base):
     last_interaction_at = Column(DateTime)
     added_at = Column(DateTime, default=datetime.utcnow)
     extra_data = Column(Text)
+    notes = Column(Text)
+    deleted_at = Column(DateTime, nullable=True)
 
     crm = relationship("CRM", back_populates="contacts")
     tags = relationship("Tag", secondary="contact_tag", backref="contacts")
@@ -96,6 +102,7 @@ class Campaign(Base):
     ai_prompt = Column(Text)
     context_pdf_path = Column(String)
     full_personalize = Column(Boolean, default=False)
+    dm_delay_hours = Column(Integer, default=0)
 
     user = relationship("User", backref="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign", cascade="all, delete-orphan")
@@ -144,6 +151,7 @@ class CampaignContact(Base):
     last_sent_at = Column(DateTime)
     replied_at = Column(DateTime)
     last_checked_at = Column(DateTime)
+    connection_accepted_at = Column(DateTime)
 
     campaign = relationship("Campaign", back_populates="campaign_contacts")
     contact = relationship("Contact")
@@ -201,3 +209,17 @@ class ContactTag(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     contact_id = Column(Integer, ForeignKey("contact.id", ondelete="CASCADE"), nullable=False)
     tag_id = Column(Integer, ForeignKey("tag.id", ondelete="CASCADE"), nullable=False)
+
+
+class Notification(Base):
+    __tablename__ = "notification"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+    type = Column(String, nullable=False)  # campaign_completed, reply_received, cookies_expired
+    title = Column(String, nullable=False)
+    message = Column(Text)
+    read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", backref="notifications")

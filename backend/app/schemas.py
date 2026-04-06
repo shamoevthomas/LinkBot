@@ -67,6 +67,7 @@ class ContactResponse(BaseModel):
     connection_status: str
     last_interaction_at: Optional[datetime] = None
     added_at: datetime
+    notes: Optional[str] = None
     tags: List["TagResponse"] = []
 
 class ContactAdd(BaseModel):
@@ -83,6 +84,9 @@ class BulkMove(BaseModel):
 class BulkUpdateStatus(BaseModel):
     contact_ids: List[int]
     connection_status: str
+
+class ContactNotesUpdate(BaseModel):
+    notes: str
 
 # Campaigns
 class CampaignCreate(BaseModel):
@@ -116,6 +120,7 @@ class DMCampaignCreate(BaseModel):
     delay_minutes: Optional[int] = 2  # minutes between each action
     is_connection_dm: bool = False  # connection + DM combo campaign
     keywords: Optional[str] = None  # search keywords (for connection_dm)
+    dm_delay_hours: int = 0  # hours to wait after connection accepted before sending DM
 
 class GenerateCampaignMessagesRequest(BaseModel):
     ai_prompt: str

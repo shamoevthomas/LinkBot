@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Rocket, Settings, Link, Contact } from 'lucide-react';
+import { LayoutDashboard, Users, Rocket, Settings, Link, Contact, Bell, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getNotifications } from '../../api/dashboard';
+import { getNotificationsList, markNotificationRead, markAllNotificationsRead } from '../../api/notifications';
 import UserPopup from '../ui/UserPopup';
 
 const links = [
@@ -13,9 +14,18 @@ const links = [
   { to: '/dashboard/config', icon: Settings, label: 'Configuration', dotKey: 'cookies_invalid' },
 ];
 
+const NOTIF_ICONS = {
+  reply_received: '💬',
+  campaign_completed: '✅',
+  cookies_expired: '⚠️',
+};
+
 export default function Sidebar() {
   const { user } = useAuth();
   const [notifs, setNotifs] = useState({});
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [notifList, setNotifList] = useState([]);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
     const fetchNotifs = () => getNotifications().then(setNotifs).catch(() => {});
@@ -23,6 +33,43 @@ export default function Sidebar() {
     const interval = setInterval(fetchNotifs, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (showNotifs) {
+      getNotificationsList().then((data) => setNotifList(data.notifications || [])).catch(() => {});
+    }
+  }, [showNotifs]);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setShowNotifs(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    await markAllNotificationsRead();
+    setNotifList((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifs((prev) => ({ ...prev, unread_notifications: 0 }));
+  };
+
+  const handleMarkRead = async (id) => {
+    await markNotificationRead(id);
+    setNotifList((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    setNotifs((prev) => ({ ...prev, unread_notifications: Math.max(0, (prev.unread_notifications || 1) - 1) }));
+  };
+
+  const unreadCount = notifs.unread_notifications || 0;
+
+  const timeAgo = (iso) => {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return 'a l\'instant';
+    if (diff < 3600) return `${Math.floor(diff / 60)}min`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+    return `${Math.floor(diff / 86400)}j`;
+  };
 
   return (
     <nav style={{
@@ -86,8 +133,83 @@ export default function Sidebar() {
           ))}
         </div>
 
+        {/* Notifications bell */}
+        <div ref={dropdownRef} style={{ position: 'relative', marginLeft: 4 }}>
+          <button
+            onClick={() => setShowNotifs(!showNotifs)}
+            style={{
+              position: 'relative', padding: 8, borderRadius: 10,
+              background: showNotifs ? 'rgba(0,132,255,0.08)' : 'transparent',
+              border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
+            }}
+          >
+            <Bell size={18} color={showNotifs ? 'var(--blue)' : '#6b7280'} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 4, right: 4,
+                minWidth: 16, height: 16, padding: '0 4px',
+                background: '#ef4444', color: '#fff',
+                fontSize: 9, fontWeight: 700, borderRadius: 99,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {showNotifs && (
+            <div style={{
+              position: 'absolute', right: 0, top: 44,
+              width: 340, maxHeight: 400, overflowY: 'auto',
+              background: '#fff', borderRadius: 14,
+              boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+              border: '1px solid #e5e7eb',
+              zIndex: 100,
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '12px 16px', borderBottom: '1px solid #f3f4f6',
+              }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>Notifications</span>
+                {unreadCount > 0 && (
+                  <button onClick={handleMarkAllRead}
+                    style={{ fontSize: 11, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
+                    Tout marquer lu
+                  </button>
+                )}
+              </div>
+              {notifList.length === 0 ? (
+                <div style={{ padding: '24px 16px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                  Aucune notification
+                </div>
+              ) : (
+                notifList.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => !n.read && handleMarkRead(n.id)}
+                    style={{
+                      padding: '10px 16px',
+                      borderBottom: '1px solid #f9fafb',
+                      background: n.read ? '#fff' : '#f0f7ff',
+                      cursor: n.read ? 'default' : 'pointer',
+                      display: 'flex', gap: 10, alignItems: 'flex-start',
+                    }}
+                  >
+                    <span style={{ fontSize: 16, marginTop: 2 }}>{NOTIF_ICONS[n.type] || '🔔'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600, color: '#111' }}>{n.title}</div>
+                      {n.message && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{n.message}</div>}
+                    </div>
+                    <span style={{ fontSize: 10, color: '#9ca3af', whiteSpace: 'nowrap', marginTop: 2 }}>{timeAgo(n.created_at)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
         {/* User popup */}
-        <div style={{ marginLeft: 8 }}>
+        <div style={{ marginLeft: 4 }}>
           <UserPopup />
         </div>
       </div>

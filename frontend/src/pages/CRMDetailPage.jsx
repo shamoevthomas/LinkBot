@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Trash2, ArrowRightLeft, Plus, Loader2, Send, ExternalLink, MapPin, Briefcase, X, Link, Sparkles, Tag, ChevronDown, Download, ShieldOff, Filter, SlidersHorizontal, RefreshCw } from 'lucide-react';
-import { getCRM, getContacts, deleteContacts, moveContacts, updateContactsStatus, getCRMs, addContact, sendMessageToContact, searchLinkedInPeople, generateAIMessage, exportContacts } from '../api/crm';
+import { ArrowLeft, Search, Trash2, ArrowRightLeft, Copy, Plus, Loader2, Send, ExternalLink, MapPin, Briefcase, X, Link, Sparkles, Tag, ChevronDown, Download, ShieldOff, Filter, SlidersHorizontal, RefreshCw } from 'lucide-react';
+import { getCRM, getContacts, deleteContacts, moveContacts, copyContacts, updateContactsStatus, getCRMs, addContact, sendMessageToContact, searchLinkedInPeople, generateAIMessage, exportContacts, updateContactNotes, undoDeleteContacts } from '../api/crm';
 import { getTags, createTag, deleteTag, assignTag, removeTag } from '../api/tags';
 import { addToBlacklist } from '../api/blacklist';
 import { syncConnections } from '../api/config';
@@ -19,11 +19,14 @@ export default function CRMDetailPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showMove, setShowMove] = useState(false);
+  const [showCopy, setShowCopy] = useState(false);
+  const [targetCopyCrm, setTargetCopyCrm] = useState('');
   const [crms, setCrms] = useState([]);
   const [targetCrm, setTargetCrm] = useState('');
   const [selectedContact, setSelectedContact] = useState(null);
@@ -57,7 +60,9 @@ export default function CRMDetailPage() {
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(null); // urn_id being added or 'url'
 
-  const perPage = 25;
+  const [perPage, setPerPage] = useState(() => parseInt(localStorage.getItem('linkbot_perPage')) || 25);
+
+  useEffect(() => { localStorage.setItem('linkbot_perPage', perPage); }, [perPage]);
 
   useEffect(() => {
     client.get('/ai/status').then((r) => setAiAvailable(r.data.available)).catch(() => {});
@@ -65,10 +70,16 @@ export default function CRMDetailPage() {
 
   useEffect(() => { getTags().then(setTags).catch(() => {}); }, []);
 
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { page, per_page: perPage, search, connection_status: statusFilter };
+      const params = { page, per_page: perPage, search: debouncedSearch, connection_status: statusFilter };
       if (headlineSearch) params.headline_search = headlineSearch;
       if (locationSearch) params.location_search = locationSearch;
       if (addedAfter) params.added_after = addedAfter;
@@ -82,7 +93,7 @@ export default function CRMDetailPage() {
       setContacts(contactsData.contacts || []);
       setTotal(contactsData.total || 0);
     } finally { setLoading(false); }
-  }, [id, page, search, statusFilter, headlineSearch, locationSearch, addedAfter, addedBefore, tagFilter]);
+  }, [id, page, debouncedSearch, statusFilter, headlineSearch, locationSearch, addedAfter, addedBefore, tagFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -125,12 +136,24 @@ export default function CRMDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Supprimer les contacts selectionnes ?')) return;
+    const count = selected.size;
+    const ids = [...selected];
     try {
-      await deleteContacts(id, [...selected]);
-      toast.success(`${selected.size} contact(s) supprime(s)`);
+      const res = await deleteContacts(id, ids);
+      const deletedIds = res.deleted_ids || ids;
       setSelected(new Set());
       load();
+      toast((t) => (
+        <div className="flex items-center gap-3">
+          <span>{count} contact(s) supprime(s)</span>
+          <button
+            onClick={() => {
+              undoDeleteContacts(id, deletedIds).then(() => { load(); toast.dismiss(t.id); toast.success('Suppression annulee'); }).catch(() => toast.error('Erreur'));
+            }}
+            className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
+          >Annuler</button>
+        </div>
+      ), { duration: 10000 });
     } catch { toast.error('Erreur lors de la suppression'); }
   };
 
@@ -142,6 +165,20 @@ export default function CRMDetailPage() {
       setShowMove(false);
       load();
     } catch { toast.error('Erreur lors du deplacement'); }
+  };
+
+  const handleCopy = async () => {
+    try {
+      const res = await copyContacts(id, [...selected], parseInt(targetCopyCrm));
+      toast.success(`${res.copied} contact(s) duplique(s)${res.skipped ? `, ${res.skipped} deja present(s)` : ''}`);
+      setSelected(new Set());
+      setShowCopy(false);
+    } catch { toast.error('Erreur lors de la duplication'); }
+  };
+
+  const openCopyModal = async () => {
+    setCrms(await getCRMs());
+    setShowCopy(true);
   };
 
   const handleChangeStatus = async (newStatus) => {
@@ -441,6 +478,9 @@ export default function CRMDetailPage() {
           <button onClick={openMoveModal} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 flex items-center gap-1">
             <ArrowRightLeft size={14} /> Deplacer
           </button>
+          <button onClick={openCopyModal} className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-medium hover:bg-emerald-200 flex items-center gap-1">
+            <Copy size={14} /> Dupliquer
+          </button>
           <div className="relative">
             <button onClick={(e) => { e.stopPropagation(); setShowStatusMenu(!showStatusMenu); }}
               className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-200 flex items-center gap-1">
@@ -554,18 +594,28 @@ export default function CRMDetailPage() {
         )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {totalPages >= 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <span className="text-xs text-gray-500">{total} contact(s) au total</span>
-            <div className="flex gap-1">
-              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((p) => (
-                <button key={p} onClick={() => setPage(p)}
-                  className={`px-3 py-1 rounded text-xs font-medium ${p === page ? 'text-white' : 'text-gray-600 hover:bg-gray-200'}`}
-                  style={p === page ? { background: 'var(--blue)' } : {}}>
-                  {p}
-                </button>
-              ))}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500">{total} contact(s) au total</span>
+              <select value={perPage} onChange={(e) => { setPerPage(parseInt(e.target.value)); setPage(1); }}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white">
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
             </div>
+            {totalPages > 1 && (
+              <div className="flex gap-1">
+                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((p) => (
+                  <button key={p} onClick={() => setPage(p)}
+                    className={`px-3 py-1 rounded text-xs font-medium ${p === page ? 'text-white' : 'text-gray-600 hover:bg-gray-200'}`}
+                    style={p === page ? { background: 'var(--blue)' } : {}}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -655,6 +705,23 @@ export default function CRMDetailPage() {
           <button onClick={handleMove} disabled={!targetCrm}
             className="cta-btn w-full disabled:opacity-40" style={{ padding: '10px 16px', fontSize: '14px' }}>
             Deplacer {selected.size} contact(s)
+          </button>
+        </div>
+      </Modal>
+
+      {/* Copy modal */}
+      <Modal open={showCopy} onClose={() => setShowCopy(false)} title="Dupliquer vers un CRM">
+        <div className="space-y-4">
+          <select value={targetCopyCrm} onChange={(e) => setTargetCopyCrm(e.target.value)}
+            className="input-glass w-full px-3 py-2">
+            <option value="">Selectionner un CRM...</option>
+            {crms.filter((c) => c.id !== parseInt(id)).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <button onClick={handleCopy} disabled={!targetCopyCrm}
+            className="cta-btn w-full disabled:opacity-40" style={{ padding: '10px 16px', fontSize: '14px' }}>
+            Dupliquer {selected.size} contact(s)
           </button>
         </div>
       </Modal>
@@ -761,6 +828,24 @@ export default function CRMDetailPage() {
                       : 'Aucune'}
                   </p>
                 </div>
+              </div>
+
+              {/* Notes */}
+              <div className="border-t border-gray-200 pt-4">
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Notes</label>
+                <textarea
+                  defaultValue={selectedContact.notes || ''}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val !== (selectedContact.notes || '')) {
+                      updateContactNotes(id, selectedContact.id, val).catch(() => {});
+                      setSelectedContact({ ...selectedContact, notes: val });
+                    }
+                  }}
+                  rows={3}
+                  placeholder="Ajouter des notes..."
+                  className="input-glass w-full resize-none text-sm"
+                />
               </div>
 
               {/* Send message */}

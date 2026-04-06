@@ -14,6 +14,8 @@ export const deleteContacts = (crmId, contactIds) =>
   client.delete(`/crms/${crmId}/contacts`, { data: { contact_ids: contactIds } }).then((r) => r.data);
 export const moveContacts = (crmId, contactIds, targetCrmId) =>
   client.post(`/crms/${crmId}/contacts/move`, { contact_ids: contactIds, target_crm_id: targetCrmId }).then((r) => r.data);
+export const copyContacts = (crmId, contactIds, targetCrmId) =>
+  client.post(`/crms/${crmId}/contacts/copy`, { contact_ids: contactIds, target_crm_id: targetCrmId }).then((r) => r.data);
 export const updateContactsStatus = (crmId, contactIds, connectionStatus) =>
   client.patch(`/crms/${crmId}/contacts/status`, { contact_ids: contactIds, connection_status: connectionStatus }).then((r) => r.data);
 export const sendMessageToContact = (crmId, contactId, message) =>
@@ -26,3 +28,7 @@ export const exportContacts = (crmId, params) =>
   client.get(`/crms/${crmId}/contacts/export`, { params, responseType: 'blob' }).then((r) => r.data);
 export const getAllContacts = (params) =>
   client.get('/crms/all-contacts', { params }).then((r) => r.data);
+export const updateContactNotes = (crmId, contactId, notes) =>
+  client.patch(`/crms/${crmId}/contacts/${contactId}/notes`, { notes }).then((r) => r.data);
+export const undoDeleteContacts = (crmId, contactIds) =>
+  client.post(`/crms/${crmId}/contacts/undo-delete`, { contact_ids: contactIds }).then((r) => r.data);

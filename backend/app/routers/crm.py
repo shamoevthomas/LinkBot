@@ -24,6 +24,7 @@ from app.schemas import (
     BulkMove,
     BulkUpdateStatus,
     BulkTagAssign,
+    ContactNotesUpdate,
     SendMessageRequest,
     GenerateAIMessageRequest,
     TagResponse,
@@ -52,7 +53,7 @@ def list_all_contacts(
     """List all contacts across all CRMs with search, filter, sort, and pagination."""
     # Only show contacts from the current user's CRMs
     user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
-    q = db.query(Contact).filter(Contact.crm_id.in_(user_crm_ids))
+    q = db.query(Contact).filter(Contact.crm_id.in_(user_crm_ids), Contact.deleted_at.is_(None))
 
     if crm_id:
         q = q.filter(Contact.crm_id == crm_id)
@@ -294,7 +295,7 @@ def list_contacts(
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
-    q = db.query(Contact).filter(Contact.crm_id == crm_id)
+    q = db.query(Contact).filter(Contact.crm_id == crm_id, Contact.deleted_at.is_(None))
 
     # Search filter
     if search:
@@ -574,23 +575,48 @@ async def generate_ai_message(
     return {"message": message}
 
 
-@router.delete("/{crm_id}/contacts", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{crm_id}/contacts", status_code=status.HTTP_200_OK)
 def bulk_delete_contacts(
     crm_id: int,
     body: BulkDelete,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    """Bulk-delete contacts from a CRM."""
+    """Soft-delete contacts from a CRM (undo-able for 5 minutes)."""
     crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
+    now = datetime.utcnow()
+    contacts = db.query(Contact).filter(
+        Contact.crm_id == crm_id,
+        Contact.id.in_(body.contact_ids),
+    ).all()
+    deleted_ids = []
+    for c in contacts:
+        c.deleted_at = now
+        deleted_ids.append(c.id)
+    db.commit()
+    return {"deleted_ids": deleted_ids}
+
+
+@router.post("/{crm_id}/contacts/undo-delete", status_code=status.HTTP_200_OK)
+def undo_delete_contacts(
+    crm_id: int,
+    body: BulkDelete,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Restore soft-deleted contacts."""
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
+    if not crm:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
     db.query(Contact).filter(
         Contact.crm_id == crm_id,
         Contact.id.in_(body.contact_ids),
-    ).delete(synchronize_session="fetch")
+    ).update({"deleted_at": None}, synchronize_session="fetch")
     db.commit()
+    return {"restored": len(body.contact_ids)}
 
 
 @router.post("/{crm_id}/contacts/move", status_code=status.HTTP_200_OK)
@@ -633,6 +659,56 @@ def bulk_move_contacts(
     return {"moved": moved, "skipped": skipped}
 
 
+@router.post("/{crm_id}/contacts/copy", status_code=status.HTTP_200_OK)
+def bulk_copy_contacts(
+    crm_id: int,
+    body: BulkMove,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Copy (duplicate) contacts into another CRM."""
+    source = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
+    if not source:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source CRM not found")
+
+    target = db.query(CRM).filter(CRM.id == body.target_crm_id, CRM.user_id == _user.id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target CRM not found")
+
+    contacts = (
+        db.query(Contact)
+        .filter(Contact.crm_id == crm_id, Contact.id.in_(body.contact_ids))
+        .all()
+    )
+
+    copied = 0
+    skipped = 0
+    for contact in contacts:
+        dup = db.query(Contact).filter(
+            Contact.crm_id == body.target_crm_id,
+            Contact.urn_id == contact.urn_id,
+        ).first()
+        if dup:
+            skipped += 1
+            continue
+        db.add(Contact(
+            crm_id=body.target_crm_id,
+            urn_id=contact.urn_id,
+            public_id=contact.public_id,
+            first_name=contact.first_name,
+            last_name=contact.last_name,
+            headline=contact.headline,
+            location=contact.location,
+            profile_picture_url=contact.profile_picture_url,
+            linkedin_url=contact.linkedin_url,
+            connection_status=contact.connection_status,
+        ))
+        copied += 1
+
+    db.commit()
+    return {"copied": copied, "skipped": skipped}
+
+
 @router.patch("/{crm_id}/contacts/status", status_code=status.HTTP_200_OK)
 def bulk_update_status(
     crm_id: int,
@@ -657,6 +733,25 @@ def bulk_update_status(
     return {"updated": updated}
 
 
+@router.patch("/{crm_id}/contacts/{contact_id}/notes")
+def update_contact_notes(
+    crm_id: int,
+    contact_id: int,
+    body: ContactNotesUpdate,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Update notes for a single contact."""
+    contact = db.query(Contact).filter(
+        Contact.id == contact_id, Contact.crm_id == crm_id
+    ).first()
+    if not contact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+    contact.notes = body.notes
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/{crm_id}/contacts/export")
 def export_contacts_csv(
     crm_id: int,
@@ -674,7 +769,7 @@ def export_contacts_csv(
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
-    q = db.query(Contact).filter(Contact.crm_id == crm_id)
+    q = db.query(Contact).filter(Contact.crm_id == crm_id, Contact.deleted_at.is_(None))
 
     if search:
         pattern = f"%{search}%"

@@ -16,7 +16,7 @@ class Base(DeclarativeBase):
 
 
 def init_db():
-    from app.models import User, CRM, Contact, Campaign, CampaignAction, AppSettings  # noqa: F401
+    from app.models import User, CRM, Contact, Campaign, CampaignAction, AppSettings, Notification  # noqa: F401
     Base.metadata.create_all(bind=engine)
     _run_migrations()
 
@@ -39,6 +39,20 @@ def _run_migrations():
                     f'UPDATE "{table}" SET user_id = 1 WHERE user_id IS NULL'
                 ))
                 print(f"[MIGRATION] Added user_id to {table}", flush=True)
+
+        # Add notes and deleted_at columns to contact
+        contact_columns = [c["name"] for c in inspector.get_columns("contact")]
+        if "notes" not in contact_columns:
+            conn.execute(text('ALTER TABLE "contact" ADD COLUMN notes TEXT'))
+            print("[MIGRATION] Added notes to contact", flush=True)
+        if "deleted_at" not in contact_columns:
+            conn.execute(text('ALTER TABLE "contact" ADD COLUMN deleted_at TIMESTAMP'))
+            print("[MIGRATION] Added deleted_at to contact", flush=True)
+
+        # Cleanup old soft-deleted contacts (> 5 minutes)
+        conn.execute(text(
+            "DELETE FROM contact WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '5 minutes'"
+        )) if is_pg else None
 
         # Drop old unique constraints that should now be per-user
         if is_pg:
