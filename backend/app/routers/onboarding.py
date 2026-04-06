@@ -2,14 +2,11 @@
 Onboarding route: accepts the initial profile setup via multipart form data.
 """
 
-import uuid
-from pathlib import Path
-
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.config import UPLOADS_DIR
 from app.dependencies import get_db, get_current_user
+from app.storage import upload_file
 from app.models import User, CRM, ImportJob
 from app.schemas import UserResponse
 from app.linkedin_service import validate_cookies
@@ -40,12 +37,8 @@ async def complete_onboarding(
     # Save profile picture if provided
     picture_path: str | None = user.profile_picture_path
     if profile_picture and profile_picture.filename:
-        ext = Path(profile_picture.filename).suffix or ".png"
-        filename = f"{uuid.uuid4().hex}{ext}"
-        dest = UPLOADS_DIR / filename
         content = await profile_picture.read()
-        dest.write_bytes(content)
-        picture_path = f"/uploads/{filename}"
+        picture_path = upload_file(content, profile_picture.filename)
 
     # Validate LinkedIn cookies if both are provided
     cookies_valid = user.cookies_valid or False

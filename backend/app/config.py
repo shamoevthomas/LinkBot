@@ -21,6 +21,11 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.
 # Gemini AI
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
+# Supabase Storage (for persistent file uploads in prod)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "uploads")
+
 # Ensure dirs exist (only for local SQLite dev)
 if DATABASE_URL.startswith("sqlite"):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
