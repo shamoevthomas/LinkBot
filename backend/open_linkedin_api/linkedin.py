@@ -1233,64 +1233,84 @@ class Linkedin(object):
                     params=params,
                     headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
                 )
-                data = res.json()
+                raw = res.json()
             except Exception:
                 self.logger.exception("[CONNECTIONS] Error fetching at start=%d", start)
                 break
 
-            included = data.get("included", [])
+            # Build lookup map from included entities
+            included_map = {}
+            for inc in raw.get("included", []):
+                urn = inc.get("entityUrn", "")
+                if urn:
+                    included_map[urn] = inc
+
+            # Parse the actual connection elements from data
+            inner = raw.get("data", {})
+            if isinstance(inner, dict) and "data" in inner:
+                inner = inner["data"]
+            elements = inner.get("elements", [])
+            paging = inner.get("paging", {})
+
             self.logger.info(
-                "[CONNECTIONS] start=%d, included=%d items", start, len(included)
+                "[CONNECTIONS] start=%d, elements=%d, paging_total=%s, included=%d",
+                start, len(elements), paging.get("total", "?"), len(raw.get("included", []))
             )
 
-            if not included:
+            if not elements:
                 break
 
-            for item in included:
-                item_type = item.get("$type", "") or item.get("_type", "")
-                # Only process profile entities
-                if "linkedin.voyager" not in item_type and "fsd_profile" not in item.get("entityUrn", ""):
+            for el in elements:
+                # Get the profile URN from the connection element
+                profile_urn = (
+                    el.get("*connectedMemberResolutionResult")
+                    or el.get("connectedMember")
+                    or ""
+                )
+                if not profile_urn:
                     continue
 
-                entity_urn = item.get("entityUrn", "")
-                urn_id = entity_urn.split(":")[-1] if entity_urn else ""
+                urn_id = profile_urn.split(":")[-1] if profile_urn else ""
                 if not urn_id:
                     continue
 
-                first_name = item.get("firstName", "")
-                last_name = item.get("lastName", "")
+                # Resolve profile data from included map
+                profile = included_map.get(profile_urn, {})
+
+                first_name = profile.get("firstName", "")
+                last_name = profile.get("lastName", "")
                 name = f"{first_name} {last_name}".strip()
 
                 # Extract profile picture
                 picture_url = ""
-                picture_data = item.get("profilePicture", {}) or {}
+                picture_data = profile.get("profilePicture", {}) or {}
                 artifacts = (
                     picture_data.get("displayImageReference", {}) or {}
                 ).get("vectorImage", {}) or {}
                 art_list = artifacts.get("artifacts", [])
                 if art_list:
                     root_url = artifacts.get("rootUrl", "")
-                    # Pick the largest artifact
                     best = art_list[-1] if art_list else {}
                     file_seg = best.get("fileIdentifyingUrlPathSegment", "")
                     if root_url and file_seg:
                         picture_url = f"{root_url}{file_seg}"
 
-                public_id = item.get("publicIdentifier", "")
+                public_id = profile.get("publicIdentifier", "")
 
                 results.append({
                     "urn_id": urn_id,
                     "public_id": public_id,
-                    "name": name,
+                    "name": name or "Inconnu",
                     "first_name": first_name,
                     "last_name": last_name,
-                    "jobtitle": item.get("headline", ""),
-                    "location": item.get("geoLocationName", ""),
+                    "jobtitle": profile.get("headline", ""),
+                    "location": profile.get("geoLocationName", ""),
                     "picture_url": picture_url,
                     "navigation_url": f"https://www.linkedin.com/in/{public_id}" if public_id else "",
                 })
 
-            start += len(included)
+            # Paginate by actual elements count, not included count
+            start += len(elements)
 
             if 0 < limit <= len(results):
                 break
