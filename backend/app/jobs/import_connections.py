@@ -9,7 +9,7 @@ from datetime import datetime
 
 from app.database import SessionLocal
 from app.models import Contact, ImportJob
-from app.linkedin_service import get_linkedin_client, get_user_connections
+from app.linkedin_service import get_linkedin_client
 
 logger = logging.getLogger(__name__)
 
@@ -31,26 +31,7 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
         job = db.query(ImportJob).filter(ImportJob.id == import_job_id).first()
         client = get_linkedin_client(li_at, jsessionid)
 
-        # Get user URN from profile
-        me = await asyncio.to_thread(client.get_user_profile, False)
-        urn_id = _extract_urn(me)
-
-        # Flag to use network_depths fallback if connectionOf returns 0
-        use_network_fallback = False
-        if not urn_id or urn_id.isdigit():
-            logger.warning("URN extraction gave '%s' — will use network_depths fallback", urn_id)
-            use_network_fallback = True
-
-        if not urn_id and not use_network_fallback:
-            logger.error("Could not determine current user URN for import")
-            if job:
-                job.status = "failed"
-                job.error_message = "Could not determine your LinkedIn URN"
-                job.completed_at = datetime.utcnow()
-                db.commit()
-            return
-
-        logger.info("Import starting for CRM %d with URN: %s (fallback=%s)", crm_id, urn_id, use_network_fallback)
+        logger.info("Import starting for CRM %d", crm_id)
 
         import json
 
@@ -62,37 +43,21 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
 
         while True:
             try:
-                # Use network_depths=F as primary — it's the most reliable way
-                # to get ALL 1st-degree connections via the authenticated session.
-                # connectionOf can be used as fallback but has stricter limits.
-                if not use_network_fallback:
-                    connections = await get_user_connections(
-                        client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
-                    )
-                else:
-                    connections = []
-
-                # Switch to network_depths if connectionOf returns 0 on first call
-                if not connections and offset == 0 and not use_network_fallback:
-                    logger.info("connectionOf returned 0, switching to network_depths=F")
-                    use_network_fallback = True
-
-                if use_network_fallback and not connections:
-                    connections = await asyncio.to_thread(
-                        client.search_people,
-                        network_depths=["F"],
-                        limit=_PAGE_SIZE,
-                        offset=offset,
-                    )
-                    connections = connections or []
+                # Use network_depths=["F"] to search all 1st-degree connections.
+                # This is more reliable than connectionOf which LinkedIn now limits.
+                connections = await asyncio.to_thread(
+                    client.search_people,
+                    network_depths=["F"],
+                    limit=_PAGE_SIZE,
+                    offset=offset,
+                )
+                connections = connections or []
             except Exception:
                 logger.exception("Error fetching connections at offset %d", offset)
                 break
 
             if not connections:
                 empty_rounds += 1
-                # LinkedIn sometimes returns empty pages mid-pagination.
-                # Retry up to 3 times with advancing offset before giving up.
                 if empty_rounds >= 3:
                     logger.info("3 consecutive empty rounds at offset %d — stopping", offset)
                     break
@@ -211,78 +176,3 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
         db.close()
 
 
-def _extract_urn(profile_data: dict) -> str:
-    """Extract the user's URN ID from the get_user_profile response.
-
-    The Voyager API returns the profile in `included[]` with a
-    `dashEntityUrn` like `urn:li:fsd_profile:ACoAA...`.
-    Handles both normalized JSON and flat response formats.
-    """
-    if not isinstance(profile_data, dict):
-        return ""
-
-    logger.info("[URN] /me response top-level keys: %s", list(profile_data.keys()))
-
-    # 1. Try included[] array (normalized Voyager format)
-    for item in profile_data.get("included", []):
-        dash_urn = item.get("dashEntityUrn", "")
-        if "fsd_profile" in dash_urn:
-            urn = dash_urn.split(":")[-1]
-            logger.info("[URN] Extracted from included[].dashEntityUrn: %s", urn)
-            return urn
-
-    # 2. Try included[].entityUrn with fs_miniProfile (same ID format)
-    for item in profile_data.get("included", []):
-        entity_urn = item.get("entityUrn", "")
-        if "fs_miniProfile" in entity_urn:
-            urn = entity_urn.split(":")[-1]
-            logger.info("[URN] Extracted from included[].entityUrn (miniProfile): %s", urn)
-            return urn
-
-    # 3. Try flat miniProfile (non-normalized response)
-    mini = profile_data.get("miniProfile", {})
-    if isinstance(mini, dict):
-        for key in ("dashEntityUrn", "entityUrn"):
-            val = mini.get(key, "")
-            if val and ("fsd_profile" in val or "fs_miniProfile" in val):
-                urn = val.split(":")[-1]
-                logger.info("[URN] Extracted from miniProfile.%s: %s", key, urn)
-                return urn
-
-    # 4. Try data.miniProfile or data.*miniProfile (normalized reference)
-    data_block = profile_data.get("data", {})
-    if isinstance(data_block, dict):
-        data_mini = data_block.get("miniProfile", {})
-        if isinstance(data_mini, dict):
-            for key in ("dashEntityUrn", "entityUrn"):
-                val = data_mini.get(key, "")
-                if val and ("fsd_profile" in val or "fs_miniProfile" in val):
-                    urn = val.split(":")[-1]
-                    logger.info("[URN] Extracted from data.miniProfile.%s: %s", key, urn)
-                    return urn
-
-    # 5. Try profile_id or publicIdentifier at top level
-    for key in ("profile_id", "publicIdentifier"):
-        val = profile_data.get(key) or (data_block.get(key) if isinstance(data_block, dict) else None)
-        if val:
-            logger.info("[URN] Extracted from %s: %s", key, val)
-            return str(val)
-
-    # 6. Try objectUrn in included
-    for item in profile_data.get("included", []):
-        obj_urn = item.get("objectUrn", "")
-        if obj_urn:
-            urn = obj_urn.split(":")[-1]
-            logger.info("[URN] Extracted from included[].objectUrn: %s", urn)
-            return urn
-
-    # 7. Try data.plainId as last resort (numeric — may not work with connectionOf)
-    plain_id = data_block.get("plainId") if isinstance(data_block, dict) else None
-    if not plain_id:
-        plain_id = profile_data.get("plainId")
-    if plain_id:
-        logger.warning("[URN] Using plainId as fallback (may not work): %s", plain_id)
-        return str(plain_id)
-
-    logger.error("[URN] Could not extract URN. Response sample: %s", str(profile_data)[:500])
-    return ""

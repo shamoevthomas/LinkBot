@@ -11,7 +11,7 @@ from datetime import datetime
 
 from app.database import SessionLocal
 from app.models import CRM, Contact, User
-from app.linkedin_service import get_linkedin_client, get_user_connections
+from app.linkedin_service import get_linkedin_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,6 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
 
         client = get_linkedin_client(li_at, jsessionid)
 
-        me = await asyncio.to_thread(client.get_user_profile, False)
-        urn_id = _extract_urn(me)
-        if not urn_id:
-            logger.warning("sync_connections: could not determine user URN for user %d", user_id)
-            return
-
         existing_urns = set(
             row[0] for row in
             db.query(Contact.urn_id).filter(Contact.crm_id == crm.id).all()
@@ -57,9 +51,13 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
 
         while True:
             try:
-                connections = await get_user_connections(
-                    client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
+                connections = await asyncio.to_thread(
+                    client.search_people,
+                    network_depths=["F"],
+                    limit=_PAGE_SIZE,
+                    offset=offset,
                 )
+                connections = connections or []
             except Exception:
                 logger.exception("sync_connections: error at offset %d for user %d", offset, user_id)
                 break
@@ -119,23 +117,20 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
     try:
         client = get_linkedin_client(li_at, jsessionid)
 
-        # Step 1: Get user URN
-        me = await asyncio.to_thread(client.get_user_profile, False)
-        urn_id = _extract_urn(me)
-        if not urn_id:
-            logger.warning("sync_and_update: could not determine user URN")
-            return
-
-        # Step 2: Fetch all connections from LinkedIn (single pass, keep full data)
+        # Step 1: Fetch all connections from LinkedIn via network search
         all_connections = []
         all_connection_urns = set()
         offset = 0
         empty_rounds = 0
         while True:
             try:
-                connections = await get_user_connections(
-                    client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
+                connections = await asyncio.to_thread(
+                    client.search_people,
+                    network_depths=["F"],
+                    limit=_PAGE_SIZE,
+                    offset=offset,
                 )
+                connections = connections or []
             except Exception:
                 logger.exception("sync_and_update: error at offset %d", offset)
                 break
