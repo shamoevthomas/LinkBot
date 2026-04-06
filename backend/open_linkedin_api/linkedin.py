@@ -1194,6 +1194,13 @@ class Linkedin(object):
         """
         return self.search_people(connection_of=urn_id, **kwargs)
 
+    @staticmethod
+    def _text_value(val) -> str:
+        """Extract text from a value that may be a plain string or a TextViewModel dict."""
+        if isinstance(val, dict):
+            return val.get("text", "") or ""
+        return val or ""
+
     def get_all_connections(self, limit: int = -1, offset: int = 0) -> List:
         """Fetch ALL of the authenticated user's 1st-degree connections
         using the dedicated connections endpoint (not the search API).
@@ -1213,6 +1220,7 @@ class Linkedin(object):
         _CONN_PAGE_SIZE = 100
         results = []
         start = offset
+        seen_urns = set()
 
         while True:
             count = _CONN_PAGE_SIZE
@@ -1220,7 +1228,6 @@ class Linkedin(object):
                 count = limit - len(results)
 
             params = {
-                "decorationId": "com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-15",
                 "count": count,
                 "q": "search",
                 "sortType": "RECENTLY_ADDED",
@@ -1238,95 +1245,81 @@ class Linkedin(object):
                 self.logger.exception("[CONNECTIONS] Error fetching at start=%d", start)
                 break
 
-            # Parse the response — try data.elements first, fall back to included
-            inner = raw.get("data", {})
-            if isinstance(inner, dict) and "data" in inner:
-                inner = inner["data"]
+            included = raw.get("included", [])
 
-            # Log data structure for debugging
-            self.logger.info(
-                "[CONNECTIONS] start=%d, data keys=%s, included=%d",
-                start, list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__,
-                len(raw.get("included", []))
-            )
+            # Debug: dump structure of first page
+            if start == offset:
+                self.logger.info("[CONNECTIONS] top-level keys: %s", list(raw.keys()))
+                inner = raw.get("data", {})
+                self.logger.info("[CONNECTIONS] data keys: %s", list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__)
+                for i, inc in enumerate(included[:3]):
+                    self.logger.info(
+                        "[CONNECTIONS] included[%d]: $type=%s, entityUrn=%s, keys=%s, firstName=%r",
+                        i, inc.get("$type", "?"), inc.get("entityUrn", "?"),
+                        list(inc.keys())[:10], inc.get("firstName", "<MISSING>")
+                    )
+                # Log first fsd_profile item
+                for inc in included:
+                    if "fsd_profile" in inc.get("entityUrn", ""):
+                        self.logger.info(
+                            "[CONNECTIONS] FIRST fsd_profile: $type=%s, urn=%s, keys=%s, firstName=%r, lastName=%r, headline=%r",
+                            inc.get("$type", "?"), inc.get("entityUrn", "?"),
+                            list(inc.keys())[:15], inc.get("firstName", "<MISSING>"),
+                            inc.get("lastName", "<MISSING>"), inc.get("headline", "<MISSING>")
+                        )
+                        break
 
-            # Build lookup map from included entities
-            included_map = {}
-            for inc in raw.get("included", []):
-                urn = inc.get("entityUrn", "")
-                if urn:
-                    included_map[urn] = inc
-
-            # Try to get elements from data (may be "elements" or "*elements")
-            elements = inner.get("elements", []) if isinstance(inner, dict) else []
-            element_refs = inner.get("*elements", []) if isinstance(inner, dict) else []
-            paging = inner.get("paging", {}) if isinstance(inner, dict) else {}
-
-            if elements:
-                # data.elements contains connection objects directly
-                page_items = elements
-                use_elements = True
-            elif element_refs:
-                # data.*elements contains URN references — resolve from included
-                page_items = [included_map.get(ref, {}) for ref in element_refs if ref]
-                use_elements = True
-            else:
-                # Fallback: filter included for profile entities (have firstName)
-                page_items = [
-                    item for item in raw.get("included", [])
-                    if "firstName" in item
-                ]
-                use_elements = False
+            # Extract profile entities from included: filter by fsd_profile URN
+            profiles = []
+            for item in included:
+                entity_urn = item.get("entityUrn", "")
+                if "fsd_profile" not in entity_urn:
+                    continue
+                urn_id = entity_urn.split(":")[-1]
+                if not urn_id or urn_id in seen_urns:
+                    continue
+                seen_urns.add(urn_id)
+                profiles.append((urn_id, item))
 
             self.logger.info(
-                "[CONNECTIONS] page_items=%d, paging_total=%s, use_elements=%s",
-                len(page_items), paging.get("total", "?"), use_elements
+                "[CONNECTIONS] start=%d, included=%d, profiles=%d",
+                start, len(included), len(profiles)
             )
 
-            if not page_items:
+            if not profiles and not included:
                 break
 
-            for el in page_items:
-                if use_elements and elements:
-                    # Connection object — resolve profile from included
-                    profile_urn = (
-                        el.get("*connectedMemberResolutionResult")
-                        or el.get("connectedMember")
-                        or ""
-                    )
-                    if not profile_urn:
-                        continue
-                    urn_id = profile_urn.split(":")[-1] if profile_urn else ""
-                    if not urn_id:
-                        continue
-                    profile = included_map.get(profile_urn, {})
-                else:
-                    # Profile entity directly (from *elements resolve or fallback)
-                    profile = el
-                    entity_urn = el.get("entityUrn", "")
-                    urn_id = entity_urn.split(":")[-1] if entity_urn else ""
-                    if not urn_id:
-                        continue
+            # If no profiles found but included has data, we've exhausted connections
+            if not profiles:
+                break
 
-                first_name = profile.get("firstName", "")
-                last_name = profile.get("lastName", "")
+            for urn_id, profile in profiles:
+                first_name = self._text_value(profile.get("firstName"))
+                last_name = self._text_value(profile.get("lastName"))
                 name = f"{first_name} {last_name}".strip()
+                headline = self._text_value(profile.get("headline"))
+                location = self._text_value(
+                    profile.get("geoLocationName") or profile.get("locationName")
+                )
 
                 # Extract profile picture
                 picture_url = ""
-                picture_data = profile.get("profilePicture", {}) or {}
-                artifacts = (
-                    picture_data.get("displayImageReference", {}) or {}
-                ).get("vectorImage", {}) or {}
-                art_list = artifacts.get("artifacts", [])
-                if art_list:
-                    root_url = artifacts.get("rootUrl", "")
-                    best = art_list[-1] if art_list else {}
-                    file_seg = best.get("fileIdentifyingUrlPathSegment", "")
-                    if root_url and file_seg:
-                        picture_url = f"{root_url}{file_seg}"
+                picture_data = profile.get("profilePicture") or profile.get("picture") or {}
+                if isinstance(picture_data, dict):
+                    # Try dash format
+                    vec = (picture_data.get("displayImageReference") or {}).get("vectorImage") or {}
+                    # Try legacy format
+                    if not vec:
+                        vec = picture_data.get("com.linkedin.common.VectorImage") or {}
+                    art_list = vec.get("artifacts") or []
+                    root_url = vec.get("rootUrl", "")
+                    if art_list and root_url:
+                        best = art_list[-1]
+                        file_seg = best.get("fileIdentifyingUrlPathSegment", "")
+                        if file_seg:
+                            picture_url = f"{root_url}{file_seg}"
 
-                public_id = profile.get("publicIdentifier", "")
+                public_id = self._text_value(profile.get("publicIdentifier"))
 
                 results.append({
                     "urn_id": urn_id,
@@ -1334,24 +1327,19 @@ class Linkedin(object):
                     "name": name or "Inconnu",
                     "first_name": first_name,
                     "last_name": last_name,
-                    "jobtitle": profile.get("headline", ""),
-                    "location": profile.get("geoLocationName", ""),
+                    "jobtitle": headline,
+                    "location": location,
                     "picture_url": picture_url,
                     "navigation_url": f"https://www.linkedin.com/in/{public_id}" if public_id else "",
                 })
 
-            # Paginate by actual connection count
-            if use_elements:
-                start += len(page_items)
-            else:
-                # Fallback: included has ~2x items (profiles + other entities)
-                # Use profile count for pagination
-                start += len(page_items)
+            # Paginate: increment by the requested page size (not profile count,
+            # since LinkedIn paginates by connection count)
+            start += count
 
             if 0 < limit <= len(results):
                 break
 
-            # Safety: stop after too many pages
             if start > 10000:
                 self.logger.warning("[CONNECTIONS] Safety limit reached at start=%d", start)
                 break
