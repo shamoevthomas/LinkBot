@@ -10,7 +10,8 @@
   --card-bdr: rgba(0,0,0,0.09);
 }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
+body { overflow-x: hidden; }
 
 body {
   margin: 0;

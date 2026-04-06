@@ -289,54 +289,51 @@ export default function CRMDetailPage() {
 
   return (
     <PageWrapper>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/dashboard/crms')} className="p-2 hover:bg-gray-200 rounded-lg">
-          <ArrowLeft size={20} className="text-gray-600" />
-        </button>
-        <div className="flex-1">
-          <h1 className="f text-2xl font-bold text-gray-900">{crm?.name || '...'}</h1>
-          {crm?.description && <p className="text-sm text-gray-500">{crm.description}</p>}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-3">
+          <button onClick={() => navigate('/dashboard/crms')} className="p-2 hover:bg-gray-200 rounded-lg shrink-0">
+            <ArrowLeft size={20} className="text-gray-600" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="f text-xl sm:text-2xl font-bold text-gray-900 truncate">{crm?.name || '...'}</h1>
+            {crm?.description && <p className="text-sm text-gray-500 truncate">{crm.description}</p>}
+          </div>
         </div>
-        <button onClick={handleExport} disabled={exporting}
-          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50">
-          {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Exporter
-        </button>
-        <button onClick={() => setShowTagModal(true)}
-          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-          <Tag size={16} /> Tags
-        </button>
-        <button onClick={() => setShowAdd(true)}
-          className="cta-btn flex items-center gap-2" style={{ padding: '8px 16px', fontSize: '14px' }}>
-          <Plus size={16} /> Ajouter
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={handleExport} disabled={exporting}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50">
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} <span className="hidden sm:inline">Exporter</span>
+          </button>
+          <button onClick={() => setShowTagModal(true)}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-1.5">
+            <Tag size={14} /> <span className="hidden sm:inline">Tags</span>
+          </button>
+          <button onClick={() => setShowAdd(true)}
+            className="cta-btn flex items-center gap-1.5 ml-auto" style={{ padding: '6px 14px', fontSize: '13px' }}>
+            <Plus size={14} /> Ajouter
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-2 flex-wrap">
-        <div className="relative flex-1 max-w-xs">
+      <div className="flex gap-2 mb-2 flex-wrap">
+        <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Rechercher un contact..."
-            className="input-glass w-full pl-9 pr-3 py-2" />
+            className="input-glass w-full pl-9 pr-3 py-2 text-sm" />
         </div>
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="input-glass px-3 py-2">
+          className="input-glass px-2 py-2 text-sm max-w-[140px]">
           <option value="">Tous les statuts</option>
           <option value="connected">Connecte</option>
           <option value="request_sent">Demande envoyee</option>
           <option value="not_connected">Non connecte</option>
         </select>
-        {tags.length > 0 && (
-          <select value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1); }}
-            className="input-glass px-3 py-2">
-            <option value="">Tous les tags</option>
-            {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        )}
         <button onClick={() => setShowFilters(!showFilters)}
-          className={`px-3 py-2 border rounded-lg text-sm font-medium flex items-center gap-1.5 ${showFilters ? 'border-blue-300 hover:border-blue-300' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+          className={`px-2 py-2 border rounded-lg text-sm font-medium flex items-center gap-1 shrink-0 ${showFilters ? 'border-blue-300' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
           style={showFilters ? { color: 'var(--blue)', background: 'rgba(0,132,255,0.08)' } : {}}>
-          <SlidersHorizontal size={14} /> Filtres
+          <SlidersHorizontal size={14} />
         </button>
       </div>
 
@@ -375,7 +372,7 @@ export default function CRMDetailPage() {
 
       {/* Bulk actions */}
       {selected.size > 0 && (
-        <div className="rounded-lg p-3 mb-4 flex items-center gap-3" style={{ background: 'rgba(0,132,255,0.08)', border: '1px solid rgba(0,132,255,0.2)' }}>
+        <div className="rounded-lg p-3 mb-4 flex items-center gap-2 flex-wrap" style={{ background: 'rgba(0,132,255,0.08)', border: '1px solid rgba(0,132,255,0.2)' }}>
           <span className="text-sm font-medium" style={{ color: 'var(--blue)' }}>{selected.size} selectionne(s)</span>
           <button onClick={handleDelete} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-medium hover:bg-red-200 flex items-center gap-1">
             <Trash2 size={14} /> Supprimer
@@ -441,52 +438,52 @@ export default function CRMDetailPage() {
             <p className="text-sm mt-1">Ajoutez des contacts ou lancez une campagne de recherche</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="w-10 px-4 py-3"><input type="checkbox" checked={selected.size === contacts.length && contacts.length > 0} onChange={toggleAll} className="rounded" /></th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Contact</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Titre</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Derniere interaction</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Ajoute le</th>
+                <th className="w-8 px-2 py-3"><input type="checkbox" checked={selected.size === contacts.length && contacts.length > 0} onChange={toggleAll} className="rounded" /></th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600">Contact</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600">Titre</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600 hidden md:table-cell">Statut</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600 hidden lg:table-cell">Derniere interaction</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600 hidden lg:table-cell">Ajoute le</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {contacts.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedContact(c)}>
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} className="rounded" />
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
+                  <td className="px-2 py-3">
+                    <div className="flex items-center gap-2 min-w-0">
                       {c.profile_picture_url ? (
-                        <img src={c.profile_picture_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+                        <img src={c.profile_picture_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
                       ) : (
-                        <div className="w-9 h-9 rounded-full text-xs font-bold flex items-center justify-center"
+                        <div className="w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center shrink-0"
                           style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                           {initials(c)}
                         </div>
                       )}
-                      <div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-medium text-gray-900">{c.first_name} {c.last_name}</p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <p className="font-medium text-gray-900 truncate">{c.first_name} {c.last_name}</p>
                           {(c.tags || []).map((t) => (
-                            <span key={t.id} className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white" style={{ backgroundColor: t.color || '#3b82f6' }}>
+                            <span key={t.id} className="px-1 py-0.5 rounded text-[9px] font-medium text-white shrink-0" style={{ backgroundColor: t.color || '#3b82f6' }}>
                               {t.name}
                             </span>
                           ))}
                         </div>
-                        {c.location && <p className="text-xs text-gray-400">{c.location}</p>}
+                        {c.location && <p className="text-xs text-gray-400 truncate">{c.location}</p>}
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{c.headline || '-'}</td>
-                  <td className="px-4 py-3"><Badge status={c.connection_status} /></td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
+                  <td className="px-2 py-3 text-gray-600 truncate text-xs">{c.headline || '-'}</td>
+                  <td className="px-2 py-3 hidden md:table-cell"><Badge status={c.connection_status} /></td>
+                  <td className="px-2 py-3 text-gray-500 text-xs hidden lg:table-cell">
                     {c.last_interaction_at ? new Date(c.last_interaction_at).toLocaleDateString('fr-FR') : '-'}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
+                  <td className="px-2 py-3 text-gray-500 text-xs hidden lg:table-cell">
                     {new Date(c.added_at).toLocaleDateString('fr-FR')}
                   </td>
                 </tr>
