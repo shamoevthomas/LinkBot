@@ -88,6 +88,12 @@ async def run_connection_campaign(campaign_id: int) -> None:
             .first()
         )
 
+        if contact:
+            # Race condition guard
+            from app.models import CampaignContact as _CC
+            if db.query(_CC).filter(_CC.campaign_id == campaign_id, _CC.contact_id == contact.id).first():
+                return
+
         if not contact:
             campaign.status = "completed"
             campaign.completed_at = datetime.utcnow()

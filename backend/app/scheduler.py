@@ -1,86 +1,141 @@
 """
-APScheduler integration for running campaign jobs on intervals.
+Simple asyncio-based campaign scheduler.
 
-Uses ``AsyncIOScheduler`` so jobs are dispatched on the FastAPI event loop.
-Each campaign gets its own interval job whose period is derived from
-``(spread_over_days * 86400) / total_target``, clamped to [30, 3600] seconds.
+Replaces APScheduler which failed to fire jobs on Render.
+Uses a single background asyncio loop that checks registered campaigns
+and runs their jobs when due. Guaranteed to work on uvicorn's event loop.
 """
 
+import asyncio
 import logging
-from typing import Optional
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.jobstores.memory import MemoryJobStore
+import random
+from datetime import datetime, timedelta
+from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
-_scheduler: Optional[AsyncIOScheduler] = None
+# Registry: campaign_id -> {type, interval, jitter, last_run, next_run, paused}
+_campaigns: Dict[int, dict] = {}
+_loop_task: Optional[asyncio.Task] = None
+_shutdown = False
+
+# Sync connections tracking
+_last_sync_connections: Optional[datetime] = None
+SYNC_CONNECTIONS_INTERVAL = 6 * 3600  # 6 hours
+
+
+# ---------------------------------------------------------------------------
+# Campaign job runner
+# ---------------------------------------------------------------------------
+
+async def _run_campaign_tick(campaign_id: int, campaign_type: str):
+    """Run one tick of a campaign job."""
+    if campaign_type == "search":
+        from app.jobs.search_campaign import run_search_campaign
+        await run_search_campaign(campaign_id)
+    elif campaign_type == "dm":
+        from app.jobs.dm_campaign import run_dm_campaign
+        await run_dm_campaign(campaign_id)
+    elif campaign_type == "connection":
+        from app.jobs.connection_campaign import run_connection_campaign
+        await run_connection_campaign(campaign_id)
+    elif campaign_type == "connection_dm":
+        from app.jobs.connection_dm_campaign import run_connection_dm_campaign
+        await run_connection_dm_campaign(campaign_id)
+    else:
+        logger.warning("Unknown campaign type: %s", campaign_type)
+
+
+async def _run_sync_connections():
+    """Run the periodic connection sync."""
+    global _last_sync_connections
+    try:
+        from app.jobs.sync_connections import sync_new_connections
+        await sync_new_connections()
+        _last_sync_connections = datetime.utcnow()
+        print("[SCHEDULER] sync_connections completed", flush=True)
+    except Exception:
+        logger.exception("Error in sync_connections")
+
+
+# ---------------------------------------------------------------------------
+# Main background loop
+# ---------------------------------------------------------------------------
+
+async def _main_loop():
+    """Background loop that checks and runs campaign jobs."""
+    global _shutdown, _last_sync_connections
+    print("[SCHEDULER] Main loop started", flush=True)
+
+    # Run sync_connections once at startup (after 30s delay)
+    await asyncio.sleep(30)
+    await _run_sync_connections()
+
+    while not _shutdown:
+        try:
+            now = datetime.utcnow()
+
+            # Check sync_connections (every 6 hours)
+            if (_last_sync_connections is None or
+                    (now - _last_sync_connections).total_seconds() >= SYNC_CONNECTIONS_INTERVAL):
+                await _run_sync_connections()
+
+            # Check each registered campaign
+            for cid, info in list(_campaigns.items()):
+                if info.get("paused"):
+                    continue
+                if now >= info["next_run"]:
+                    print(f"[SCHEDULER] Firing campaign {cid} ({info['type']})", flush=True)
+                    try:
+                        await _run_campaign_tick(cid, info["type"])
+                    except Exception:
+                        logger.exception("Error running campaign %d", cid)
+
+                    # Schedule next run with jitter
+                    jitter_secs = random.randint(0, info["jitter"])
+                    info["last_run"] = datetime.utcnow()
+                    info["next_run"] = info["last_run"] + timedelta(
+                        seconds=info["interval"] + jitter_secs
+                    )
+                    print(
+                        f"[SCHEDULER] Campaign {cid}: next run in {info['interval'] + jitter_secs}s",
+                        flush=True,
+                    )
+
+        except Exception:
+            logger.exception("Error in scheduler main loop")
+
+        await asyncio.sleep(5)  # Check every 5 seconds
+
+    print("[SCHEDULER] Main loop stopped", flush=True)
 
 
 # ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
 
-def init_scheduler() -> AsyncIOScheduler:
-    """Create and start the global scheduler.  Safe to call multiple times."""
-    global _scheduler
-    if _scheduler is not None:
-        return _scheduler
-
-    _scheduler = AsyncIOScheduler(
-        jobstores={"default": MemoryJobStore()},
-        job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 120},
-    )
-    _scheduler.start()
-    logger.info("APScheduler started")
-
-    # Register CRON job: sync new connections every 6 hours
-    _schedule_sync_connections()
-
-    return _scheduler
+def init_scheduler():
+    """Start the background scheduler loop. Must be called from an async context."""
+    global _loop_task, _shutdown
+    _shutdown = False
+    if _loop_task is None or _loop_task.done():
+        loop = asyncio.get_event_loop()
+        _loop_task = loop.create_task(_main_loop())
+        print("[SCHEDULER] Initialized", flush=True)
 
 
-def _schedule_sync_connections() -> None:
-    """Register the periodic connection sync job (every 6 hours)
-    and run once at startup after a short delay."""
-    from app.jobs.sync_connections import sync_new_connections
-
-    # Recurring every 6 hours
-    _scheduler.add_job(
-        sync_new_connections,
-        trigger=CronTrigger(hour="*/6"),
-        id="sync_connections",
-        replace_existing=True,
-    )
-
-    # Run once 30s after startup to catch up on missed connections
-    from datetime import datetime, timedelta
-    _scheduler.add_job(
-        sync_new_connections,
-        trigger="date",
-        run_date=datetime.now() + timedelta(seconds=30),
-        id="sync_connections_startup",
-        replace_existing=True,
-    )
-    logger.info("Scheduled sync_connections CRON (every 6h) + startup run")
+def get_scheduler():
+    """Compatibility stub — returns None (no APScheduler)."""
+    return None
 
 
-def get_scheduler() -> AsyncIOScheduler:
-    """Return the running scheduler instance, creating it if necessary."""
-    if _scheduler is None:
-        return init_scheduler()
-    return _scheduler
-
-
-def shutdown_scheduler() -> None:
-    """Gracefully shut down the scheduler."""
-    global _scheduler
-    if _scheduler is not None:
-        _scheduler.shutdown(wait=False)
-        logger.info("APScheduler shut down")
-        _scheduler = None
+def shutdown_scheduler():
+    """Stop the background loop."""
+    global _shutdown
+    _shutdown = True
+    if _loop_task and not _loop_task.done():
+        _loop_task.cancel()
+    print("[SCHEDULER] Shutdown requested", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -88,10 +143,7 @@ def shutdown_scheduler() -> None:
 # ---------------------------------------------------------------------------
 
 def _get_schedule_interval(max_per_day: int) -> int | None:
-    """If schedule is enabled, compute interval from the time window and daily limit.
-
-    Returns interval in seconds, or None if schedule is disabled.
-    """
+    """If schedule is enabled, compute interval from the time window and daily limit."""
     from app.database import SessionLocal
     from app.models import AppSettings
 
@@ -112,14 +164,13 @@ def _get_schedule_interval(max_per_day: int) -> int | None:
         end_min = end_h * 60 + end_m
 
         if end_min <= start_min:
-            window_min = (1440 - start_min) + end_min  # overnight
+            window_min = (1440 - start_min) + end_min
         else:
             window_min = end_min - start_min
 
         if max_per_day <= 0 or window_min <= 0:
             return None
 
-        # Spread actions evenly across the window
         interval = (window_min * 60) // max_per_day
         return max(30, interval)
     except Exception:
@@ -128,129 +179,88 @@ def _get_schedule_interval(max_per_day: int) -> int | None:
         db.close()
 
 
-def _calculate_interval_seconds(total_target: int, spread_over_days: int) -> int:
-    """Return the interval between job executions in seconds.
-
-    Formula: ``(spread_over_days * 86400) / total_target``, clamped to
-    the range [30, 3600].
-    """
-    if total_target <= 0 or spread_over_days <= 0:
-        return 60  # sensible default
-
-    raw = (spread_over_days * 86400) / total_target
-    return max(30, min(3600, int(raw)))
-
-
 # ---------------------------------------------------------------------------
 # Campaign job management
 # ---------------------------------------------------------------------------
-
-def _job_id(campaign_id: int) -> str:
-    return f"campaign_{campaign_id}"
-
 
 def schedule_campaign_job(
     campaign_id: int,
     campaign_type: str,
     interval_seconds: Optional[int] = None,
 ) -> None:
-    """Register (or replace) an interval job for the given campaign.
-
-    The correct runner function is selected based on *campaign_type*
-    (``"search"``, ``"dm"``, or ``"connection"``).
-    """
-    scheduler = get_scheduler()
-    job_id = _job_id(campaign_id)
-
-    # Remove any existing job for this campaign.
-    if scheduler.get_job(job_id):
-        scheduler.remove_job(job_id)
-
-    # Determine global daily limit for this campaign type
+    """Register a campaign for periodic execution."""
     from app.database import SessionLocal
     from app.models import AppSettings
+
+    # Remove existing entry
+    _campaigns.pop(campaign_id, None)
+
+    # Determine interval
     db = SessionLocal()
     try:
         limit_key = "max_dms_per_day" if campaign_type in ("dm",) else "max_connections_per_day"
         row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
         daily_limit = int(row.value) if row else 25
 
-        # Check if schedule mode is enabled — use window-based interval
         schedule_interval = _get_schedule_interval(daily_limit)
 
         if schedule_interval:
-            # Schedule ON: spread actions across the time window
             interval = schedule_interval
             jitter = max(15, int(interval * 0.5))
         else:
-            # Schedule OFF: spread actions across 24h
             interval = max(30, 86400 // max(1, daily_limit))
             jitter = max(10, int(interval * 0.3))
     finally:
         db.close()
 
-    # Import runners lazily to avoid circular imports.
-    if campaign_type == "search":
-        from app.jobs.search_campaign import run_search_campaign as runner
-    elif campaign_type == "dm":
-        from app.jobs.dm_campaign import run_dm_campaign as runner
-    elif campaign_type == "connection":
-        from app.jobs.connection_campaign import run_connection_campaign as runner
-    elif campaign_type == "connection_dm":
-        from app.jobs.connection_dm_campaign import run_connection_dm_campaign as runner
-    else:
-        logger.error("Unknown campaign type: %s", campaign_type)
-        return
+    now = datetime.utcnow()
+    # First run after a short random delay (10-30s) to stagger campaigns
+    first_delay = random.randint(10, 30)
 
-    scheduler.add_job(
-        runner,
-        trigger=IntervalTrigger(seconds=interval, jitter=jitter),
-        id=job_id,
-        args=[campaign_id],
-        replace_existing=True,
-    )
-    logger.info(
-        "Scheduled campaign %d (%s) every %d s", campaign_id, campaign_type, interval
+    _campaigns[campaign_id] = {
+        "type": campaign_type,
+        "interval": interval,
+        "jitter": jitter,
+        "last_run": None,
+        "next_run": now + timedelta(seconds=first_delay),
+        "paused": False,
+    }
+
+    print(
+        f"[SCHEDULER] Registered campaign {campaign_id} ({campaign_type}) "
+        f"every {interval}s (jitter {jitter}s), first run in {first_delay}s",
+        flush=True,
     )
 
 
 def pause_campaign_job(campaign_id: int) -> None:
-    """Pause the job for the given campaign (does not remove it)."""
-    scheduler = get_scheduler()
-    job_id = _job_id(campaign_id)
-    job = scheduler.get_job(job_id)
-    if job:
-        job.pause()
-        logger.info("Paused campaign job %s", job_id)
+    """Pause a campaign."""
+    if campaign_id in _campaigns:
+        _campaigns[campaign_id]["paused"] = True
+        print(f"[SCHEDULER] Paused campaign {campaign_id}", flush=True)
 
 
 def resume_campaign_job(campaign_id: int) -> None:
-    """Resume a previously paused campaign job."""
-    scheduler = get_scheduler()
-    job_id = _job_id(campaign_id)
-    job = scheduler.get_job(job_id)
-    if job:
-        job.resume()
-        logger.info("Resumed campaign job %s", job_id)
-
-
-def get_campaign_next_run_time(campaign_id: int):
-    """Return the next scheduled run time for a campaign job, or None."""
-    from datetime import datetime as _dt
-    scheduler = get_scheduler()
-    job = scheduler.get_job(_job_id(campaign_id))
-    if job and job.next_run_time:
-        return job.next_run_time
-    return None
+    """Resume a paused campaign."""
+    if campaign_id in _campaigns:
+        _campaigns[campaign_id]["paused"] = False
+        _campaigns[campaign_id]["next_run"] = datetime.utcnow() + timedelta(seconds=10)
+        print(f"[SCHEDULER] Resumed campaign {campaign_id}", flush=True)
 
 
 def cancel_campaign_job(campaign_id: int) -> None:
-    """Remove the job for the given campaign entirely."""
-    scheduler = get_scheduler()
-    job_id = _job_id(campaign_id)
-    if scheduler.get_job(job_id):
-        scheduler.remove_job(job_id)
-        logger.info("Cancelled campaign job %s", job_id)
+    """Remove a campaign from the scheduler."""
+    removed = _campaigns.pop(campaign_id, None)
+    if removed:
+        print(f"[SCHEDULER] Cancelled campaign {campaign_id}", flush=True)
+
+
+def get_campaign_next_run_time(campaign_id: int):
+    """Return the next scheduled run time for a campaign, or None."""
+    info = _campaigns.get(campaign_id)
+    if info and not info.get("paused"):
+        return info["next_run"]
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -262,13 +272,12 @@ def is_within_schedule(db_session=None) -> bool:
 
     Returns True (allowed) if schedule is disabled or not configured.
     """
-    from datetime import datetime
+    from datetime import datetime as _dt
     from app.database import SessionLocal
     from app.models import AppSettings
 
     db = db_session or SessionLocal()
     try:
-        # Check if schedule is enabled
         enabled_row = db.query(AppSettings).filter(AppSettings.key == "schedule_enabled").first()
         if not enabled_row or enabled_row.value.lower() != "true":
             return True
@@ -285,7 +294,7 @@ def is_within_schedule(db_session=None) -> bool:
         except (ValueError, AttributeError):
             return True
 
-        now = datetime.now()
+        now = _dt.now()
         current_minutes = now.hour * 60 + now.minute
         start_minutes = start_h * 60 + start_m
         end_minutes = end_h * 60 + end_m
@@ -293,7 +302,6 @@ def is_within_schedule(db_session=None) -> bool:
         if start_minutes <= end_minutes:
             return start_minutes <= current_minutes < end_minutes
         else:
-            # Overnight window (e.g. 22:00 -> 06:00)
             return current_minutes >= start_minutes or current_minutes < end_minutes
     finally:
         if not db_session:
@@ -302,14 +310,14 @@ def is_within_schedule(db_session=None) -> bool:
 
 def get_global_actions_today(action_types: list, db_session=None) -> int:
     """Count today's successful actions across ALL campaigns."""
-    from datetime import datetime, date as _date
+    from datetime import datetime as _dt, date as _date
     from sqlalchemy import func
     from app.database import SessionLocal
     from app.models import CampaignAction
 
     db = db_session or SessionLocal()
     try:
-        today_start = datetime.combine(_date.today(), datetime.min.time())
+        today_start = _dt.combine(_date.today(), _dt.min.time())
         count = db.query(func.count(CampaignAction.id)).filter(
             CampaignAction.action_type.in_(action_types),
             CampaignAction.status == "success",

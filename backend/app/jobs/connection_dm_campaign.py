@@ -352,6 +352,14 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 )
 
                 if contact:
+                    # Skip if already in this campaign (race condition guard)
+                    already = db.query(CampaignContact).filter(
+                        CampaignContact.campaign_id == campaign_id,
+                        CampaignContact.contact_id == contact.id,
+                    ).first()
+                    if already:
+                        return
+
                     # Resolve URN
                     resolved_urn = await resolve_contact_urn(client, contact)
                     if not resolved_urn:

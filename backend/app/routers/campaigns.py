@@ -467,7 +467,7 @@ def diagnose_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Return diagnostic info about why a campaign may not be making progress."""
-    from app.scheduler import get_scheduler, is_within_schedule, get_global_actions_today, get_effective_daily_limit
+    from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit, _campaigns
 
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
     if not campaign:
@@ -476,10 +476,9 @@ def diagnose_campaign(
     issues = []
 
     # 1. Check scheduler job
-    scheduler = get_scheduler()
-    job = scheduler.get_job(f"campaign_{campaign_id}")
-    has_job = job is not None
-    job_paused = job and job.next_run_time is None if job else False
+    info = _campaigns.get(campaign_id)
+    has_job = info is not None
+    job_paused = info.get("paused", False) if info else False
     if not has_job:
         issues.append("Aucun job programme dans le scheduler")
     elif job_paused:
@@ -548,7 +547,7 @@ def diagnose_campaign(
         "type": campaign.type,
         "has_scheduler_job": has_job,
         "job_paused": job_paused,
-        "next_run_time": str(job.next_run_time) if job and job.next_run_time else None,
+        "next_run_time": str(info["next_run"]) if info else None,
         "cookies_valid": bool(user and user.cookies_valid),
         "within_schedule": is_within_schedule(db),
         "dm_limit": f"{dm_used}/{dm_limit}",
