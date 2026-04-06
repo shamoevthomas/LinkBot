@@ -1228,6 +1228,7 @@ class Linkedin(object):
                 count = limit - len(results)
 
             params = {
+                "decorationId": "com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-15",
                 "count": count,
                 "q": "search",
                 "sortType": "RECENTLY_ADDED",
@@ -1246,50 +1247,81 @@ class Linkedin(object):
                 break
 
             included = raw.get("included", [])
+            data_section = raw.get("data", {})
+
+            # Build lookup map from all included entities
+            included_map = {}
+            for inc in included:
+                urn = inc.get("entityUrn", "")
+                if urn:
+                    included_map[urn] = inc
+
+            # Get element references from data.*elements
+            element_refs = data_section.get("*elements", []) if isinstance(data_section, dict) else []
+            paging = data_section.get("paging", {}) if isinstance(data_section, dict) else {}
 
             # Debug: dump structure of first page
             if start == offset:
                 self.logger.info("[CONNECTIONS] top-level keys: %s", list(raw.keys()))
-                inner = raw.get("data", {})
-                self.logger.info("[CONNECTIONS] data keys: %s", list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__)
+                self.logger.info("[CONNECTIONS] data keys: %s", list(data_section.keys()) if isinstance(data_section, dict) else "N/A")
+                self.logger.info("[CONNECTIONS] *elements count: %d, paging: %s", len(element_refs), paging)
                 for i, inc in enumerate(included[:3]):
                     self.logger.info(
-                        "[CONNECTIONS] included[%d]: $type=%s, entityUrn=%s, keys=%s, firstName=%r",
-                        i, inc.get("$type", "?"), inc.get("entityUrn", "?"),
-                        list(inc.keys())[:10], inc.get("firstName", "<MISSING>")
+                        "[CONNECTIONS] included[%d]: $type=%s, entityUrn=%s, keys=%s",
+                        i, inc.get("$type", "?"), inc.get("entityUrn", "?"), list(inc.keys())[:10]
                     )
                 # Log first fsd_profile item
                 for inc in included:
                     if "fsd_profile" in inc.get("entityUrn", ""):
                         self.logger.info(
-                            "[CONNECTIONS] FIRST fsd_profile: $type=%s, urn=%s, keys=%s, firstName=%r, lastName=%r, headline=%r",
+                            "[CONNECTIONS] FIRST fsd_profile: $type=%s, urn=%s, keys=%s, firstName=%r, lastName=%r, headline=%r, publicIdentifier=%r",
                             inc.get("$type", "?"), inc.get("entityUrn", "?"),
-                            list(inc.keys())[:15], inc.get("firstName", "<MISSING>"),
-                            inc.get("lastName", "<MISSING>"), inc.get("headline", "<MISSING>")
+                            list(inc.keys()), inc.get("firstName", "<MISSING>"),
+                            inc.get("lastName", "<MISSING>"), inc.get("headline", "<MISSING>"),
+                            inc.get("publicIdentifier", "<MISSING>")
                         )
                         break
 
-            # Extract profile entities from included: filter by fsd_profile URN
+            if not element_refs and not included:
+                break
+
+            # Resolve connections: *elements → Connection object → connectedMember → Profile
             profiles = []
-            for item in included:
-                entity_urn = item.get("entityUrn", "")
-                if "fsd_profile" not in entity_urn:
+            for conn_urn in element_refs:
+                conn = included_map.get(conn_urn, {})
+                # Get profile URN from connection object
+                profile_urn = conn.get("*connectedMemberResolutionResult") or conn.get("connectedMember") or ""
+                if not profile_urn:
                     continue
-                urn_id = entity_urn.split(":")[-1]
+                # Ensure it's a URN string
+                if isinstance(profile_urn, dict):
+                    profile_urn = profile_urn.get("entityUrn", "")
+                urn_id = profile_urn.split(":")[-1] if profile_urn else ""
                 if not urn_id or urn_id in seen_urns:
                     continue
                 seen_urns.add(urn_id)
-                profiles.append((urn_id, item))
+                # Resolve profile from included
+                profile = included_map.get(profile_urn, {})
+                profiles.append((urn_id, profile))
+
+            # Fallback: if *elements didn't work, try fsd_profile URNs from included
+            if not profiles:
+                for item in included:
+                    entity_urn = item.get("entityUrn", "")
+                    if "fsd_profile" not in entity_urn:
+                        continue
+                    urn_id = entity_urn.split(":")[-1]
+                    if not urn_id or urn_id in seen_urns:
+                        continue
+                    seen_urns.add(urn_id)
+                    profiles.append((urn_id, item))
 
             self.logger.info(
-                "[CONNECTIONS] start=%d, included=%d, profiles=%d",
-                start, len(included), len(profiles)
+                "[CONNECTIONS] start=%d, *elements=%d, included=%d, profiles=%d, paging_total=%s",
+                start, len(element_refs), len(included), len(profiles),
+                paging.get("total", "?")
             )
 
-            if not profiles and not included:
-                break
-
-            # If no profiles found but included has data, we've exhausted connections
             if not profiles:
                 break
 
@@ -1335,7 +1367,8 @@ class Linkedin(object):
 
             # Paginate: increment by the requested page size (not profile count,
             # since LinkedIn paginates by connection count)
-            start += count
+            # Use element_refs count for pagination (matches LinkedIn's page size)
+            start += len(element_refs) if element_refs else len(profiles)
 
             if 0 < limit <= len(results):
                 break
