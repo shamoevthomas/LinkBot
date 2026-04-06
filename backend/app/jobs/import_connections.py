@@ -35,7 +35,13 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
         me = await asyncio.to_thread(client.get_user_profile, False)
         urn_id = _extract_urn(me)
 
-        if not urn_id:
+        # Flag to use network_depths fallback if connectionOf returns 0
+        use_network_fallback = False
+        if not urn_id or urn_id.isdigit():
+            logger.warning("URN extraction gave '%s' — will use network_depths fallback", urn_id)
+            use_network_fallback = True
+
+        if not urn_id and not use_network_fallback:
             logger.error("Could not determine current user URN for import")
             if job:
                 job.status = "failed"
@@ -43,6 +49,8 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                 job.completed_at = datetime.utcnow()
                 db.commit()
             return
+
+        logger.info("Import starting for CRM %d with URN: %s (fallback=%s)", crm_id, urn_id, use_network_fallback)
 
         import json
 
@@ -53,14 +61,41 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
 
         while True:
             try:
-                connections = await get_user_connections(
-                    client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
-                )
+                if use_network_fallback:
+                    # Fallback: search 1st-degree connections via network filter
+                    connections = await asyncio.to_thread(
+                        client.search_people,
+                        network_depths=["F"],
+                        limit=_PAGE_SIZE,
+                        offset=offset,
+                    )
+                    connections = connections or []
+                else:
+                    connections = await get_user_connections(
+                        client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
+                    )
             except Exception:
                 logger.exception("Error fetching connections at offset %d", offset)
                 break
 
+            # If first page via connectionOf returned 0, retry with network fallback
+            if not connections and offset == 0 and not use_network_fallback and urn_id:
+                logger.warning("connectionOf=%s returned 0 results, switching to network_depths fallback", urn_id)
+                use_network_fallback = True
+                try:
+                    connections = await asyncio.to_thread(
+                        client.search_people,
+                        network_depths=["F"],
+                        limit=_PAGE_SIZE,
+                        offset=offset,
+                    )
+                    connections = connections or []
+                except Exception:
+                    logger.exception("Fallback search also failed")
+                    break
+
             if not connections:
+                logger.info("No connections returned at offset %d", offset)
                 break
 
             for person in connections:
@@ -147,25 +182,73 @@ def _extract_urn(profile_data: dict) -> str:
 
     The Voyager API returns the profile in `included[]` with a
     `dashEntityUrn` like `urn:li:fsd_profile:ACoAA...`.
+    Handles both normalized JSON and flat response formats.
     """
     if not isinstance(profile_data, dict):
         return ""
 
-    # Try included[] array (Voyager format)
+    logger.info("[URN] /me response top-level keys: %s", list(profile_data.keys()))
+
+    # 1. Try included[] array (normalized Voyager format)
     for item in profile_data.get("included", []):
         dash_urn = item.get("dashEntityUrn", "")
         if "fsd_profile" in dash_urn:
-            return dash_urn.split(":")[-1]
+            urn = dash_urn.split(":")[-1]
+            logger.info("[URN] Extracted from included[].dashEntityUrn: %s", urn)
+            return urn
 
-    # Try data.plainId as fallback
-    plain_id = profile_data.get("data", {}).get("plainId")
-    if plain_id:
-        return str(plain_id)
+    # 2. Try included[].entityUrn with fs_miniProfile (same ID format)
+    for item in profile_data.get("included", []):
+        entity_urn = item.get("entityUrn", "")
+        if "fs_miniProfile" in entity_urn:
+            urn = entity_urn.split(":")[-1]
+            logger.info("[URN] Extracted from included[].entityUrn (miniProfile): %s", urn)
+            return urn
 
-    # Try objectUrn in included
+    # 3. Try flat miniProfile (non-normalized response)
+    mini = profile_data.get("miniProfile", {})
+    if isinstance(mini, dict):
+        for key in ("dashEntityUrn", "entityUrn"):
+            val = mini.get(key, "")
+            if val and ("fsd_profile" in val or "fs_miniProfile" in val):
+                urn = val.split(":")[-1]
+                logger.info("[URN] Extracted from miniProfile.%s: %s", key, urn)
+                return urn
+
+    # 4. Try data.miniProfile or data.*miniProfile (normalized reference)
+    data_block = profile_data.get("data", {})
+    if isinstance(data_block, dict):
+        data_mini = data_block.get("miniProfile", {})
+        if isinstance(data_mini, dict):
+            for key in ("dashEntityUrn", "entityUrn"):
+                val = data_mini.get(key, "")
+                if val and ("fsd_profile" in val or "fs_miniProfile" in val):
+                    urn = val.split(":")[-1]
+                    logger.info("[URN] Extracted from data.miniProfile.%s: %s", key, urn)
+                    return urn
+
+    # 5. Try profile_id or publicIdentifier at top level
+    for key in ("profile_id", "publicIdentifier"):
+        val = profile_data.get(key) or (data_block.get(key) if isinstance(data_block, dict) else None)
+        if val:
+            logger.info("[URN] Extracted from %s: %s", key, val)
+            return str(val)
+
+    # 6. Try objectUrn in included
     for item in profile_data.get("included", []):
         obj_urn = item.get("objectUrn", "")
         if obj_urn:
-            return obj_urn.split(":")[-1]
+            urn = obj_urn.split(":")[-1]
+            logger.info("[URN] Extracted from included[].objectUrn: %s", urn)
+            return urn
 
+    # 7. Try data.plainId as last resort (numeric — may not work with connectionOf)
+    plain_id = data_block.get("plainId") if isinstance(data_block, dict) else None
+    if not plain_id:
+        plain_id = profile_data.get("plainId")
+    if plain_id:
+        logger.warning("[URN] Using plainId as fallback (may not work): %s", plain_id)
+        return str(plain_id)
+
+    logger.error("[URN] Could not extract URN. Response sample: %s", str(profile_data)[:500])
     return ""
