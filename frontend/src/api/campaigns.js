@@ -16,6 +16,8 @@ export const cancelCampaign = (id) =>
   client.post(`/campaigns/${id}/cancel`).then((r) => r.data);
 export const duplicateCampaign = (id) =>
   client.post(`/campaigns/${id}/duplicate`).then((r) => r.data);
+export const diagnoseCampaign = (id) =>
+  client.get(`/campaigns/${id}/diagnose`).then((r) => r.data);
 export const getCampaignActions = (id, params) =>
   client.get(`/campaigns/${id}/actions`, { params }).then((r) => r.data);
 export const getCampaignContacts = (id, params) =>

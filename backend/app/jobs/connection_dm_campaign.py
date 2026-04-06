@@ -453,9 +453,16 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
 
         db.commit()
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Unexpected error in connection_dm campaign %d", campaign_id)
-        db.rollback()
+        try:
+            db.rollback()
+            campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+            if campaign:
+                campaign.error_message = f"[{datetime.utcnow().strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
+                db.commit()
+        except Exception:
+            pass
     finally:
         db.close()
 

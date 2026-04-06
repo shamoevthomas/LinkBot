@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer } from 'lucide-react';
-import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, getCampaignActions, getCampaignContacts } from '../api/campaigns';
+import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, getCampaignActions, getCampaignContacts } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -39,6 +39,7 @@ export default function CampaignDetailPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('contacts'); // 'contacts' | 'actions'
   const [selectedContact, setSelectedContact] = useState(null);
+  const [diagnosis, setDiagnosis] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +63,12 @@ export default function CampaignDetailPage() {
   }, [campaign?.status, load]);
 
   const handleStart = async () => { await startCampaign(id); toast.success('Campagne lancee'); load(); };
+  const handleDiagnose = async () => {
+    try {
+      const d = await diagnoseCampaign(id);
+      setDiagnosis(d);
+    } catch { toast.error('Erreur diagnostic'); }
+  };
   const handlePause = async () => { await pauseCampaign(id); toast.success('Campagne en pause'); load(); };
   const handleResume = async () => { await resumeCampaign(id); toast.success('Campagne relancee'); load(); };
   const handleCancel = async () => {
@@ -186,6 +193,62 @@ export default function CampaignDetailPage() {
             <span className="text-sm text-indigo-700">
               Prochaine action dans <span className="font-bold">{formatCountdown(countdown)}</span>
             </span>
+          </div>
+        )}
+
+        {/* Error message from backend */}
+        {campaign.error_message && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+            <AlertCircle size={16} className="text-red-500 shrink-0" />
+            <span className="text-sm text-red-700 font-mono">{campaign.error_message}</span>
+          </div>
+        )}
+
+        {/* Diagnose button when stuck at 0% */}
+        {campaign.status === 'running' && campaign.total_processed === 0 && (
+          <div className="mb-4">
+            <button onClick={handleDiagnose} className="text-sm text-indigo-600 hover:text-indigo-800 underline">
+              Diagnostiquer pourquoi rien ne se passe
+            </button>
+            {diagnosis && (
+              <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm space-y-1">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <span className="text-gray-500">Job scheduler</span>
+                  <span className={diagnosis.has_scheduler_job ? 'text-emerald-600' : 'text-red-600'}>{diagnosis.has_scheduler_job ? 'Actif' : 'Absent'}</span>
+                  <span className="text-gray-500">Cookies LinkedIn</span>
+                  <span className={diagnosis.cookies_valid ? 'text-emerald-600' : 'text-red-600'}>{diagnosis.cookies_valid ? 'Valides' : 'Invalides'}</span>
+                  <span className="text-gray-500">Fenetre horaire</span>
+                  <span className={diagnosis.within_schedule ? 'text-emerald-600' : 'text-amber-600'}>{diagnosis.within_schedule ? 'OK' : 'Hors fenetre'}</span>
+                  <span className="text-gray-500">Limite DMs</span>
+                  <span>{diagnosis.dm_limit}</span>
+                  <span className="text-gray-500">Limite connexions</span>
+                  <span>{diagnosis.conn_limit}</span>
+                  <span className="text-gray-500">Contacts CRM</span>
+                  <span>{diagnosis.crm_contacts}</span>
+                  <span className="text-gray-500">Non traites</span>
+                  <span>{diagnosis.unprocessed_contacts}</span>
+                  <span className="text-gray-500">Messages configures</span>
+                  <span>{diagnosis.messages_configured}</span>
+                </div>
+                {diagnosis.last_error && (
+                  <div className="mt-2 p-2 bg-red-50 rounded text-red-700 font-mono text-xs">{diagnosis.last_error}</div>
+                )}
+                {diagnosis.issues.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {diagnosis.issues.map((issue, i) => (
+                      <div key={i} className="flex items-center gap-2 text-red-600">
+                        <XCircle size={14} /> {issue}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {diagnosis.ok && (
+                  <div className="mt-2 text-emerald-600 flex items-center gap-2">
+                    <CheckCircle size={14} /> Tout semble OK — verifiez les logs backend
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

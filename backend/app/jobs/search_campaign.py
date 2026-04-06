@@ -161,9 +161,18 @@ async def run_search_campaign(campaign_id: int) -> None:
             campaign.total_succeeded, campaign.total_target or 0,
         )
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Unexpected error in search campaign %d", campaign_id)
-        db.rollback()
+        try:
+            db.rollback()
+            from app.models import Campaign as _C
+            c = db.query(_C).filter(_C.id == campaign_id).first()
+            if c:
+                from datetime import datetime as _dt
+                c.error_message = f"[{_dt.utcnow().strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
+                db.commit()
+        except Exception:
+            pass
     finally:
         db.close()
 

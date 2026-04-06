@@ -460,6 +460,108 @@ def get_campaign(
     return _campaign_to_response(campaign, db)
 
 
+@router.get("/{campaign_id}/diagnose")
+def diagnose_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Return diagnostic info about why a campaign may not be making progress."""
+    from app.scheduler import get_scheduler, is_within_schedule, get_global_actions_today, get_effective_daily_limit
+
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    issues = []
+
+    # 1. Check scheduler job
+    scheduler = get_scheduler()
+    job = scheduler.get_job(f"campaign_{campaign_id}")
+    has_job = job is not None
+    job_paused = job and job.next_run_time is None if job else False
+    if not has_job:
+        issues.append("Aucun job programme dans le scheduler")
+    elif job_paused:
+        issues.append("Le job est en pause dans le scheduler")
+
+    # 2. Check cookies
+    user = db.query(User).first()
+    if not user or not user.li_at_cookie:
+        issues.append("Pas de cookies LinkedIn configures")
+    elif not user.cookies_valid:
+        issues.append("Les cookies LinkedIn sont invalides/expires")
+
+    # 3. Check schedule window
+    if not is_within_schedule(db):
+        issues.append("Hors de la fenetre horaire (schedule_enabled=true)")
+
+    # 4. Check daily limits
+    dm_types = ["dm_send"] + [f"followup_{i}" for i in range(1, 8)]
+    conn_types = ["connection_request"]
+
+    dm_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
+    dm_limit = get_effective_daily_limit(int(dm_row.value) if dm_row else 50, db)
+    dm_used = get_global_actions_today(dm_types, db)
+
+    conn_row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
+    conn_limit = get_effective_daily_limit(int(conn_row.value) if conn_row else 25, db)
+    conn_used = get_global_actions_today(conn_types, db)
+
+    if campaign.type in ("dm", "connection_dm") and dm_used >= dm_limit:
+        issues.append(f"Limite DM quotidienne atteinte ({dm_used}/{dm_limit})")
+    if campaign.type in ("connection", "connection_dm") and conn_used >= conn_limit:
+        issues.append(f"Limite connexions quotidienne atteinte ({conn_used}/{conn_limit})")
+
+    # 5. Check CRM contacts
+    crm_contact_count = 0
+    unprocessed_count = 0
+    if campaign.crm_id:
+        crm_contact_count = db.query(Contact).filter(Contact.crm_id == campaign.crm_id).count()
+        already_ids = (
+            db.query(CampaignContact.contact_id)
+            .filter(CampaignContact.campaign_id == campaign_id)
+            .subquery()
+        )
+        unprocessed_count = (
+            db.query(Contact)
+            .filter(Contact.crm_id == campaign.crm_id, ~Contact.id.in_(already_ids))
+            .count()
+        )
+        if crm_contact_count == 0:
+            issues.append("Le CRM est vide (aucun contact)")
+        elif unprocessed_count == 0:
+            issues.append("Tous les contacts du CRM ont deja ete traites")
+    else:
+        issues.append("Aucun CRM associe a cette campagne")
+
+    # 6. Check campaign messages (for DM types)
+    msg_count = 0
+    if campaign.type in ("dm", "connection_dm"):
+        msg_count = db.query(CampaignMessage).filter(CampaignMessage.campaign_id == campaign_id).count()
+        if msg_count == 0 and not campaign.full_personalize:
+            issues.append("Aucun message configure pour cette campagne")
+
+    return {
+        "campaign_id": campaign_id,
+        "status": campaign.status,
+        "type": campaign.type,
+        "has_scheduler_job": has_job,
+        "job_paused": job_paused,
+        "next_run_time": str(job.next_run_time) if job and job.next_run_time else None,
+        "cookies_valid": bool(user and user.cookies_valid),
+        "within_schedule": is_within_schedule(db),
+        "dm_limit": f"{dm_used}/{dm_limit}",
+        "conn_limit": f"{conn_used}/{conn_limit}",
+        "crm_contacts": crm_contact_count,
+        "unprocessed_contacts": unprocessed_count,
+        "messages_configured": msg_count,
+        "last_error": campaign.error_message,
+        "issues": issues,
+        "ok": len(issues) == 0,
+    }
+
+
 @router.post("/{campaign_id}/start", response_model=CampaignResponse)
 def start_campaign(
     campaign_id: int,
