@@ -53,6 +53,7 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
 
         offset = 0
         total_new = 0
+        empty_rounds = 0
 
         while True:
             try:
@@ -64,7 +65,13 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
                 break
 
             if not connections:
-                break
+                empty_rounds += 1
+                if empty_rounds >= 3:
+                    break
+                offset += _PAGE_SIZE
+                continue
+
+            empty_rounds = 0
 
             for person in connections:
                 person_urn = person.get("urn_id")
@@ -90,11 +97,11 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
                 existing_urns.add(person_urn)
                 total_new += 1
 
-            db.commit()
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
             offset += len(connections)
-
-            if len(connections) < _PAGE_SIZE:
-                break
 
         print(f"[SYNC] User {user_id}: added {total_new} new connections", flush=True)
 
@@ -123,6 +130,7 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
         all_connections = []
         all_connection_urns = set()
         offset = 0
+        empty_rounds = 0
         while True:
             try:
                 connections = await get_user_connections(
@@ -133,7 +141,13 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
                 break
 
             if not connections:
-                break
+                empty_rounds += 1
+                if empty_rounds >= 3:
+                    break
+                offset += _PAGE_SIZE
+                continue
+
+            empty_rounds = 0
 
             for person in connections:
                 person_urn = person.get("urn_id")
@@ -142,8 +156,6 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
                     all_connections.append(person)
 
             offset += len(connections)
-            if len(connections) < _PAGE_SIZE:
-                break
 
         print(f"[SYNC] Fetched {len(all_connection_urns)} total connections from LinkedIn", flush=True)
 
@@ -181,7 +193,10 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
                 existing_urns.add(person_urn)
                 total_new += 1
 
-            db.commit()
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
 
         # Step 4: Update connection_status across user's CRMs only
         updated = 0

@@ -58,11 +58,26 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
         total_created = 0
         total_skipped = 0
         skipped_list = []  # [{name, reason}]
+        empty_rounds = 0  # consecutive rounds with 0 results
 
         while True:
             try:
-                if use_network_fallback:
-                    # Fallback: search 1st-degree connections via network filter
+                # Use network_depths=F as primary — it's the most reliable way
+                # to get ALL 1st-degree connections via the authenticated session.
+                # connectionOf can be used as fallback but has stricter limits.
+                if not use_network_fallback:
+                    connections = await get_user_connections(
+                        client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
+                    )
+                else:
+                    connections = []
+
+                # Switch to network_depths if connectionOf returns 0 on first call
+                if not connections and offset == 0 and not use_network_fallback:
+                    logger.info("connectionOf returned 0, switching to network_depths=F")
+                    use_network_fallback = True
+
+                if use_network_fallback and not connections:
                     connections = await asyncio.to_thread(
                         client.search_people,
                         network_depths=["F"],
@@ -70,33 +85,22 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                         offset=offset,
                     )
                     connections = connections or []
-                else:
-                    connections = await get_user_connections(
-                        client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
-                    )
             except Exception:
                 logger.exception("Error fetching connections at offset %d", offset)
                 break
 
-            # If first page via connectionOf returned 0, retry with network fallback
-            if not connections and offset == 0 and not use_network_fallback and urn_id:
-                logger.warning("connectionOf=%s returned 0 results, switching to network_depths fallback", urn_id)
-                use_network_fallback = True
-                try:
-                    connections = await asyncio.to_thread(
-                        client.search_people,
-                        network_depths=["F"],
-                        limit=_PAGE_SIZE,
-                        offset=offset,
-                    )
-                    connections = connections or []
-                except Exception:
-                    logger.exception("Fallback search also failed")
-                    break
-
             if not connections:
-                logger.info("No connections returned at offset %d", offset)
-                break
+                empty_rounds += 1
+                # LinkedIn sometimes returns empty pages mid-pagination.
+                # Retry up to 3 times with advancing offset before giving up.
+                if empty_rounds >= 3:
+                    logger.info("3 consecutive empty rounds at offset %d — stopping", offset)
+                    break
+                logger.info("Empty result at offset %d (attempt %d/3), advancing", offset, empty_rounds)
+                offset += _PAGE_SIZE
+                continue
+
+            empty_rounds = 0  # reset on success
 
             for person in connections:
                 person_urn = person.get("urn_id")
@@ -174,8 +178,7 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                 job.skipped_details = json.dumps(skipped_list, ensure_ascii=False) if skipped_list else None
                 db.commit()
 
-            if len(connections) < _PAGE_SIZE:
-                break
+            logger.info("Batch done: offset=%d, created=%d, skipped=%d", offset, total_created, total_skipped)
 
         # Mark as completed
         if job:
