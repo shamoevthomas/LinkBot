@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_db()
     from app.scheduler import init_scheduler, shutdown_scheduler
-    init_scheduler()
+    await init_scheduler()
     _recover_running_campaigns()
     yield
     # Shutdown

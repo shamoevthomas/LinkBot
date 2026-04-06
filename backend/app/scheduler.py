@@ -114,13 +114,12 @@ async def _main_loop():
 # Lifecycle
 # ---------------------------------------------------------------------------
 
-def init_scheduler():
-    """Start the background scheduler loop. Must be called from an async context."""
+async def init_scheduler():
+    """Start the background scheduler loop. Must be called with await."""
     global _loop_task, _shutdown
     _shutdown = False
     if _loop_task is None or _loop_task.done():
-        loop = asyncio.get_event_loop()
-        _loop_task = loop.create_task(_main_loop())
+        _loop_task = asyncio.create_task(_main_loop())
         print("[SCHEDULER] Initialized", flush=True)
 
 
