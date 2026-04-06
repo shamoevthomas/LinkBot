@@ -26,17 +26,39 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#fff', position: 'relative', overflow: 'hidden' }}>
+      {/* Decorative blue gradient blob */}
+      <div style={{
+        position: 'absolute',
+        top: '-20%',
+        right: '-10%',
+        width: '600px',
+        height: '600px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(0,132,255,0.12) 0%, rgba(0,132,255,0.03) 50%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '-15%',
+        left: '-10%',
+        width: '500px',
+        height: '500px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(0,132,255,0.08) 0%, rgba(0,132,255,0.02) 50%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      <div className="w-full max-w-md" style={{ position: 'relative', zIndex: 1 }}>
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-linkedin rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--blue)', boxShadow: '0 8px 24px rgba(0,132,255,0.25)' }}>
             <Link size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">LinkBot</h1>
-          <p className="text-gray-500 mt-1">Connectez-vous pour continuer</p>
+          <h1 className="f" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)' }}>LinkBot</h1>
+          <p style={{ color: 'var(--text3)', marginTop: '4px' }}>Connectez-vous pour continuer</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+        <form onSubmit={handleSubmit} className="g-card" style={{ padding: '2rem', borderRadius: '20px' }}>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">
               {error}
@@ -45,23 +67,23 @@ export default function LoginPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Identifiant</label>
+              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Identifiant</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent"
+                className="input-glass"
                 placeholder="Entrez votre identifiant"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Mot de passe</label>
+              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Mot de passe</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent"
+                className="input-glass"
                 placeholder="Entrez votre mot de passe"
                 required
               />
@@ -71,7 +93,8 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-6 px-4 py-3 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="cta-btn w-full mt-6 flex items-center justify-center gap-2 disabled:opacity-50"
+            style={{ padding: '12px 16px', fontSize: '14px' }}
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : null}
             {loading ? 'Connexion...' : 'Se connecter'}

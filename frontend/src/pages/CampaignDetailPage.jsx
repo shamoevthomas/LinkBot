@@ -90,7 +90,7 @@ export default function CampaignDetailPage() {
     perdu: contacts.filter(c => c.status === 'perdu').length,
   };
 
-  if (loading) return <PageWrapper><div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-linkedin border-t-transparent rounded-full animate-spin" /></div></PageWrapper>;
+  if (loading) return <PageWrapper><div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--blue)', borderTopColor: 'transparent' }} /></div></PageWrapper>;
 
   return (
     <PageWrapper>
@@ -100,7 +100,7 @@ export default function CampaignDetailPage() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{campaign.name}</h1>
+            <h1 className="f text-2xl font-bold text-gray-900">{campaign.name}</h1>
             <Badge status={campaign.type} />
             <Badge status={campaign.status} />
           </div>
@@ -128,7 +128,7 @@ export default function CampaignDetailPage() {
       </div>
 
       {/* Progress */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className="g-card p-6 mb-6">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-600">Progression</span>
           <span className="text-2xl font-bold text-gray-900">{progress}%</span>
@@ -136,8 +136,8 @@ export default function CampaignDetailPage() {
         <div className="w-full bg-gray-100 rounded-full h-3 mb-4">
           <div className={`h-3 rounded-full transition-all ${
             campaign.status === 'completed' ? 'bg-emerald-500' :
-            campaign.status === 'failed' ? 'bg-red-500' : 'bg-linkedin'
-          }`} style={{ width: `${progress}%` }} />
+            campaign.status === 'failed' ? 'bg-red-500' : ''
+          }`} style={campaign.status !== 'completed' && campaign.status !== 'failed' ? { background: 'var(--blue)', width: `${progress}%` } : { width: `${progress}%` }} />
         </div>
 
         {/* Rates */}
@@ -238,7 +238,7 @@ export default function CampaignDetailPage() {
 
       {/* Contacts tab */}
       {tab === 'contacts' && contacts.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="g-card overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -257,7 +257,7 @@ export default function CampaignDetailPage() {
                       {cc.contact_profile_picture_url ? (
                         <img src={cc.contact_profile_picture_url} alt="" className="w-9 h-9 rounded-full object-cover border border-gray-200" />
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-linkedin-light text-linkedin text-xs font-bold flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-full text-xs font-bold flex items-center justify-center" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                           {initials(cc)}
                         </div>
                       )}
@@ -288,7 +288,7 @@ export default function CampaignDetailPage() {
 
       {/* Actions tab (or default for non-DM campaigns) */}
       {(tab === 'actions' || contacts.length === 0) && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="g-card overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200">
             <h3 className="font-semibold text-gray-900">Journal d'actions</h3>
           </div>
@@ -314,7 +314,7 @@ export default function CampaignDetailPage() {
                           {a.contact_profile_picture_url ? (
                             <img src={a.contact_profile_picture_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-linkedin-light text-linkedin text-xs font-bold flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                               {(a.contact_first_name?.[0] || '')}{(a.contact_last_name?.[0] || '')}
                             </div>
                           )}
@@ -338,7 +338,7 @@ export default function CampaignDetailPage() {
       {selectedContact && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedContact(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="relative bg-gradient-to-r from-linkedin to-blue-700 rounded-t-2xl p-6 pb-16">
+            <div className="relative rounded-t-2xl p-6 pb-16" style={{ background: 'linear-gradient(to right, var(--blue), #2563eb)' }}>
               <button onClick={() => setSelectedContact(null)}
                 className="absolute top-4 right-4 p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors">
                 <X size={18} className="text-white" />
@@ -349,7 +349,7 @@ export default function CampaignDetailPage() {
                 <img src={selectedContact.contact_profile_picture_url} alt=""
                   className="w-24 h-24 rounded-full border-4 border-white object-cover shadow-lg" />
               ) : (
-                <div className="w-24 h-24 rounded-full border-4 border-white bg-linkedin-light text-linkedin text-2xl font-bold flex items-center justify-center shadow-lg">
+                <div className="w-24 h-24 rounded-full border-4 border-white text-2xl font-bold flex items-center justify-center shadow-lg" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                   {initials(selectedContact)}
                 </div>
               )}

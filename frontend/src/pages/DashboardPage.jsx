@@ -20,7 +20,7 @@ export default function DashboardPage() {
     return (
       <PageWrapper>
         <div className="flex justify-center py-20">
-          <Loader2 size={28} className="animate-spin text-linkedin" />
+          <Loader2 size={28} className="animate-spin" style={{ color: 'var(--blue)' }} />
         </div>
       </PageWrapper>
     );
@@ -36,14 +36,14 @@ export default function DashboardPage() {
   return (
     <PageWrapper>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
+        <h1 className="f" style={{ fontWeight: 700, fontSize: 24, color: 'var(--text)' }}>Tableau de bord</h1>
         <div className="flex gap-2">
           <button onClick={() => navigate('/dashboard/crms')}
             className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
             <Plus size={16} /> Nouveau CRM
           </button>
           <button onClick={() => navigate('/dashboard/campaigns')}
-            className="px-4 py-2 bg-linkedin text-white font-medium rounded-lg text-sm hover:bg-linkedin-dark flex items-center gap-2">
+            className="cta-btn flex items-center gap-2" style={{ padding: '8px 16px', fontSize: 14 }}>
             <Rocket size={16} /> Nouvelle campagne
           </button>
         </div>
@@ -52,24 +52,24 @@ export default function DashboardPage() {
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {cards.map((card) => (
-          <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-5">
+          <div key={card.label} className="g-card p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-gray-500">{card.label}</span>
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${card.color}`}>
                 <card.icon size={18} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{card.value}</p>
+            <p className="text-3xl font-bold" style={{ color: 'var(--text)' }}>{card.value}</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent campaigns */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="g-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900">Campagnes recentes</h2>
-            <button onClick={() => navigate('/dashboard/campaigns')} className="text-xs text-linkedin hover:underline flex items-center gap-1">
+            <h2 className="font-semibold" style={{ color: 'var(--text)' }}>Campagnes recentes</h2>
+            <button onClick={() => navigate('/dashboard/campaigns')} className="text-xs hover:underline flex items-center gap-1" style={{ color: 'var(--blue)' }}>
               Tout voir <ArrowRight size={12} />
             </button>
           </div>
@@ -81,7 +81,7 @@ export default function DashboardPage() {
                 <div key={c.id} onClick={() => navigate(`/dashboard/campaigns/${c.id}`)}
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-100">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                    <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{c.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{c.type}</p>
                   </div>
                   <Badge status={c.status} />
@@ -92,10 +92,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent actions */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="g-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900">Actions recentes</h2>
-            <button onClick={() => navigate('/dashboard/config')} className="text-xs text-linkedin hover:underline flex items-center gap-1">
+            <h2 className="font-semibold" style={{ color: 'var(--text)' }}>Actions recentes</h2>
+            <button onClick={() => navigate('/dashboard/config')} className="text-xs hover:underline flex items-center gap-1" style={{ color: 'var(--blue)' }}>
               Activite <ArrowRight size={12} />
             </button>
           </div>

@@ -51,20 +51,24 @@ export default function OnboardingWizard() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+      <div className="g-card w-full max-w-lg overflow-hidden" style={{ borderRadius: '20px', padding: 0 }}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-linkedin to-linkedin-dark px-6 py-5">
-          <h2 className="text-xl font-bold text-white">Configuration de votre compte</h2>
+        <div style={{ background: 'linear-gradient(135deg, var(--blue), rgba(0,132,255,0.8))', padding: '20px 24px' }}>
+          <h2 className="f" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>Configuration de votre compte</h2>
           <div className="flex items-center gap-2 mt-3">
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  step >= s ? 'bg-white text-linkedin' : 'bg-white/30 text-white'
-                }`}>
+                <div className="flex items-center justify-center text-sm font-bold" style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: step >= s ? '#fff' : 'rgba(255,255,255,0.3)',
+                  color: step >= s ? 'var(--blue)' : '#fff',
+                }}>
                   {step > s ? <Check size={16} /> : s}
                 </div>
-                {s < 3 && <div className={`w-12 h-0.5 ${step > s ? 'bg-white' : 'bg-white/30'}`} />}
+                {s < 3 && <div style={{ width: '48px', height: '2px', background: step > s ? '#fff' : 'rgba(255,255,255,0.3)' }} />}
               </div>
             ))}
           </div>
@@ -78,9 +82,9 @@ export default function OnboardingWizard() {
                 <label className="cursor-pointer">
                   <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
                   {preview ? (
-                    <img src={preview} alt="Photo" className="w-20 h-20 rounded-full object-cover border-2 border-linkedin" />
+                    <img src={preview} alt="Photo" className="w-20 h-20 rounded-full object-cover" style={{ border: '2px solid var(--blue)' }} />
                   ) : (
-                    <div className="w-20 h-20 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-linkedin hover:text-linkedin transition-colors">
+                    <div className="w-20 h-20 rounded-full bg-gray-100 flex flex-col items-center justify-center text-gray-400 transition-colors" style={{ border: '2px dashed var(--card-bdr)' }}>
                       <Upload size={20} />
                       <span className="text-[10px] mt-1">Photo</span>
                     </div>
@@ -90,44 +94,45 @@ export default function OnboardingWizard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text2)' }}>Prénom</label>
                   <input value={form.first_name} onChange={(e) => set('first_name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                    className="input-glass" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text2)' }}>Nom</label>
                   <input value={form.last_name} onChange={(e) => set('last_name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                    className="input-glass" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Votre rôle</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text2)' }}>Votre rôle</label>
                 <select value={form.job_role} onChange={(e) => set('job_role', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent bg-white">
+                  className="input-glass">
                   <option value="">Sélectionner...</option>
                   {JOB_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Pourquoi utiliser LinkBot ?</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text2)' }}>Pourquoi utiliser LinkBot ?</label>
                 <select value={form.reason_for_using} onChange={(e) => set('reason_for_using', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent bg-white">
+                  className="input-glass">
                   <option value="">Sélectionner...</option>
                   {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL de votre profil LinkedIn</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text2)' }}>URL de votre profil LinkedIn</label>
                 <input value={form.linkedin_profile_url} onChange={(e) => set('linkedin_profile_url', e.target.value)}
                   placeholder="https://linkedin.com/in/votre-profil"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                  className="input-glass" />
               </div>
 
               <button onClick={() => setStep(2)} disabled={!canStep2}
-                className="w-full py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                className="cta-btn w-full flex items-center justify-center gap-2 disabled:opacity-40"
+                style={{ padding: '10px 16px', fontSize: '14px' }}>
                 Suivant <ChevronRight size={18} />
               </button>
             </div>
@@ -137,39 +142,41 @@ export default function OnboardingWizard() {
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-sm font-medium text-gray-700">Cookie li_at</label>
-                  <button onClick={() => setShowHelp(!showHelp)} className="text-xs text-linkedin flex items-center gap-1 hover:underline">
+                  <label className="text-sm font-medium" style={{ color: 'var(--text2)' }}>Cookie li_at</label>
+                  <button onClick={() => setShowHelp(!showHelp)} className="text-xs flex items-center gap-1 hover:underline" style={{ color: 'var(--blue)' }}>
                     <HelpCircle size={14} /> Comment trouver ?
                   </button>
                 </div>
                 {showHelp && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2 text-xs text-blue-800 space-y-1">
+                  <div className="rounded-lg p-3 mb-2 text-xs space-y-1" style={{ background: 'rgba(0,132,255,0.08)', border: '1px solid rgba(0,132,255,0.15)', color: 'var(--text)' }}>
                     <p><strong>1.</strong> Ouvrez LinkedIn dans Chrome</p>
                     <p><strong>2.</strong> Appuyez sur F12 (DevTools) → onglet Application</p>
-                    <p><strong>3.</strong> Dans Cookies → linkedin.com, cherchez <code className="bg-blue-100 px-1 rounded">li_at</code></p>
+                    <p><strong>3.</strong> Dans Cookies → linkedin.com, cherchez <code style={{ background: 'rgba(0,132,255,0.1)', padding: '1px 4px', borderRadius: '4px' }}>li_at</code></p>
                     <p><strong>4.</strong> Copiez la valeur complète</p>
-                    <p><strong>5.</strong> Faites la même chose pour <code className="bg-blue-100 px-1 rounded">JSESSIONID</code></p>
+                    <p><strong>5.</strong> Faites la même chose pour <code style={{ background: 'rgba(0,132,255,0.1)', padding: '1px 4px', borderRadius: '4px' }}>JSESSIONID</code></p>
                   </div>
                 )}
                 <textarea value={form.li_at} onChange={(e) => set('li_at', e.target.value)}
                   rows={2} placeholder="Collez votre cookie li_at ici..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent font-mono text-xs" />
+                  className="input-glass" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">JSESSIONID</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text2)' }}>JSESSIONID</label>
                 <textarea value={form.jsessionid} onChange={(e) => set('jsessionid', e.target.value)}
                   rows={2} placeholder="Collez votre JSESSIONID ici..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent font-mono text-xs" />
+                  className="input-glass" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
               </div>
 
               <div className="flex gap-3">
                 <button onClick={() => setStep(1)}
-                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+                  className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl text-sm transition-colors"
+                  style={{ padding: '10px 16px', border: '1px solid var(--card-bdr)', color: 'var(--text2)', background: '#fff' }}>
                   <ChevronLeft size={18} /> Retour
                 </button>
                 <button onClick={() => setStep(3)} disabled={!canStep3}
-                  className="flex-1 py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                  className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
+                  style={{ padding: '10px 16px', fontSize: '14px' }}>
                   Suivant <ChevronRight size={18} />
                 </button>
               </div>
@@ -179,39 +186,41 @@ export default function OnboardingWizard() {
           {step === 3 && (
             <div className="space-y-5">
               <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-3">
-                  <Users size={28} className="text-linkedin" />
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(0,132,255,0.08)' }}>
+                  <Users size={28} style={{ color: 'var(--blue)' }} />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">Importer votre réseau</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Importer votre réseau</h3>
+                <p className="text-sm mt-1" style={{ color: 'var(--text3)' }}>
                   Importez toutes vos connexions LinkedIn dans un CRM dédié.
                   Les nouvelles connexions seront ajoutées automatiquement.
                 </p>
               </div>
 
-              <label className="flex items-center gap-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl cursor-pointer hover:bg-blue-100 transition-colors">
+              <label className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors" style={{ background: 'rgba(0,132,255,0.06)', border: '2px solid rgba(0,132,255,0.18)' }}>
                 <input type="checkbox" checked={importNetwork} onChange={(e) => setImportNetwork(e.target.checked)}
-                  className="w-5 h-5 text-linkedin rounded-lg" />
+                  className="w-5 h-5 rounded-lg" style={{ accentColor: 'var(--blue)' }} />
                 <div className="flex-1">
-                  <span className="text-sm font-semibold text-blue-800">Importer mon réseau LinkedIn</span>
-                  <p className="text-xs text-blue-600 mt-0.5">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Importer mon réseau LinkedIn</span>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text2)' }}>
                     Un CRM "Mon Réseau" sera créé avec toutes vos connexions. Synchronisation automatique toutes les 6h.
                   </p>
                 </div>
-                <Users size={20} className="text-blue-400" />
+                <Users size={20} style={{ color: 'rgba(0,132,255,0.5)' }} />
               </label>
 
-              <p className="text-xs text-gray-400 text-center">
+              <p className="text-xs text-center" style={{ color: 'var(--text3)' }}>
                 Cette étape est optionnelle. Vous pourrez toujours importer votre réseau plus tard depuis la Configuration.
               </p>
 
               <div className="flex gap-3">
                 <button onClick={() => setStep(2)}
-                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+                  className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl text-sm transition-colors"
+                  style={{ padding: '10px 16px', border: '1px solid var(--card-bdr)', color: 'var(--text2)', background: '#fff' }}>
                   <ChevronLeft size={18} /> Retour
                 </button>
                 <button onClick={handleSubmit} disabled={loading}
-                  className="flex-1 py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                  className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
+                  style={{ padding: '10px 16px', fontSize: '14px' }}>
                   {loading ? <Loader2 size={18} className="animate-spin" /> : null}
                   {loading ? 'Validation...' : 'Terminer'}
                 </button>

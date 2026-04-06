@@ -86,12 +86,12 @@ export default function CampaignsPage() {
     <PageWrapper>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Campagnes</h1>
+          <h1 className="f text-2xl font-bold text-gray-900">Campagnes</h1>
           <p className="text-gray-500 text-sm mt-1">Automatisez vos actions LinkedIn</p>
         </div>
         <div className="relative">
           <button onClick={() => setShowDropdown(!showDropdown)}
-            className="px-4 py-2.5 bg-linkedin text-white font-medium rounded-lg text-sm hover:bg-linkedin-dark transition-colors flex items-center gap-2">
+            className="cta-btn flex items-center gap-2">
             <Plus size={18} /> Nouvelle campagne <ChevronDown size={16} />
           </button>
           {showDropdown && (
@@ -127,17 +127,17 @@ export default function CampaignsPage() {
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="w-8 h-8 border-4 border-linkedin border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--blue)', borderTopColor: 'transparent' }} />
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-gray-200">
+        <div className="g-card text-center py-20">
           <p className="text-gray-500">Aucune campagne</p>
         </div>
       ) : (
         <div className="space-y-3">
           {campaigns.map((c) => (
             <div key={c.id} onClick={() => navigate(`/dashboard/campaigns/${c.id}`)}
-              className="bg-white rounded-xl border border-gray-200 p-5 cursor-pointer hover:shadow-md transition-all">
+              className="g-card cursor-pointer p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <h3 className="font-semibold text-gray-900">{c.name}</h3>
@@ -148,7 +148,7 @@ export default function CampaignsPage() {
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex-1 bg-gray-100 rounded-full h-2">
-                  <div className="h-2 rounded-full bg-linkedin transition-all" style={{ width: `${progress(c)}%` }} />
+                  <div className="h-2 rounded-full transition-all" style={{ background: 'var(--blue)', width: `${progress(c)}%` }} />
                 </div>
                 <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
                   {c.total_processed} / {c.total_target || '?'}
@@ -176,7 +176,7 @@ export default function CampaignsPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nom de la campagne</label>
             <input value={form.name} onChange={(e) => set('name', e.target.value)} required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent"
+              className="input-glass"
               placeholder="Ex: Prospection Marketing Managers" />
           </div>
 
@@ -184,7 +184,7 @@ export default function CampaignsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mots-clés de recherche</label>
               <input value={form.keywords} onChange={(e) => set('keywords', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent"
+                className="input-glass"
                 placeholder="Ex: Marketing Manager Paris" />
             </div>
           )}
@@ -192,7 +192,7 @@ export default function CampaignsPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">CRM de destination</label>
             <select value={form.crm_id} onChange={(e) => set('crm_id', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-linkedin"
+              className="input-glass"
               required={showNew === 'search' || showNew === 'dm'}>
               <option value="">Sélectionner un CRM...</option>
               {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
@@ -203,7 +203,7 @@ export default function CampaignsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Template de message</label>
               <textarea value={form.message_template} onChange={(e) => set('message_template', e.target.value)}
-                rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent"
+                rows={3} className="input-glass"
                 placeholder="Bonjour {first_name}, ..." />
               <p className="text-xs text-gray-400 mt-1">
                 {form.use_ai
@@ -230,16 +230,16 @@ export default function CampaignsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de contacts à collecter</label>
               <input type="number" value={form.total_target} onChange={(e) => set('total_target', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" min={1} />
+                className="input-glass" min={1} />
             </div>
           )}
 
           {/* Connexion + DM toggle */}
           {showNew === 'connection' && (
-            <label className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
+            <label className="flex items-center gap-3 p-3 border border-blue-200 rounded-lg cursor-pointer" style={{ background: 'rgba(0,132,255,0.08)' }}>
               <input type="checkbox" checked={form.withDM} onChange={(e) => set('withDM', e.target.checked)}
-                className="w-4 h-4 text-linkedin rounded" />
-              <MessageCircle size={16} className="text-linkedin" />
+                className="w-4 h-4 rounded" style={{ accentColor: 'var(--blue)' }} />
+              <MessageCircle size={16} style={{ color: 'var(--blue)' }} />
               <div>
                 <span className="text-sm font-medium text-blue-700">Connexion + DM</span>
                 <p className="text-xs text-blue-500">Envoyer un message automatiquement après acceptation de la connexion</p>
@@ -263,19 +263,19 @@ export default function CampaignsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Max par jour</label>
               <input type="number" value={form.max_per_day} onChange={(e) => set('max_per_day', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" min={1} />
+                className="input-glass" min={1} />
             </div>
             {form.targetMode === 'spread' ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Étaler sur (jours)</label>
                 <input type="number" value={form.spread_over_days} onChange={(e) => set('spread_over_days', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" min={1} />
+                  className="input-glass" min={1} />
               </div>
             ) : (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Total à envoyer</label>
                 <input type="number" value={form.total_target} onChange={(e) => set('total_target', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" min={1} />
+                  className="input-glass" min={1} />
               </div>
             )}
           </div>
@@ -311,12 +311,12 @@ export default function CampaignsPage() {
                 },
               });
             }}
-              className="w-full py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors flex items-center justify-center gap-2">
+              className="cta-btn w-full flex items-center justify-center gap-2">
               <MessageCircle size={16} /> Configurer les DMs
             </button>
           ) : (
             <button type="submit" disabled={creating}
-              className="w-full py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-50">
+              className="cta-btn w-full disabled:opacity-50">
               {creating ? 'Lancement...' : 'Lancer la campagne'}
             </button>
           )}

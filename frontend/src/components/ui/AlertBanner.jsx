@@ -5,14 +5,22 @@ export default function AlertBanner({ show }) {
   const navigate = useNavigate();
   if (!show) return null;
   return (
-    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center gap-3">
-      <AlertTriangle size={20} className="text-red-500 shrink-0" />
-      <p className="text-sm text-red-700 flex-1">
+    <div style={{
+      background: '#fef2f2', border: '1px solid #fecaca',
+      borderRadius: 12, padding: '12px 16px', marginBottom: 16,
+      display: 'flex', alignItems: 'center', gap: 12,
+    }}>
+      <AlertTriangle size={20} color="#ef4444" style={{ flexShrink: 0 }} />
+      <p style={{ fontSize: 13, color: '#b91c1c', flex: 1, margin: 0 }}>
         Vos cookies LinkedIn ont expiré. Mettez-les à jour pour continuer à utiliser les campagnes.
       </p>
       <button
         onClick={() => navigate('/dashboard/config')}
-        className="text-sm font-medium text-red-700 hover:text-red-800 underline whitespace-nowrap"
+        style={{
+          fontSize: 13, fontWeight: 600, color: '#b91c1c',
+          background: 'none', border: 'none', cursor: 'pointer',
+          textDecoration: 'underline', whiteSpace: 'nowrap',
+        }}
       >
         Mettre à jour
       </button>

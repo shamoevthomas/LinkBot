@@ -215,7 +215,7 @@ export default function NewDMCampaignPage() {
   const selectedCrm = crms.find((c) => c.id === parseInt(crmId));
 
   if (loading) return (
-    <PageWrapper><div className="flex justify-center py-20"><Loader2 size={32} className="animate-spin text-linkedin" /></div></PageWrapper>
+    <PageWrapper><div className="flex justify-center py-20"><Loader2 size={32} className="animate-spin" style={{ color: 'var(--blue)' }} /></div></PageWrapper>
   );
 
   return (
@@ -226,7 +226,7 @@ export default function NewDMCampaignPage() {
           <ArrowLeft size={20} className="text-gray-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900 f">
             {connectionConfig ? 'Nouvelle campagne Connexion + DM' : 'Nouvelle campagne Message'}
           </h1>
           <p className="text-sm text-gray-500">
@@ -242,9 +242,10 @@ export default function NewDMCampaignPage() {
         {[{ n: 1, label: 'Configuration' }, { n: 2, label: 'Messages' }, { n: 3, label: 'Lancement' }].map(({ n, label }) => (
           <button key={n} onClick={() => n < step ? setStep(n) : null}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              step === n ? 'bg-linkedin text-white shadow-md' :
+              step === n ? 'text-white shadow-md' :
               step > n ? 'bg-green-100 text-green-700 cursor-pointer' : 'bg-gray-100 text-gray-400'
-            }`}>
+            }`}
+            style={step === n ? { background: 'var(--blue)' } : undefined}>
             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
               step === n ? 'bg-white/20' : step > n ? 'bg-green-200' : 'bg-gray-200'
             }`}>{step > n ? '\u2713' : n}</span>
@@ -256,19 +257,19 @@ export default function NewDMCampaignPage() {
       {/* ============ STEP 1 ============ */}
       {step === 1 && (
         <div className="space-y-6 max-w-3xl">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+          <div className="g-card space-y-5">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Send size={18} className="text-linkedin" /> Informations generales
+              <Send size={18} style={{ color: 'var(--blue)' }} /> Informations generales
             </h2>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nom de la campagne</label>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Prospection Immobilier Q2"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                className="input-glass w-full" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">CRM cible</label>
               <select value={crmId} onChange={(e) => setCrmId(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-linkedin">
+                className="input-glass w-full">
                 <option value="">Selectionner un CRM...</option>
                 {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
               </select>
@@ -278,32 +279,32 @@ export default function NewDMCampaignPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Delai entre actions</label>
                 <div className="flex items-center gap-2">
                   <input type="number" value={delayMinutes} onChange={(e) => setDelayMinutes(Math.max(1, parseInt(e.target.value) || 2))}
-                    min={1} max={60} className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+                    min={1} max={60} className="input-glass w-full" />
                   <span className="text-sm text-gray-500 whitespace-nowrap">min</span>
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Max / jour</label>
                 <input type="number" value={maxPerDay} onChange={(e) => setMaxPerDay(parseInt(e.target.value) || 25)}
-                  min={1} className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+                  min={1} className="input-glass w-full" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Etaler sur (jours)</label>
                 <input type="number" value={spreadDays} onChange={(e) => setSpreadDays(parseInt(e.target.value) || 5)}
-                  min={1} className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+                  min={1} className="input-glass w-full" />
               </div>
             </div>
           </div>
 
           {/* Context */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+          <div className="g-card space-y-4">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <FileText size={18} className="text-orange-500" /> Contexte
             </h2>
             <p className="text-xs text-gray-400">Decrivez votre offre, produit, service... Ou importez un PDF.</p>
             <textarea value={contextText} onChange={(e) => setContextText(e.target.value)}
               rows={5} placeholder="Ex: Nous sommes une agence immobiliere a Lyon..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent resize-none" />
+              className="input-glass w-full resize-none" />
             <div className="flex items-center gap-3">
               <label className="px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 cursor-pointer flex items-center gap-2">
                 {extracting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
@@ -337,7 +338,7 @@ export default function NewDMCampaignPage() {
           )}
 
           <button onClick={() => setStep(2)} disabled={!name.trim() || !crmId}
-            className="w-full py-3 bg-linkedin text-white font-semibold rounded-xl text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-40">
+            className="cta-btn w-full py-3 rounded-xl text-sm disabled:opacity-40">
             Configurer les messages
           </button>
         </div>
@@ -352,11 +353,12 @@ export default function NewDMCampaignPage() {
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => { setMode('template'); setPreviews(null); }}
                 className={`p-4 rounded-2xl border-2 text-left transition-all ${
-                  mode === 'template' ? 'border-linkedin bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                }`}>
+                  mode === 'template' ? 'bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
+                style={mode === 'template' ? { borderColor: 'var(--blue)' } : undefined}>
                 <div className="flex items-center gap-2 mb-1">
-                  <PenTool size={18} className={mode === 'template' ? 'text-linkedin' : 'text-gray-400'} />
-                  <span className={`font-semibold text-sm ${mode === 'template' ? 'text-linkedin' : 'text-gray-600'}`}>
+                  <PenTool size={18} style={mode === 'template' ? { color: 'var(--blue)' } : undefined} className={mode !== 'template' ? 'text-gray-400' : ''} />
+                  <span className={`font-semibold text-sm ${mode !== 'template' ? 'text-gray-600' : ''}`} style={mode === 'template' ? { color: 'var(--blue)' } : undefined}>
                     Template + variables
                   </span>
                 </div>
@@ -392,8 +394,9 @@ export default function NewDMCampaignPage() {
               )}
 
               {messages.map((msg, idx) => (
-                <div key={idx} className={`bg-white rounded-2xl border-2 overflow-hidden ${idx === 0 ? 'border-linkedin' : 'border-gray-200'}`}>
-                  <div className={`px-6 py-3 flex items-center justify-between ${idx === 0 ? 'bg-gradient-to-r from-linkedin to-blue-600' : 'bg-gray-50 border-b border-gray-200'}`}>
+                <div key={idx} className="g-card !p-0 overflow-hidden" style={idx === 0 ? { borderColor: 'var(--blue)', borderWidth: '2px' } : { borderWidth: '2px' }}>
+                  <div className={`px-6 py-3 flex items-center justify-between ${idx === 0 ? '' : 'bg-gray-50 border-b border-gray-200'}`}
+                    style={idx === 0 ? { background: 'linear-gradient(to right, var(--blue), #2563eb)' } : undefined}>
                     <div className="flex items-center gap-2">
                       {idx === 0 ? <span className="text-white font-semibold text-sm">Message principal</span> : (
                         <>
@@ -424,7 +427,7 @@ export default function NewDMCampaignPage() {
                   <div className="p-6">
                     <textarea value={msg.message_template} onChange={(e) => updateMessage(idx, 'message_template', e.target.value)}
                       rows={4} placeholder={`Bonjour {first_name},\n{compliment}\n...\n\nVariables : {first_name}, {last_name}, {headline}, {compliment}`}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-linkedin resize-none" />
+                      className="input-glass w-full resize-none" />
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-gray-400">Variables : {'{first_name}'}, {'{last_name}'}, {'{headline}'}, {'{company}'}, {'{location}'}</p>
                       {useAi && <p className="text-xs text-purple-500 font-medium">{'{compliment}'} = accroche IA personnalisee par contact</p>}
@@ -434,7 +437,8 @@ export default function NewDMCampaignPage() {
               ))}
               {messages.length < 8 && (
                 <button onClick={addFollowup}
-                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-2xl text-sm font-medium text-gray-500 hover:border-linkedin hover:text-linkedin flex items-center justify-center gap-2">
+                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-2xl text-sm font-medium text-gray-500 hover:border-blue-300 flex items-center justify-center gap-2"
+                  style={{ '--tw-border-opacity': 1 }}>
                   <Plus size={18} /> Ajouter une relance ({messages.length - 1}/7)
                 </button>
               )}
@@ -511,12 +515,13 @@ export default function NewDMCampaignPage() {
                     <Eye size={16} className="text-purple-500" /> Apercu des messages personnalises
                   </h3>
                   {previews.map((preview, pIdx) => (
-                    <div key={pIdx} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div key={pIdx} className="g-card !p-0 overflow-hidden">
                       <div className="flex items-center gap-3 px-5 py-3 bg-gray-50 border-b border-gray-100">
                         {preview.contact.profile_picture_url ? (
                           <img src={preview.contact.profile_picture_url} alt="" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-linkedin-light text-linkedin text-sm font-bold flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full text-sm font-bold flex items-center justify-center"
+                            style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                             {(preview.contact.first_name?.[0] || '')}{(preview.contact.last_name?.[0] || '')}
                           </div>
                         )}
@@ -530,11 +535,13 @@ export default function NewDMCampaignPage() {
                         {preview.messages.map((rm, mIdx) => (
                           <div key={mIdx}>
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              mIdx === 0 ? 'bg-linkedin text-white' : 'bg-gray-100 text-gray-500'
-                            }`}>
+                              mIdx === 0 ? 'text-white' : 'bg-gray-100 text-gray-500'
+                            }`}
+                              style={mIdx === 0 ? { background: 'var(--blue)' } : undefined}>
                               {mIdx === 0 ? 'Principal' : `Relance ${mIdx} (J+${rm.delay_days})`}
                             </span>
-                            <div className="mt-1 bg-blue-50 rounded-lg px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap border-l-4 border-linkedin">
+                            <div className="mt-1 bg-blue-50 rounded-lg px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap border-l-4"
+                              style={{ borderColor: 'var(--blue)' }}>
                               {rm.rendered}
                             </div>
                           </div>
@@ -555,7 +562,7 @@ export default function NewDMCampaignPage() {
             </button>
             <button onClick={() => setStep(3)}
               disabled={mode === 'template' ? !messages[0].message_template.trim() : !aiPrompt.trim()}
-              className="flex-1 py-3 bg-linkedin text-white font-semibold rounded-xl text-sm hover:bg-linkedin-dark disabled:opacity-40">
+              className="cta-btn flex-1 py-3 rounded-xl text-sm disabled:opacity-40">
               Apercu et lancement
             </button>
           </div>
@@ -565,7 +572,7 @@ export default function NewDMCampaignPage() {
       {/* ============ STEP 3 ============ */}
       {step === 3 && (
         <div className="space-y-6 max-w-3xl">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <div className="g-card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Resume</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gray-50 rounded-xl p-4">
@@ -598,13 +605,16 @@ export default function NewDMCampaignPage() {
           </div>
 
           {mode === 'template' && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+            <div className="g-card space-y-4">
               <h2 className="text-lg font-semibold text-gray-900">Templates</h2>
               {messages.map((msg, idx) => (
                 <div key={idx} className="bg-gray-50 rounded-xl p-4">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    idx === 0 ? 'bg-linkedin text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>{idx === 0 ? 'Principal' : `Relance ${idx} (J+${msg.delay_days})`}</span>
+                    idx === 0 ? 'text-white' : 'bg-gray-200 text-gray-600'
+                  }`}
+                    style={idx === 0 ? { background: 'var(--blue)' } : undefined}>
+                    {idx === 0 ? 'Principal' : `Relance ${idx} (J+${msg.delay_days})`}
+                  </span>
                   <p className="text-sm text-gray-700 whitespace-pre-wrap mt-2">{msg.message_template || '(vide)'}</p>
                 </div>
               ))}
@@ -612,7 +622,7 @@ export default function NewDMCampaignPage() {
           )}
 
           {mode === 'full' && previews && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+            <div className="g-card space-y-4">
               <h2 className="text-lg font-semibold text-gray-900">Exemples de messages generes</h2>
               {previews.slice(0, 2).map((p, i) => (
                 <div key={i} className="bg-gray-50 rounded-xl p-4">
@@ -628,7 +638,8 @@ export default function NewDMCampaignPage() {
               Modifier
             </button>
             <button onClick={handleLaunch} disabled={launching}
-              className="flex-1 py-4 bg-gradient-to-r from-linkedin to-blue-600 text-white font-bold rounded-xl text-base hover:from-linkedin-dark hover:to-blue-700 disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg shadow-blue-200">
+              className="flex-1 py-4 text-white font-bold rounded-xl text-base disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg"
+              style={{ background: 'linear-gradient(to right, var(--blue), #2563eb)' }}>
               {launching ? <><Loader2 size={20} className="animate-spin" /> Lancement...</> : <><Rocket size={20} /> Lancer la campagne</>}
             </button>
           </div>

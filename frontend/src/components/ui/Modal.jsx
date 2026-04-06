@@ -3,18 +3,38 @@ import { X } from 'lucide-react';
 export default function Modal({ open, onClose, title, children, wide }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)',
+        padding: 16,
+      }}
+      onClick={onClose}
+    >
       <div
-        className={`bg-white rounded-xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto`}
+        style={{
+          background: '#fff', borderRadius: 20,
+          boxShadow: '0 24px 80px rgba(0,0,0,0.12)',
+          width: '100%', maxWidth: wide ? 640 : 440,
+          maxHeight: '90vh', overflowY: 'auto',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500">
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '20px 24px', borderBottom: '1px solid var(--card-bdr)',
+        }}>
+          <h2 className="f" style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{title}</h2>
+          <button onClick={onClose} style={{
+            padding: 6, borderRadius: 10, border: 'none',
+            background: 'transparent', cursor: 'pointer', color: 'var(--text3)',
+            display: 'flex',
+          }}>
             <X size={20} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div style={{ padding: 24 }}>{children}</div>
       </div>
     </div>
   );

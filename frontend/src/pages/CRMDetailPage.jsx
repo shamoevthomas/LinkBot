@@ -294,7 +294,7 @@ export default function CRMDetailPage() {
           <ArrowLeft size={20} className="text-gray-600" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">{crm?.name || '...'}</h1>
+          <h1 className="f text-2xl font-bold text-gray-900">{crm?.name || '...'}</h1>
           {crm?.description && <p className="text-sm text-gray-500">{crm.description}</p>}
         </div>
         <button onClick={handleExport} disabled={exporting}
@@ -306,7 +306,7 @@ export default function CRMDetailPage() {
           <Tag size={16} /> Tags
         </button>
         <button onClick={() => setShowAdd(true)}
-          className="px-4 py-2 bg-linkedin text-white font-medium rounded-lg text-sm hover:bg-linkedin-dark transition-colors flex items-center gap-2">
+          className="cta-btn flex items-center gap-2" style={{ padding: '8px 16px', fontSize: '14px' }}>
           <Plus size={16} /> Ajouter
         </button>
       </div>
@@ -317,10 +317,10 @@ export default function CRMDetailPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Rechercher un contact..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+            className="input-glass w-full pl-9 pr-3 py-2" />
         </div>
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-linkedin">
+          className="input-glass px-3 py-2">
           <option value="">Tous les statuts</option>
           <option value="connected">Connecte</option>
           <option value="request_sent">Demande envoyee</option>
@@ -328,13 +328,14 @@ export default function CRMDetailPage() {
         </select>
         {tags.length > 0 && (
           <select value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1); }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-linkedin">
+            className="input-glass px-3 py-2">
             <option value="">Tous les tags</option>
             {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         )}
         <button onClick={() => setShowFilters(!showFilters)}
-          className={`px-3 py-2 border rounded-lg text-sm font-medium flex items-center gap-1.5 ${showFilters ? 'border-linkedin text-linkedin bg-linkedin-light' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+          className={`px-3 py-2 border rounded-lg text-sm font-medium flex items-center gap-1.5 ${showFilters ? 'border-blue-300 hover:border-blue-300' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+          style={showFilters ? { color: 'var(--blue)', background: 'rgba(0,132,255,0.08)' } : {}}>
           <SlidersHorizontal size={14} /> Filtres
         </button>
       </div>
@@ -347,26 +348,26 @@ export default function CRMDetailPage() {
               <label className="block text-xs text-gray-500 mb-1">Titre / Poste</label>
               <input value={headlineSearch} onChange={(e) => { setHeadlineSearch(e.target.value); setPage(1); }}
                 placeholder="Marketing, CEO..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                className="input-glass w-full px-3 py-2" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Localisation</label>
               <input value={locationSearch} onChange={(e) => { setLocationSearch(e.target.value); setPage(1); }}
                 placeholder="Paris, France..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                className="input-glass w-full px-3 py-2" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Ajoute apres</label>
               <input type="date" value={addedAfter} onChange={(e) => { setAddedAfter(e.target.value); setPage(1); }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                className="input-glass w-full px-3 py-2" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Ajoute avant</label>
               <input type="date" value={addedBefore} onChange={(e) => { setAddedBefore(e.target.value); setPage(1); }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                className="input-glass w-full px-3 py-2" />
             </div>
           </div>
-          <button onClick={resetFilters} className="mt-3 text-xs text-linkedin hover:underline">Reinitialiser les filtres</button>
+          <button onClick={resetFilters} className="mt-3 text-xs hover:underline" style={{ color: 'var(--blue)' }}>Reinitialiser les filtres</button>
         </div>
       )}
 
@@ -374,8 +375,8 @@ export default function CRMDetailPage() {
 
       {/* Bulk actions */}
       {selected.size > 0 && (
-        <div className="bg-linkedin-light border border-linkedin/20 rounded-lg p-3 mb-4 flex items-center gap-3">
-          <span className="text-sm font-medium text-linkedin">{selected.size} selectionne(s)</span>
+        <div className="rounded-lg p-3 mb-4 flex items-center gap-3" style={{ background: 'rgba(0,132,255,0.08)', border: '1px solid rgba(0,132,255,0.2)' }}>
+          <span className="text-sm font-medium" style={{ color: 'var(--blue)' }}>{selected.size} selectionne(s)</span>
           <button onClick={handleDelete} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-medium hover:bg-red-200 flex items-center gap-1">
             <Trash2 size={14} /> Supprimer
           </button>
@@ -431,9 +432,9 @@ export default function CRMDetailPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white overflow-hidden" style={{ border: '1px solid var(--card-bdr)', borderRadius: '16px' }}>
         {loading ? (
-          <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-linkedin" /></div>
+          <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin" style={{ color: 'var(--blue)' }} /></div>
         ) : contacts.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <p className="font-medium">Aucun contact</p>
@@ -462,7 +463,8 @@ export default function CRMDetailPage() {
                       {c.profile_picture_url ? (
                         <img src={c.profile_picture_url} alt="" className="w-9 h-9 rounded-full object-cover" />
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-linkedin-light text-linkedin text-xs font-bold flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-full text-xs font-bold flex items-center justify-center"
+                          style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                           {initials(c)}
                         </div>
                       )}
@@ -500,7 +502,8 @@ export default function CRMDetailPage() {
             <div className="flex gap-1">
               {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((p) => (
                 <button key={p} onClick={() => setPage(p)}
-                  className={`px-3 py-1 rounded text-xs font-medium ${p === page ? 'bg-linkedin text-white' : 'text-gray-600 hover:bg-gray-200'}`}>
+                  className={`px-3 py-1 rounded text-xs font-medium ${p === page ? 'text-white' : 'text-gray-600 hover:bg-gray-200'}`}
+                  style={p === page ? { background: 'var(--blue)' } : {}}>
                   {p}
                 </button>
               ))}
@@ -532,9 +535,9 @@ export default function CRMDetailPage() {
             <form onSubmit={handleSearch} className="flex gap-2">
               <input value={addQuery} onChange={(e) => setAddQuery(e.target.value)}
                 placeholder="Ex: Edmond Lomy, Marketing Manager..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                className="input-glass flex-1 px-3 py-2" />
               <button type="submit" disabled={searching || !addQuery.trim()}
-                className="px-4 py-2 bg-linkedin text-white font-medium rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-50 flex items-center gap-2">
+                className="cta-btn disabled:opacity-50 flex items-center gap-2" style={{ padding: '8px 16px', fontSize: '14px' }}>
                 {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                 Chercher
               </button>
@@ -545,7 +548,8 @@ export default function CRMDetailPage() {
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {searchResults.map((p) => (
                   <div key={p.urn_id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
-                    <div className="w-10 h-10 rounded-full bg-linkedin-light text-linkedin text-xs font-bold flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-full text-xs font-bold flex items-center justify-center shrink-0"
+                      style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                       {(p.name || '?')[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -554,7 +558,7 @@ export default function CRMDetailPage() {
                       {p.location && <p className="text-xs text-gray-400">{p.location}</p>}
                     </div>
                     <button onClick={() => handleAddFromSearch(p)} disabled={adding === p.urn_id}
-                      className="px-3 py-1.5 bg-linkedin text-white rounded-lg text-xs font-medium hover:bg-linkedin-dark disabled:opacity-50 shrink-0 flex items-center gap-1">
+                      className="cta-btn disabled:opacity-50 shrink-0 flex items-center gap-1" style={{ padding: '6px 12px', fontSize: '12px' }}>
                       {adding === p.urn_id ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
                       Ajouter
                     </button>
@@ -569,11 +573,11 @@ export default function CRMDetailPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">URL du profil LinkedIn</label>
               <input value={addUrl} onChange={(e) => setAddUrl(e.target.value)}
                 placeholder="https://www.linkedin.com/in/nom-prenom" required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                className="input-glass w-full px-3 py-2" />
               <p className="text-xs text-gray-400 mt-1">Les informations du profil seront extraites automatiquement</p>
             </div>
             <button type="submit" disabled={adding === 'url'}
-              className="w-full py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              className="cta-btn w-full disabled:opacity-50 flex items-center justify-center gap-2" style={{ padding: '10px 16px', fontSize: '14px' }}>
               {adding === 'url' ? <><Loader2 size={16} className="animate-spin" /> Extraction en cours...</> : 'Ajouter et enrichir'}
             </button>
           </form>
@@ -584,14 +588,14 @@ export default function CRMDetailPage() {
       <Modal open={showMove} onClose={() => setShowMove(false)} title="Deplacer vers un CRM">
         <div className="space-y-4">
           <select value={targetCrm} onChange={(e) => setTargetCrm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            className="input-glass w-full px-3 py-2">
             <option value="">Selectionner un CRM...</option>
             {crms.filter((c) => c.id !== parseInt(id)).map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
           <button onClick={handleMove} disabled={!targetCrm}
-            className="w-full py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark disabled:opacity-40">
+            className="cta-btn w-full disabled:opacity-40" style={{ padding: '10px 16px', fontSize: '14px' }}>
             Deplacer {selected.size} contact(s)
           </button>
         </div>
@@ -601,11 +605,11 @@ export default function CRMDetailPage() {
       <Modal open={showTagModal} onClose={() => setShowTagModal(false)} title="Gestion des tags">
         <form onSubmit={handleCreateTag} className="flex gap-2 mb-4">
           <input value={newTagName} onChange={(e) => setNewTagName(e.target.value)}
-            placeholder="Nom du tag..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+            placeholder="Nom du tag..." className="input-glass flex-1 px-3 py-2" />
           <input type="color" value={newTagColor} onChange={(e) => setNewTagColor(e.target.value)}
             className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5" />
           <button type="submit" disabled={!newTagName.trim()}
-            className="px-4 py-2 bg-linkedin text-white rounded-lg text-sm font-medium hover:bg-linkedin-dark disabled:opacity-50">
+            className="cta-btn disabled:opacity-50" style={{ padding: '8px 16px', fontSize: '14px' }}>
             Creer
           </button>
         </form>
@@ -633,7 +637,7 @@ export default function CRMDetailPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedContact(null); setMessageText(''); setShowAiPrompt(false); setAiInstructions(''); }}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="relative bg-gradient-to-r from-linkedin to-blue-700 rounded-t-2xl p-6 pb-16">
+            <div className="relative rounded-t-2xl p-6 pb-16" style={{ background: 'linear-gradient(to right, var(--blue), #2563eb)' }}>
               <button onClick={() => { setSelectedContact(null); setMessageText(''); setShowAiPrompt(false); setAiInstructions(''); }}
                 className="absolute top-4 right-4 p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors">
                 <X size={18} className="text-white" />
@@ -646,7 +650,8 @@ export default function CRMDetailPage() {
                 <img src={selectedContact.profile_picture_url} alt=""
                   className="w-24 h-24 rounded-full border-4 border-white object-cover shadow-lg" />
               ) : (
-                <div className="w-24 h-24 rounded-full border-4 border-white bg-linkedin-light text-linkedin text-2xl font-bold flex items-center justify-center shadow-lg">
+                <div className="w-24 h-24 rounded-full border-4 border-white text-2xl font-bold flex items-center justify-center shadow-lg"
+                  style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
                   {initials(selectedContact)}
                 </div>
               )}
@@ -676,7 +681,7 @@ export default function CRMDetailPage() {
                 </div>
                 {selectedContact.linkedin_url && (
                   <a href={selectedContact.linkedin_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-linkedin hover:underline">
+                    className="flex items-center gap-2 text-sm hover:underline" style={{ color: 'var(--blue)' }}>
                     <ExternalLink size={14} className="shrink-0" />
                     Voir le profil LinkedIn
                   </a>
@@ -733,9 +738,9 @@ export default function CRMDetailPage() {
 
                 <textarea value={messageText} onChange={(e) => setMessageText(e.target.value)}
                   rows={3} placeholder={`Bonjour ${selectedContact.first_name || ''}...`}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent resize-none" />
+                  className="input-glass w-full px-3 py-2 resize-none" />
                 <button onClick={handleSendMessage} disabled={sending || !messageText.trim()}
-                  className="mt-2 w-full py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  className="cta-btn mt-2 w-full disabled:opacity-50 flex items-center justify-center gap-2" style={{ padding: '10px 16px', fontSize: '14px' }}>
                   {sending ? <><Loader2 size={16} className="animate-spin" /> Envoi...</> : <><Send size={16} /> Envoyer</>}
                 </button>
               </div>

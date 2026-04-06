@@ -40,26 +40,26 @@ export default function CRMListPage() {
     <PageWrapper>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">CRM</h1>
-          <p className="text-gray-500 text-sm mt-1">Gérez vos listes de contacts LinkedIn</p>
+          <h1 className="f" style={{ fontWeight: 700, fontSize: 24, color: 'var(--text)' }}>CRM</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text2)' }}>Gérez vos listes de contacts LinkedIn</p>
         </div>
         <button onClick={() => setShowCreate(true)}
-          className="px-4 py-2.5 bg-linkedin text-white font-medium rounded-lg text-sm hover:bg-linkedin-dark transition-colors flex items-center gap-2">
+          className="cta-btn flex items-center gap-2" style={{ padding: '10px 16px', fontSize: 14 }}>
           <Plus size={18} /> Nouveau CRM
         </button>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="w-8 h-8 border-4 border-linkedin border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--blue)', borderTopColor: 'transparent' }} />
         </div>
       ) : crms.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-gray-200">
+        <div className="g-card text-center py-20">
           <Users size={48} className="text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun CRM</h3>
-          <p className="text-gray-500 text-sm mb-6">Créez votre premier CRM pour commencer à organiser vos contacts</p>
+          <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text)' }}>Aucun CRM</h3>
+          <p className="text-sm mb-6" style={{ color: 'var(--text2)' }}>Créez votre premier CRM pour commencer à organiser vos contacts</p>
           <button onClick={() => setShowCreate(true)}
-            className="px-5 py-2.5 bg-linkedin text-white font-medium rounded-lg text-sm hover:bg-linkedin-dark transition-colors inline-flex items-center gap-2">
+            className="cta-btn inline-flex items-center gap-2" style={{ padding: '10px 20px', fontSize: 14 }}>
             <Plus size={18} /> Créer un CRM
           </button>
         </div>
@@ -67,16 +67,16 @@ export default function CRMListPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {crms.map((crm) => (
             <div key={crm.id} onClick={() => navigate(`/dashboard/crm/${crm.id}`)}
-              className="bg-white rounded-xl border border-gray-200 p-5 cursor-pointer hover:shadow-md hover:border-linkedin/30 transition-all group">
+              className="g-card p-5 cursor-pointer group">
               <div className="flex items-start justify-between mb-4">
-                <div className="w-11 h-11 bg-linkedin-light rounded-lg flex items-center justify-center group-hover:bg-linkedin/10 transition-colors">
-                  <Users size={22} className="text-linkedin" />
+                <div className="w-11 h-11 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(0,132,255,0.08)' }}>
+                  <Users size={22} style={{ color: 'var(--blue)' }} />
                 </div>
-                <span className="text-2xl font-bold text-gray-900">{crm.contact_count}</span>
+                <span className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{crm.contact_count}</span>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">{crm.name}</h3>
-              {crm.description && <p className="text-sm text-gray-500 mb-3 line-clamp-2">{crm.description}</p>}
-              <div className="flex items-center gap-1 text-xs text-gray-400">
+              <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text)' }}>{crm.name}</h3>
+              {crm.description && <p className="text-sm mb-3 line-clamp-2" style={{ color: 'var(--text2)' }}>{crm.description}</p>}
+              <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--text3)' }}>
                 <Clock size={12} />
                 {new Date(crm.created_at).toLocaleDateString('fr-FR')}
               </div>
@@ -90,17 +90,17 @@ export default function CRMListPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent"
+              className="input-glass w-full"
               placeholder="Ex: Prospects Q1 2026" required />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description (optionnel)</label>
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent"
+              className="input-glass w-full"
               rows={2} placeholder="Description..." />
           </div>
           <button type="submit" disabled={creating}
-            className="w-full py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark transition-colors disabled:opacity-50">
+            className="cta-btn w-full disabled:opacity-50" style={{ padding: '10px 20px', fontSize: 14 }}>
             {creating ? 'Création...' : 'Créer le CRM'}
           </button>
         </form>

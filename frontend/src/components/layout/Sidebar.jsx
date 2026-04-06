@@ -23,64 +23,90 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0">
-      <div className="p-5 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-linkedin rounded-lg flex items-center justify-center">
-            <Link size={20} className="text-white" />
+    <nav style={{
+      position: 'sticky', top: 20, zIndex: 40,
+      maxWidth: 900, margin: '0 auto',
+      padding: '0 24px',
+    }}>
+      <div className="glass-nav" style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 20px',
+      }}>
+        {/* Logo */}
+        <NavLink to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', marginRight: 16 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 10,
+            background: 'var(--blue-alpha)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Link size={16} color="#fff" />
           </div>
-          <span className="text-xl font-bold text-gray-900">LinkBot</span>
+          <span className="f" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>LinkBot</span>
+        </NavLink>
+
+        {/* Nav links */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+          {links.map(({ to, icon: Icon, label, end, badgeKey, dotKey }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              style={{ textDecoration: 'none' }}
+              className={({ isActive }) => isActive ? 'nav-active' : 'nav-idle'}
+            >
+              {({ isActive }) => (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 12,
+                  fontSize: 13, fontWeight: 500,
+                  color: isActive ? 'var(--blue)' : 'var(--text2)',
+                  background: isActive ? 'rgba(0,132,255,0.08)' : 'transparent',
+                  transition: 'all 0.2s',
+                }}>
+                  <Icon size={17} />
+                  <span>{label}</span>
+                  {badgeKey && notifs[badgeKey] > 0 && (
+                    <span style={{
+                      minWidth: 18, height: 18, padding: '0 5px',
+                      background: '#ef4444', color: '#fff',
+                      fontSize: 10, fontWeight: 700, borderRadius: 99,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {notifs[badgeKey]}
+                    </span>
+                  )}
+                  {dotKey && notifs[dotKey] && (
+                    <span style={{ width: 8, height: 8, background: '#ef4444', borderRadius: 99 }} />
+                  )}
+                </div>
+              )}
+            </NavLink>
+          ))}
         </div>
-      </div>
 
-      <nav className="flex-1 p-3 space-y-1">
-        {links.map(({ to, icon: Icon, label, end, badgeKey, dotKey }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-linkedin-light text-linkedin'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`
-            }
-          >
-            <Icon size={20} />
-            <span className="flex-1">{label}</span>
-            {badgeKey && notifs[badgeKey] > 0 && (
-              <span className="min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                {notifs[badgeKey]}
-              </span>
-            )}
-            {dotKey && notifs[dotKey] && (
-              <span className="w-2.5 h-2.5 bg-red-500 rounded-full" />
-            )}
-          </NavLink>
-        ))}
-      </nav>
-
-      <div className="p-4 border-t border-gray-200">
-        <div className="flex items-center gap-3">
+        {/* User */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 8 }}>
           {user?.profile_picture_path ? (
-            <img src={user.profile_picture_path} alt="" className="w-9 h-9 rounded-full object-cover" />
+            <img src={user.profile_picture_path} alt="" style={{ width: 32, height: 32, borderRadius: 99, objectFit: 'cover' }} />
           ) : (
-            <div className="w-9 h-9 bg-linkedin-light rounded-full flex items-center justify-center text-sm font-semibold text-linkedin">
+            <div style={{
+              width: 32, height: 32, borderRadius: 99,
+              background: 'rgba(0,132,255,0.1)', color: 'var(--blue)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700,
+            }}>
               {user?.first_name?.[0] || 'U'}{user?.last_name?.[0] || ''}
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {user?.first_name} {user?.last_name}
-            </p>
-            <p className="text-xs text-gray-500 truncate">{user?.job_role || 'Utilisateur'}</p>
-          </div>
-          <button onClick={logout} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-            <LogOut size={18} />
+          <button onClick={logout} style={{
+            padding: 6, borderRadius: 10, border: 'none',
+            background: 'transparent', cursor: 'pointer', color: 'var(--text3)',
+            display: 'flex', alignItems: 'center',
+          }}>
+            <LogOut size={17} />
           </button>
         </div>
       </div>
-    </aside>
+    </nav>
   );
 }

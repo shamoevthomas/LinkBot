@@ -46,7 +46,7 @@ function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, lo
       <p className="text-sm text-gray-500 mb-3">Importez des contacts depuis un fichier CSV</p>
 
       <details className="mb-4 group">
-        <summary className="text-xs text-linkedin cursor-pointer hover:underline font-medium flex items-center gap-1">
+        <summary className="text-xs cursor-pointer hover:underline font-medium flex items-center gap-1" style={{ color: 'var(--blue)' }}>
           Prompt IA pour formater votre CSV
         </summary>
         <div className="mt-2 relative">
@@ -61,17 +61,17 @@ function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, lo
 
       <div className="space-y-3">
         <select value={csvCrmId} onChange={(e) => setCsvCrmId(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+          className="input-glass w-full">
           <option value="">Sélectionner un CRM...</option>
           {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <label className="flex items-center justify-center gap-2 px-4 py-8 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-linkedin transition-colors">
+        <label className="flex items-center justify-center gap-2 px-4 py-8 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-300 transition-colors">
           <Upload size={20} className="text-gray-400" />
           <span className="text-sm text-gray-500">{csvFile ? csvFile.name : 'Cliquez pour sélectionner un fichier CSV'}</span>
           <input type="file" accept=".csv" className="hidden" onChange={(e) => setCsvFile(e.target.files?.[0])} />
         </label>
         <button onClick={handleImportCSV} disabled={loading || !csvFile || !csvCrmId}
-          className="px-6 py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark disabled:opacity-40">
+          className="cta-btn px-6 py-2.5 rounded-lg text-sm disabled:opacity-40">
           {loading ? 'Import...' : 'Importer le CSV'}
         </button>
       </div>
@@ -214,7 +214,7 @@ export default function ConfigPage() {
 
   return (
     <PageWrapper>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Configuration</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6 f">Configuration</h1>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
@@ -228,7 +228,7 @@ export default function ConfigPage() {
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="g-card">
         {/* Credentials tab */}
         {tab === 'credentials' && (
           <div className="max-w-lg space-y-4">
@@ -244,16 +244,16 @@ export default function ConfigPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Cookie li_at</label>
               <textarea value={liAt} onChange={(e) => setLiAt(e.target.value)} rows={2}
                 placeholder="Collez votre cookie li_at..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent font-mono text-xs" />
+                className="input-glass w-full font-mono text-xs" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">JSESSIONID</label>
               <textarea value={jsessionid} onChange={(e) => setJsessionid(e.target.value)} rows={2}
                 placeholder="Collez votre JSESSIONID..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent font-mono text-xs" />
+                className="input-glass w-full font-mono text-xs" />
             </div>
             <button onClick={handleSaveCookies} disabled={loading || !liAt || !jsessionid}
-              className="px-6 py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark disabled:opacity-40 flex items-center gap-2">
+              className="cta-btn px-6 py-2.5 rounded-lg text-sm disabled:opacity-40 flex items-center gap-2">
               {loading ? <Loader2 size={16} className="animate-spin" /> : null}
               Tester et sauvegarder
             </button>
@@ -273,7 +273,7 @@ export default function ConfigPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       {importStatus.status === 'running' && (
-                        <Loader2 size={16} className="animate-spin text-linkedin" />
+                        <Loader2 size={16} className="animate-spin" style={{ color: 'var(--blue)' }} />
                       )}
                       {importStatus.status === 'completed' && (
                         <CheckCircle size={16} className="text-emerald-500" />
@@ -294,7 +294,7 @@ export default function ConfigPage() {
 
                   {importStatus.status === 'running' && (
                     <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                      <div className="h-2 rounded-full bg-linkedin transition-all animate-pulse" style={{ width: '100%' }} />
+                      <div className="h-2 rounded-full transition-all animate-pulse" style={{ width: '100%', background: 'var(--blue)' }} />
                     </div>
                   )}
                   {importStatus.status === 'completed' && (
@@ -333,12 +333,12 @@ export default function ConfigPage() {
               <div className="flex gap-3">
                 <select value={importCrmId} onChange={(e) => setImportCrmId(e.target.value)}
                   disabled={importStatus?.status === 'running'}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:opacity-50">
+                  className="input-glass flex-1 disabled:opacity-50">
                   <option value="">Sélectionner un CRM...</option>
                   {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <button onClick={handleImportConnections} disabled={loading || importStatus?.status === 'running'}
-                  className="px-4 py-2 bg-linkedin text-white font-medium rounded-lg text-sm hover:bg-linkedin-dark disabled:opacity-40">
+                  className="cta-btn px-4 py-2 rounded-lg text-sm disabled:opacity-40">
                   {importStatus?.status === 'running' ? 'En cours...' : loading ? 'Import...' : 'Importer'}
                 </button>
               </div>
@@ -365,19 +365,19 @@ export default function ConfigPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Max connexions par jour</label>
                   <input type="number" value={settings.max_connections_per_day || ''}
                     onChange={(e) => setSettings({ ...settings, max_connections_per_day: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                    className="input-glass w-full" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Max messages par jour</label>
                   <input type="number" value={settings.max_dms_per_day || ''}
                     onChange={(e) => setSettings({ ...settings, max_dms_per_day: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                    className="input-glass w-full" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Étalement par défaut (jours)</label>
                   <input type="number" value={settings.default_spread_days || ''}
                     onChange={(e) => setSettings({ ...settings, default_spread_days: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                    className="input-glass w-full" />
                 </div>
               </div>
             </div>
@@ -392,7 +392,7 @@ export default function ConfigPage() {
                 <input type="number" min="1" max="60" value={settings.delay_between_actions || ''}
                   onChange={(e) => setSettings({ ...settings, delay_between_actions: e.target.value })}
                   placeholder="2"
-                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                  className="input-glass w-24" />
                 <span className="text-sm text-gray-500">minutes</span>
               </div>
             </div>
@@ -408,14 +408,14 @@ export default function ConfigPage() {
                   <label className="block text-xs text-gray-500 mb-1">Début</label>
                   <input type="time" value={settings.schedule_start_hour || '08:00'}
                     onChange={(e) => setSettings({ ...settings, schedule_start_hour: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                    className="input-glass w-full" />
                 </div>
                 <span className="text-gray-400 mt-5">—</span>
                 <div className="flex-1">
                   <label className="block text-xs text-gray-500 mb-1">Fin</label>
                   <input type="time" value={settings.schedule_end_hour || '20:00'}
                     onChange={(e) => setSettings({ ...settings, schedule_end_hour: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                    className="input-glass w-full" />
                 </div>
               </div>
             </div>
@@ -430,7 +430,8 @@ export default function ConfigPage() {
                   <input type="checkbox" checked={settings.warmup_enabled === 'true' || settings.warmup_enabled === true}
                     onChange={(e) => setSettings({ ...settings, warmup_enabled: e.target.checked ? 'true' : 'false' })}
                     className="sr-only peer" />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-linkedin rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-linkedin"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
+                    style={{ backgroundColor: (settings.warmup_enabled === 'true' || settings.warmup_enabled === true) ? 'var(--blue)' : undefined }}></div>
                 </label>
               </div>
               <p className="text-xs text-gray-500 mb-3">Augmente progressivement le nombre d'actions par jour pour eviter la detection. La limite quotidienne monte lineairement de la limite de depart vers la limite cible sur la duree configuree.</p>
@@ -441,21 +442,21 @@ export default function ConfigPage() {
                     <input type="number" min="1" value={settings.warmup_start_limit || ''}
                       onChange={(e) => setSettings({ ...settings, warmup_start_limit: e.target.value })}
                       placeholder="5"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                      className="input-glass w-full" />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Limite cible (actions/jour)</label>
                     <input type="number" min="1" value={settings.warmup_target_limit || ''}
                       onChange={(e) => setSettings({ ...settings, warmup_target_limit: e.target.value })}
                       placeholder="25"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                      className="input-glass w-full" />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Duree (jours)</label>
                     <input type="number" min="1" value={settings.warmup_days || ''}
                       onChange={(e) => setSettings({ ...settings, warmup_days: e.target.value })}
                       placeholder="7"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin focus:border-transparent" />
+                      className="input-glass w-full" />
                   </div>
                   <p className="text-xs text-gray-400">
                     Augmente de {settings.warmup_start_limit || 5} a {settings.warmup_target_limit || 25} actions/jour sur {settings.warmup_days || 7} jours
@@ -465,7 +466,7 @@ export default function ConfigPage() {
             </div>
 
             <button onClick={handleSaveSettings} disabled={loading}
-              className="px-6 py-2.5 bg-linkedin text-white font-semibold rounded-lg text-sm hover:bg-linkedin-dark disabled:opacity-40 flex items-center gap-2">
+              className="cta-btn px-6 py-2.5 rounded-lg text-sm disabled:opacity-40 flex items-center gap-2">
               {loading ? <Loader2 size={16} className="animate-spin" /> : null}
               Sauvegarder
             </button>
@@ -478,15 +479,15 @@ export default function ConfigPage() {
             <form onSubmit={handleAddBlacklist} className="flex gap-2 flex-wrap">
               <input value={newBlacklist.urn_id} onChange={(e) => setNewBlacklist({ ...newBlacklist, urn_id: e.target.value })}
                 placeholder="URN ID (ex: ACoAAB...)" required
-                className="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+                className="input-glass flex-1 min-w-[200px]" />
               <input value={newBlacklist.name} onChange={(e) => setNewBlacklist({ ...newBlacklist, name: e.target.value })}
                 placeholder="Nom (optionnel)"
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+                className="input-glass" />
               <input value={newBlacklist.reason} onChange={(e) => setNewBlacklist({ ...newBlacklist, reason: e.target.value })}
                 placeholder="Raison (optionnel)"
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+                className="input-glass" />
               <button type="submit" disabled={loading}
-                className="px-4 py-2 bg-linkedin text-white rounded-lg text-sm font-medium hover:bg-linkedin-dark disabled:opacity-50 flex items-center gap-1">
+                className="cta-btn px-4 py-2 rounded-lg text-sm disabled:opacity-50 flex items-center gap-1">
                 <Plus size={14} /> Ajouter
               </button>
             </form>
@@ -495,7 +496,7 @@ export default function ConfigPage() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={blacklistSearch} onChange={(e) => { setBlacklistSearch(e.target.value); setBlacklistPage(1); }}
                 placeholder="Rechercher..."
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-linkedin" />
+                className="input-glass w-full pl-9" />
             </div>
 
             {blacklistItems.length === 0 ? (
@@ -533,7 +534,8 @@ export default function ConfigPage() {
               <div className="flex justify-center gap-1">
                 {Array.from({ length: Math.min(Math.ceil(blacklistTotal / 20), 10) }, (_, i) => i + 1).map((p) => (
                   <button key={p} onClick={() => setBlacklistPage(p)}
-                    className={`px-3 py-1 rounded text-xs font-medium ${p === blacklistPage ? 'bg-linkedin text-white' : 'text-gray-600 hover:bg-gray-200'}`}>
+                    className={`px-3 py-1 rounded text-xs font-medium ${p === blacklistPage ? 'text-white' : 'text-gray-600 hover:bg-gray-200'}`}
+                    style={p === blacklistPage ? { background: 'var(--blue)' } : undefined}>
                     {p}
                   </button>
                 ))}

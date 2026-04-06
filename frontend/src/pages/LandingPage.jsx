@@ -1,9 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 
-const D = "'Instrument Serif', serif";
-const MUTED = 'hsl(240, 4%, 66%)';
-const NAVY = 'hsl(201, 100%, 13%)';
 const VIDEO_SRC = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4';
 
 function useReveal() {
@@ -24,8 +21,8 @@ function useReveal() {
 function SectionTitle({ sub, children }) {
   return (
     <div className="reveal text-center mb-16 max-w-3xl mx-auto">
-      {sub && <span className="text-xs tracking-[0.3em] uppercase mb-4 block" style={{ color: MUTED }}>{sub}</span>}
-      <h2 className="text-4xl sm:text-5xl md:text-6xl font-normal" style={{ fontFamily: D, color: 'white', lineHeight: 1.05, letterSpacing: '-1.5px' }}>
+      {sub && <span className="text-xs tracking-[0.3em] uppercase mb-4 block" style={{ color: 'var(--text3)' }}>{sub}</span>}
+      <h2 className="f text-4xl sm:text-5xl md:text-6xl font-bold" style={{ color: 'var(--text)', lineHeight: 1.05, letterSpacing: '-1.5px' }}>
         {children}
       </h2>
     </div>
@@ -34,10 +31,10 @@ function SectionTitle({ sub, children }) {
 
 function GlassCard({ icon, title, desc, delay = '' }) {
   return (
-    <div className={`reveal ${delay} liquid-glass-dark rounded-2xl p-8 hover:scale-[1.02] transition-transform cursor-default`}>
+    <div className={`reveal ${delay} g-card rounded-2xl p-8 hover:scale-[1.02] transition-transform cursor-default`}>
       <div className="text-3xl mb-5">{icon}</div>
-      <h3 className="text-lg font-medium text-white mb-3" style={{ fontFamily: "'Inter', sans-serif" }}>{title}</h3>
-      <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{desc}</p>
+      <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--text)', fontFamily: "'Inter', sans-serif" }}>{title}</h3>
+      <p className="text-sm leading-relaxed" style={{ color: 'var(--text2)' }}>{desc}</p>
     </div>
   );
 }
@@ -45,9 +42,9 @@ function GlassCard({ icon, title, desc, delay = '' }) {
 function Step({ n, title, desc, delay = '' }) {
   return (
     <div className={`reveal ${delay} flex flex-col items-center text-center`}>
-      <div className="w-14 h-14 rounded-full liquid-glass flex items-center justify-center text-xl font-normal text-white mb-5" style={{ fontFamily: D }}>{n}</div>
-      <h3 className="text-lg font-medium text-white mb-2">{title}</h3>
-      <p className="text-sm leading-relaxed max-w-xs" style={{ color: MUTED }}>{desc}</p>
+      <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold mb-5 f" style={{ background: 'rgba(0, 132, 255, 0.08)', color: 'var(--blue)', border: '1px solid rgba(0, 132, 255, 0.15)' }}>{n}</div>
+      <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>{title}</h3>
+      <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'var(--text2)' }}>{desc}</p>
     </div>
   );
 }
@@ -55,8 +52,8 @@ function Step({ n, title, desc, delay = '' }) {
 function Stat({ value, label, delay = '' }) {
   return (
     <div className={`reveal ${delay} text-center`}>
-      <div className="text-5xl sm:text-6xl font-normal text-white mb-2" style={{ fontFamily: D }}>{value}</div>
-      <p className="text-sm" style={{ color: MUTED }}>{label}</p>
+      <div className="f text-5xl sm:text-6xl font-bold mb-2" style={{ color: 'var(--blue)' }}>{value}</div>
+      <p className="text-sm" style={{ color: 'var(--text2)' }}>{label}</p>
     </div>
   );
 }
@@ -66,50 +63,105 @@ export default function LandingPage() {
   const page = useReveal();
 
   return (
-    <div ref={page} style={{ background: NAVY }}>
-      {/* ── HERO ── */}
-      <div className="relative min-h-screen overflow-hidden">
-        <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover z-0">
-          <source src={VIDEO_SRC} type="video/mp4" />
-        </video>
+    <div ref={page} style={{
+      '--blue': '#0084FF',
+      '--text': '#111827',
+      '--text2': '#6b7280',
+      '--text3': '#9ca3af',
+      background: '#fff',
+      color: 'var(--text)',
+      fontFamily: "'Inter', sans-serif",
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
 
-        <nav className="relative z-10 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
-          <span className="text-3xl tracking-tight text-white" style={{ fontFamily: D }}>
-            LinkBot<sup className="text-xs">®</sup>
+      {/* ── Global decorative blobs ── */}
+      <div style={{
+        position: 'fixed', top: '-20%', left: '-10%', width: '600px', height: '600px',
+        background: 'radial-gradient(circle, rgba(0,132,255,0.06) 0%, transparent 70%)',
+        filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0,
+      }} />
+      <div style={{
+        position: 'fixed', bottom: '-10%', right: '-10%', width: '500px', height: '500px',
+        background: 'radial-gradient(circle, rgba(0,132,255,0.05) 0%, transparent 70%)',
+        filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0,
+      }} />
+
+      {/* ── HERO ── */}
+      <div className="relative min-h-screen overflow-hidden" style={{ background: '#fff' }}>
+
+        {/* Decorative gradient blobs behind hero content */}
+        <div style={{
+          position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)',
+          width: '800px', height: '800px',
+          background: 'radial-gradient(circle, rgba(0,132,255,0.07) 0%, transparent 60%)',
+          filter: 'blur(100px)', pointerEvents: 'none', zIndex: 0,
+        }} />
+        <div style={{
+          position: 'absolute', top: '30%', right: '-5%',
+          width: '400px', height: '400px',
+          background: 'radial-gradient(circle, rgba(0,132,255,0.05) 0%, transparent 70%)',
+          filter: 'blur(60px)', pointerEvents: 'none', zIndex: 0,
+        }} />
+
+        {/* Glass Navbar */}
+        <nav className="glass-nav relative z-10 flex items-center justify-between px-8 py-5" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <span className="f text-2xl tracking-tight" style={{ color: 'var(--text)' }}>
+            LinkBot<sup className="text-xs" style={{ color: 'var(--text3)' }}>®</sup>
           </span>
           <div className="hidden md:flex items-center gap-8">
             {[['Fonctionnalités', '#features'], ['Campagnes', '#campaigns'], ['IA', '#ai'], ['Comment ça marche', '#how']].map(([label, href]) => (
-              <a key={label} href={href} className="text-sm text-white/50 hover:text-white transition-colors">{label}</a>
+              <a key={label} href={href} className="text-sm hover:opacity-100 transition-colors" style={{ color: 'var(--text2)' }}>{label}</a>
             ))}
           </div>
-          <button onClick={() => navigate('/login')} className="liquid-glass rounded-full px-6 py-2.5 text-sm text-white cursor-pointer hover:scale-[1.03] transition-transform">
+          <button onClick={() => navigate('/login')} className="cta-btn rounded-full cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '10px 24px', fontSize: '14px' }}>
             Se connecter
           </button>
         </nav>
 
-        <section className="relative z-10 flex flex-col items-center text-center px-6 pt-32 pb-40">
-          <h1 className="animate-fade-rise text-5xl sm:text-7xl md:text-8xl font-normal max-w-7xl" style={{ fontFamily: D, lineHeight: 0.95, letterSpacing: '-2.46px', color: 'white' }}>
+        <section className="relative z-10 flex flex-col items-center text-center pt-24 pb-40" style={{ padding: '96px 48px 160px' }}>
+
+          {/* Floating video orb */}
+          <div className="animate-fade-rise mb-10" style={{ position: 'relative', width: '300px', height: '300px' }}>
+            <div style={{
+              position: 'absolute', inset: '-20%', borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(0,132,255,0.15) 0%, transparent 70%)',
+              filter: 'blur(40px)', pointerEvents: 'none',
+            }} />
+            <video
+              autoPlay loop muted playsInline
+              style={{
+                width: '300px', height: '300px', borderRadius: '50%', objectFit: 'cover',
+                mixBlendMode: 'screen', filter: 'hue-rotate(200deg) saturate(1.5)',
+                opacity: 0.7,
+              }}
+            >
+              <source src={VIDEO_SRC} type="video/mp4" />
+            </video>
+          </div>
+
+          <h1 className="animate-fade-rise f text-5xl sm:text-7xl md:text-8xl font-bold max-w-5xl" style={{ lineHeight: 0.95, letterSpacing: '-2.46px', color: 'var(--text)' }}>
             Automatisez votre{' '}
-            <em className="not-italic" style={{ color: MUTED }}>prospection</em>{' '}
+            <em className="not-italic" style={{ color: 'var(--blue)' }}>prospection</em>{' '}
             avec{' '}
-            <em className="not-italic" style={{ color: MUTED }}>élégance et précision.</em>
+            <em className="not-italic" style={{ color: 'var(--blue)' }}>élégance et précision.</em>
           </h1>
-          <p className="animate-fade-rise-delay text-base sm:text-lg max-w-2xl mt-8 leading-relaxed" style={{ color: MUTED }}>
+          <p className="animate-fade-rise-delay text-base sm:text-lg max-w-2xl mt-8 leading-relaxed" style={{ color: 'var(--text2)' }}>
             CRM intelligent, campagnes automatiques, messages personnalisés par IA.
             LinkBot transforme votre réseau LinkedIn en machine de croissance,
             pendant que vous vous concentrez sur l'essentiel.
           </p>
-          <button onClick={() => navigate('/login')} className="animate-fade-rise-delay-2 liquid-glass rounded-full px-14 py-5 text-base text-white mt-12 cursor-pointer hover:scale-[1.03] transition-transform">
+          <button onClick={() => navigate('/login')} className="animate-fade-rise-delay-2 cta-btn rounded-full mt-12 cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '20px 56px', fontSize: '16px' }}>
             Commencer maintenant
           </button>
         </section>
       </div>
 
       {/* ── FEATURES ── */}
-      <section id="features" className="relative px-6 py-32 max-w-7xl mx-auto">
+      <section id="features" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '128px 48px' }}>
         <SectionTitle sub="Fonctionnalités">
           Tout ce qu'il faut pour{' '}
-          <em className="not-italic" style={{ color: MUTED }}>dominer LinkedIn.</em>
+          <em className="not-italic" style={{ color: 'var(--blue)' }}>dominer LinkedIn.</em>
         </SectionTitle>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -129,15 +181,15 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)' }} />
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── CAMPAIGNS ── */}
-      <section id="campaigns" className="relative px-6 py-32 max-w-7xl mx-auto">
+      <section id="campaigns" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '128px 48px' }}>
         <SectionTitle sub="Campagnes">
           Quatre moteurs,{' '}
-          <em className="not-italic" style={{ color: MUTED }}>une seule interface.</em>
+          <em className="not-italic" style={{ color: 'var(--blue)' }}>une seule interface.</em>
         </SectionTitle>
 
         <div className="grid sm:grid-cols-2 gap-5">
@@ -147,28 +199,28 @@ export default function LandingPage() {
             { title: 'Message direct', icon: '💬', desc: 'Messages personnalisés avec variables dynamiques et relances automatiques. Templates écrits par vous ou générés entièrement par l\'IA.', tag: 'Prospection' },
             { title: 'Connexion + DM', icon: '⚡', desc: 'Le combo ultime. Envoi de connexion → détection d\'acceptation → cycle DM complet avec relances. Tout automatisé, du premier contact à la réponse.', tag: 'Automatisation' },
           ].map((c, i) => (
-            <div key={c.title} className={`reveal reveal-delay-${(i % 2) + 1} liquid-glass-dark rounded-2xl p-8 group hover:scale-[1.02] transition-transform`}>
+            <div key={c.title} className={`reveal reveal-delay-${(i % 2) + 1} g-card rounded-2xl p-8 group hover:scale-[1.02] transition-transform`}>
               <div className="flex items-start justify-between mb-5">
                 <span className="text-4xl">{c.icon}</span>
-                <span className="text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full" style={{ color: MUTED, border: '1px solid rgba(255,255,255,0.1)' }}>{c.tag}</span>
+                <span className="text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full" style={{ color: 'var(--text3)', border: '1px solid rgba(0,0,0,0.08)' }}>{c.tag}</span>
               </div>
-              <h3 className="text-xl font-normal text-white mb-3" style={{ fontFamily: D }}>{c.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{c.desc}</p>
+              <h3 className="f text-xl font-bold mb-3" style={{ color: 'var(--text)' }}>{c.title}</h3>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text2)' }}>{c.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── DIVIDER ── */}
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)' }} />
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── AI SECTION ── */}
-      <section id="ai" className="relative px-6 py-32 max-w-6xl mx-auto">
+      <section id="ai" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '128px 48px' }}>
         <SectionTitle sub="Intelligence artificielle">
           Chaque message{' '}
-          <em className="not-italic" style={{ color: MUTED }}>est unique.</em>
+          <em className="not-italic" style={{ color: 'var(--blue)' }}>est unique.</em>
         </SectionTitle>
 
         <div className="grid lg:grid-cols-2 gap-8">
@@ -180,10 +232,10 @@ export default function LandingPage() {
               { title: 'Relances intelligentes', desc: 'Les messages de relance sont aussi personnalisés. L\'IA adapte le ton et l\'angle à chaque étape du cycle pour maximiser les chances de réponse.' },
             ].map((item, i) => (
               <div key={i} className="flex gap-4">
-                <div className="w-8 h-8 shrink-0 rounded-full liquid-glass flex items-center justify-center text-sm text-white mt-0.5" style={{ fontFamily: D }}>{i + 1}</div>
+                <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-sm font-bold f mt-0.5" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)', border: '1px solid rgba(0,132,255,0.15)' }}>{i + 1}</div>
                 <div>
-                  <h4 className="text-white text-sm font-medium mb-1">{item.title}</h4>
-                  <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{item.desc}</p>
+                  <h4 className="text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>{item.title}</h4>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text2)' }}>{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -191,35 +243,35 @@ export default function LandingPage() {
 
           {/* Right: mock message */}
           <div className="reveal reveal-delay-2">
-            <div className="liquid-glass-dark rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-sm text-white font-medium">TS</div>
+            <div className="g-card rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>TS</div>
                 <div>
-                  <p className="text-white text-sm font-medium">Thomas Shamoev</p>
-                  <p className="text-xs" style={{ color: MUTED }}>Founder / CEO</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Thomas Shamoev</p>
+                  <p className="text-xs" style={{ color: 'var(--text3)' }}>Founder / CEO</p>
                 </div>
-                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">IA</span>
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)', border: '1px solid rgba(0,132,255,0.15)' }}>IA</span>
               </div>
               <div className="p-6 space-y-4">
-                <div className="rounded-xl p-4 text-sm leading-relaxed" style={{ background: 'rgba(10, 102, 194, 0.08)', borderLeft: '3px solid rgba(10, 102, 194, 0.4)', color: 'rgba(255,255,255,0.8)' }}>
+                <div className="rounded-xl p-4 text-sm leading-relaxed" style={{ background: 'rgba(0, 132, 255, 0.04)', borderLeft: '3px solid rgba(0, 132, 255, 0.3)', color: 'var(--text)' }}>
                   Bonjour Thomas,<br /><br />
                   J'ai vu votre travail sur LinkBot — l'approche d'automatiser la prospection tout en gardant une vraie personnalisation est exactement ce qui manque au marché.<br /><br />
                   J'aimerais échanger avec vous sur une idée complémentaire. Seriez-vous disponible cette semaine ?
                 </div>
-                <div className="flex items-center gap-3 text-xs" style={{ color: MUTED }}>
+                <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text3)' }}>
                   <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--blue)' }} />
                     Basé sur le profil + 3 publications récentes
                   </span>
                 </div>
               </div>
-              <div className="px-6 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="px-6 py-3" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                 <div className="flex gap-2">
                   {['Principal', 'Relance 1 (J+3)', 'Relance 2 (J+7)'].map((label, i) => (
                     <span key={label} className="text-[10px] px-3 py-1 rounded-full" style={{
-                      background: i === 0 ? 'rgba(10,102,194,0.15)' : 'rgba(255,255,255,0.04)',
-                      color: i === 0 ? 'rgb(100,180,255)' : MUTED,
-                      border: '1px solid ' + (i === 0 ? 'rgba(10,102,194,0.3)' : 'rgba(255,255,255,0.06)'),
+                      background: i === 0 ? 'rgba(0,132,255,0.08)' : 'rgba(0,0,0,0.03)',
+                      color: i === 0 ? 'var(--blue)' : 'var(--text3)',
+                      border: '1px solid ' + (i === 0 ? 'rgba(0,132,255,0.2)' : 'rgba(0,0,0,0.06)'),
                     }}>{label}</span>
                   ))}
                 </div>
@@ -230,20 +282,20 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)' }} />
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── HOW IT WORKS ── */}
-      <section id="how" className="relative px-6 py-32 max-w-6xl mx-auto">
+      <section id="how" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '128px 48px' }}>
         <SectionTitle sub="Comment ça marche">
           Trois étapes,{' '}
-          <em className="not-italic" style={{ color: MUTED }}>zéro friction.</em>
+          <em className="not-italic" style={{ color: 'var(--blue)' }}>zéro friction.</em>
         </SectionTitle>
 
         <div className="grid md:grid-cols-3 gap-12 relative">
           {/* Connecting line */}
-          <div className="hidden md:block absolute top-7 left-[16.7%] right-[16.7%] h-px" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.12), rgba(255,255,255,0.06))' }} />
+          <div className="hidden md:block absolute top-7 left-[16.7%] right-[16.7%] h-px" style={{ background: 'linear-gradient(90deg, rgba(0,132,255,0.08), rgba(0,132,255,0.15), rgba(0,132,255,0.08))' }} />
 
           <Step delay="reveal-delay-1" n="1" title="Connectez LinkedIn" desc="Collez vos cookies li_at et JSESSIONID. Vos identifiants restent stockés localement, jamais envoyés à un serveur externe." />
           <Step delay="reveal-delay-2" n="2" title="Importez ou cherchez" desc="Importez votre réseau existant en un clic, ou lancez une campagne de recherche pour trouver de nouveaux prospects par mots-clés." />
@@ -252,12 +304,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)' }} />
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── STATS ── */}
-      <section className="relative px-6 py-32 max-w-5xl mx-auto">
+      <section className="relative" style={{ maxWidth: '900px', margin: '0 auto', padding: '128px 48px' }}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
           <Stat delay="reveal-delay-1" value="4" label="Types de campagnes" />
           <Stat delay="reveal-delay-2" value="7" label="Relances automatiques" />
@@ -267,15 +319,15 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)' }} />
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── DETAILS GRID ── */}
-      <section className="relative px-6 py-32 max-w-7xl mx-auto">
+      <section className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '128px 48px' }}>
         <SectionTitle sub="Détails">
           Pensé pour les{' '}
-          <em className="not-italic" style={{ color: MUTED }}>professionnels exigeants.</em>
+          <em className="not-italic" style={{ color: 'var(--blue)' }}>professionnels exigeants.</em>
         </SectionTitle>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -289,39 +341,39 @@ export default function LandingPage() {
             { icon: '🔁', title: 'Connexion + DM', desc: 'Demande de connexion → acceptation détectée → cycle de DM automatique. Le tunnel complet.' },
             { icon: '📈', title: 'Logs d\'activité', desc: 'Journal exhaustif de chaque action exécutée. Filtrable, paginé, avec détails d\'erreurs.' },
           ].map((item, i) => (
-            <div key={item.title} className={`reveal reveal-delay-${(i % 4) + 1} liquid-glass-dark rounded-2xl p-6`}>
+            <div key={item.title} className={`reveal reveal-delay-${(i % 4) + 1} g-card rounded-2xl p-6`}>
               <span className="text-2xl block mb-3">{item.icon}</span>
-              <h4 className="text-sm font-medium text-white mb-2">{item.title}</h4>
-              <p className="text-xs leading-relaxed" style={{ color: MUTED }}>{item.desc}</p>
+              <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text)' }}>{item.title}</h4>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text2)' }}>{item.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── CTA FINAL ── */}
-      <section className="relative px-6 py-32">
-        <div className="reveal max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl sm:text-6xl md:text-7xl font-normal text-white mb-6" style={{ fontFamily: D, lineHeight: 1, letterSpacing: '-2px' }}>
+      <section className="relative" style={{ padding: '128px 48px' }}>
+        <div className="reveal text-center" style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <h2 className="f text-4xl sm:text-6xl md:text-7xl font-bold mb-6" style={{ color: 'var(--text)', lineHeight: 1, letterSpacing: '-2px' }}>
             Prêt à transformer{' '}
-            <em className="not-italic" style={{ color: MUTED }}>votre prospection ?</em>
+            <em className="not-italic" style={{ color: 'var(--blue)' }}>votre prospection ?</em>
           </h2>
-          <p className="text-base max-w-xl mx-auto mb-12 leading-relaxed" style={{ color: MUTED }}>
+          <p className="text-base max-w-xl mx-auto mb-12 leading-relaxed" style={{ color: 'var(--text2)' }}>
             Installez LinkBot, connectez votre compte LinkedIn, et lancez votre première campagne en moins de 5 minutes.
           </p>
-          <button onClick={() => navigate('/login')} className="liquid-glass rounded-full px-14 py-5 text-base text-white cursor-pointer hover:scale-[1.03] transition-transform">
+          <button onClick={() => navigate('/login')} className="cta-btn rounded-full cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '20px 56px', fontSize: '16px' }}>
             Commencer gratuitement
           </button>
         </div>
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="relative px-6 py-8 max-w-7xl mx-auto">
-        <div className="h-px mb-8" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)' }} />
+      <footer className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 48px 32px' }}>
+        <div style={{ height: '1px', marginBottom: '32px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.06), transparent)' }} />
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-xl tracking-tight text-white/40" style={{ fontFamily: D }}>
+          <span className="f text-xl tracking-tight" style={{ color: 'var(--text3)' }}>
             LinkBot<sup className="text-[8px]">®</sup>
           </span>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          <p className="text-xs" style={{ color: 'var(--text3)' }}>
             Outil local d'automatisation LinkedIn — Vos données restent sur votre machine.
           </p>
         </div>
