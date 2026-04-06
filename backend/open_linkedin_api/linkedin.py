@@ -1238,6 +1238,18 @@ class Linkedin(object):
                 self.logger.exception("[CONNECTIONS] Error fetching at start=%d", start)
                 break
 
+            # Parse the response — try data.elements first, fall back to included
+            inner = raw.get("data", {})
+            if isinstance(inner, dict) and "data" in inner:
+                inner = inner["data"]
+
+            # Log data structure for debugging
+            self.logger.info(
+                "[CONNECTIONS] start=%d, data keys=%s, included=%d",
+                start, list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__,
+                len(raw.get("included", []))
+            )
+
             # Build lookup map from included entities
             included_map = {}
             for inc in raw.get("included", []):
@@ -1245,37 +1257,56 @@ class Linkedin(object):
                 if urn:
                     included_map[urn] = inc
 
-            # Parse the actual connection elements from data
-            inner = raw.get("data", {})
-            if isinstance(inner, dict) and "data" in inner:
-                inner = inner["data"]
-            elements = inner.get("elements", [])
-            paging = inner.get("paging", {})
+            # Try to get elements from data (may be "elements" or "*elements")
+            elements = inner.get("elements", []) if isinstance(inner, dict) else []
+            element_refs = inner.get("*elements", []) if isinstance(inner, dict) else []
+            paging = inner.get("paging", {}) if isinstance(inner, dict) else {}
+
+            if elements:
+                # data.elements contains connection objects directly
+                page_items = elements
+                use_elements = True
+            elif element_refs:
+                # data.*elements contains URN references — resolve from included
+                page_items = [included_map.get(ref, {}) for ref in element_refs if ref]
+                use_elements = True
+            else:
+                # Fallback: filter included for profile entities (have firstName)
+                page_items = [
+                    item for item in raw.get("included", [])
+                    if "firstName" in item
+                ]
+                use_elements = False
 
             self.logger.info(
-                "[CONNECTIONS] start=%d, elements=%d, paging_total=%s, included=%d",
-                start, len(elements), paging.get("total", "?"), len(raw.get("included", []))
+                "[CONNECTIONS] page_items=%d, paging_total=%s, use_elements=%s",
+                len(page_items), paging.get("total", "?"), use_elements
             )
 
-            if not elements:
+            if not page_items:
                 break
 
-            for el in elements:
-                # Get the profile URN from the connection element
-                profile_urn = (
-                    el.get("*connectedMemberResolutionResult")
-                    or el.get("connectedMember")
-                    or ""
-                )
-                if not profile_urn:
-                    continue
-
-                urn_id = profile_urn.split(":")[-1] if profile_urn else ""
-                if not urn_id:
-                    continue
-
-                # Resolve profile data from included map
-                profile = included_map.get(profile_urn, {})
+            for el in page_items:
+                if use_elements and elements:
+                    # Connection object — resolve profile from included
+                    profile_urn = (
+                        el.get("*connectedMemberResolutionResult")
+                        or el.get("connectedMember")
+                        or ""
+                    )
+                    if not profile_urn:
+                        continue
+                    urn_id = profile_urn.split(":")[-1] if profile_urn else ""
+                    if not urn_id:
+                        continue
+                    profile = included_map.get(profile_urn, {})
+                else:
+                    # Profile entity directly (from *elements resolve or fallback)
+                    profile = el
+                    entity_urn = el.get("entityUrn", "")
+                    urn_id = entity_urn.split(":")[-1] if entity_urn else ""
+                    if not urn_id:
+                        continue
 
                 first_name = profile.get("firstName", "")
                 last_name = profile.get("lastName", "")
@@ -1309,8 +1340,13 @@ class Linkedin(object):
                     "navigation_url": f"https://www.linkedin.com/in/{public_id}" if public_id else "",
                 })
 
-            # Paginate by actual elements count, not included count
-            start += len(elements)
+            # Paginate by actual connection count
+            if use_elements:
+                start += len(page_items)
+            else:
+                # Fallback: included has ~2x items (profiles + other entities)
+                # Use profile count for pagination
+                start += len(page_items)
 
             if 0 < limit <= len(results):
                 break
