@@ -384,40 +384,50 @@ export default function ConfigPage() {
 
             <hr className="border-gray-200" />
 
-            {/* Délai entre actions */}
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Délai entre les actions</h3>
-              <p className="text-xs text-gray-500 mb-3">Temps d'attente entre chaque action (connexion, message, recherche) pour simuler un comportement humain.</p>
-              <div className="flex items-center gap-3">
-                <input type="number" min="1" max="60" value={settings.delay_between_actions || ''}
-                  onChange={(e) => setSettings({ ...settings, delay_between_actions: e.target.value })}
-                  placeholder="2"
-                  className="input-glass w-24" />
-                <span className="text-sm text-gray-500">minutes</span>
-              </div>
-            </div>
-
-            <hr className="border-gray-200" />
-
             {/* Plage horaire */}
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Plage horaire</h3>
-              <p className="text-xs text-gray-500 mb-3">Les campagnes ne s'exécutent que pendant cette plage horaire. En dehors, les actions sont mises en pause automatiquement.</p>
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">Début</label>
-                  <input type="time" value={settings.schedule_start_hour || '08:00'}
-                    onChange={(e) => setSettings({ ...settings, schedule_start_hour: e.target.value })}
-                    className="input-glass w-full" />
-                </div>
-                <span className="text-gray-400 mt-5">—</span>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">Fin</label>
-                  <input type="time" value={settings.schedule_end_hour || '20:00'}
-                    onChange={(e) => setSettings({ ...settings, schedule_end_hour: e.target.value })}
-                    className="input-glass w-full" />
-                </div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900">Plage horaire</h3>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={settings.schedule_enabled === 'true' || settings.schedule_enabled === true}
+                    onChange={(e) => setSettings({ ...settings, schedule_enabled: e.target.checked ? 'true' : 'false' })}
+                    className="sr-only peer" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
+                    style={{ backgroundColor: (settings.schedule_enabled === 'true' || settings.schedule_enabled === true) ? 'var(--blue)' : undefined }}></div>
+                </label>
               </div>
+
+              {(settings.schedule_enabled === 'true' || settings.schedule_enabled === true) ? (
+                <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-xs text-gray-500">Les campagnes ne s'exécutent que pendant cette plage. Les actions sont espacées aléatoirement pour simuler un comportement humain.</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Début</label>
+                      <input type="time" value={settings.schedule_start_hour || '08:00'}
+                        onChange={(e) => setSettings({ ...settings, schedule_start_hour: e.target.value })}
+                        className="input-glass w-full" />
+                    </div>
+                    <span className="text-gray-400 mt-5">—</span>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Fin</label>
+                      <input type="time" value={settings.schedule_end_hour || '20:00'}
+                        onChange={(e) => setSettings({ ...settings, schedule_end_hour: e.target.value })}
+                        className="input-glass w-full" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs text-gray-500 mb-3">Désactivé — les campagnes tournent en continu. Vous pouvez définir un délai fixe entre chaque action.</p>
+                  <div className="flex items-center gap-3">
+                    <input type="number" min="1" max="60" value={settings.delay_between_actions || ''}
+                      onChange={(e) => setSettings({ ...settings, delay_between_actions: e.target.value })}
+                      placeholder="2"
+                      className="input-glass w-24" />
+                    <span className="text-sm text-gray-500">minutes entre chaque action</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <hr className="border-gray-200" />

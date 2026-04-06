@@ -194,6 +194,7 @@ class SettingsUpdate(BaseModel):
     max_dms_per_day: Optional[int] = None
     default_spread_days: Optional[int] = None
     delay_between_actions: Optional[int] = None  # minutes
+    schedule_enabled: Optional[bool] = None
     schedule_start_hour: Optional[str] = None    # "HH:MM"
     schedule_end_hour: Optional[str] = None      # "HH:MM"
     warmup_enabled: Optional[bool] = None

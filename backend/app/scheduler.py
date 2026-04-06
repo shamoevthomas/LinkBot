@@ -87,6 +87,47 @@ def shutdown_scheduler() -> None:
 # Interval calculation
 # ---------------------------------------------------------------------------
 
+def _get_schedule_interval(max_per_day: int) -> int | None:
+    """If schedule is enabled, compute interval from the time window and daily limit.
+
+    Returns interval in seconds, or None if schedule is disabled.
+    """
+    from app.database import SessionLocal
+    from app.models import AppSettings
+
+    db = SessionLocal()
+    try:
+        enabled = db.query(AppSettings).filter(AppSettings.key == "schedule_enabled").first()
+        if not enabled or enabled.value.lower() != "true":
+            return None
+
+        start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
+        end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
+        if not start_row or not end_row:
+            return None
+
+        start_h, start_m = map(int, start_row.value.split(":"))
+        end_h, end_m = map(int, end_row.value.split(":"))
+        start_min = start_h * 60 + start_m
+        end_min = end_h * 60 + end_m
+
+        if end_min <= start_min:
+            window_min = (1440 - start_min) + end_min  # overnight
+        else:
+            window_min = end_min - start_min
+
+        if max_per_day <= 0 or window_min <= 0:
+            return None
+
+        # Spread actions evenly across the window
+        interval = (window_min * 60) // max_per_day
+        return max(30, interval)
+    except Exception:
+        return None
+    finally:
+        db.close()
+
+
 def _calculate_interval_seconds(total_target: int, spread_over_days: int) -> int:
     """Return the interval between job executions in seconds.
 
@@ -127,19 +168,31 @@ def schedule_campaign_job(
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
 
-    # Use global delay_between_actions setting if no explicit interval
-    if not interval_seconds:
-        from app.database import SessionLocal
-        from app.models import AppSettings
-        db = SessionLocal()
-        try:
-            row = db.query(AppSettings).filter(AppSettings.key == "delay_between_actions").first()
-            if row:
-                interval_seconds = int(row.value) * 60  # minutes -> seconds
-        finally:
-            db.close()
+    # Check if schedule mode is enabled — use window-based random interval
+    schedule_interval = _get_schedule_interval(
+        total_target // max(1, spread_over_days) if not interval_seconds else
+        total_target // max(1, spread_over_days)
+    )
 
-    interval = interval_seconds or _calculate_interval_seconds(total_target, spread_over_days)
+    if schedule_interval and not interval_seconds:
+        interval = schedule_interval
+        # 50% jitter for truly random human-like behavior
+        jitter = max(15, int(interval * 0.5))
+    else:
+        # Fallback: use global delay_between_actions or calculate
+        if not interval_seconds:
+            from app.database import SessionLocal
+            from app.models import AppSettings
+            db = SessionLocal()
+            try:
+                row = db.query(AppSettings).filter(AppSettings.key == "delay_between_actions").first()
+                if row:
+                    interval_seconds = int(row.value) * 60
+            finally:
+                db.close()
+
+        interval = interval_seconds or _calculate_interval_seconds(total_target, spread_over_days)
+        jitter = max(10, int(interval * 0.3))
 
     # Import runners lazily to avoid circular imports.
     if campaign_type == "search":
@@ -156,7 +209,7 @@ def schedule_campaign_job(
 
     scheduler.add_job(
         runner,
-        trigger=IntervalTrigger(seconds=interval, jitter=max(10, int(interval * 0.3))),
+        trigger=IntervalTrigger(seconds=interval, jitter=jitter),
         id=job_id,
         args=[campaign_id],
         replace_existing=True,
@@ -202,7 +255,7 @@ def cancel_campaign_job(campaign_id: int) -> None:
 def is_within_schedule(db_session=None) -> bool:
     """Check if the current time is within the configured schedule window.
 
-    Returns True (allowed) if no schedule is configured.
+    Returns True (allowed) if schedule is disabled or not configured.
     """
     from datetime import datetime
     from app.database import SessionLocal
@@ -210,6 +263,11 @@ def is_within_schedule(db_session=None) -> bool:
 
     db = db_session or SessionLocal()
     try:
+        # Check if schedule is enabled
+        enabled_row = db.query(AppSettings).filter(AppSettings.key == "schedule_enabled").first()
+        if not enabled_row or enabled_row.value.lower() != "true":
+            return True
+
         start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
         end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
 

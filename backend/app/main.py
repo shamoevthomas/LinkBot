@@ -29,6 +29,7 @@ def seed_db():
             "max_connections_per_day": "25",
             "max_dms_per_day": "50",
             "default_spread_days": "5",
+            "schedule_enabled": "false",
             "warmup_enabled": "false",
             "warmup_start_limit": "5",
             "warmup_target_limit": "25",
