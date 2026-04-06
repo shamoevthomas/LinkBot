@@ -102,14 +102,22 @@ export default function CRMDetailPage() {
 
   const selectAllContacts = async () => {
     try {
-      const params = { page: 1, per_page: 10000, search, connection_status: statusFilter };
-      if (headlineSearch) params.headline_search = headlineSearch;
-      if (locationSearch) params.location_search = locationSearch;
-      if (addedAfter) params.added_after = addedAfter;
-      if (addedBefore) params.added_before = addedBefore;
-      if (tagFilter) params.tag_id = tagFilter;
-      const data = await getContacts(id, params);
-      setSelected(new Set((data.contacts || []).map((c) => c.id)));
+      const allIds = [];
+      let p = 1;
+      const baseParams = { per_page: 200, search, connection_status: statusFilter };
+      if (headlineSearch) baseParams.headline_search = headlineSearch;
+      if (locationSearch) baseParams.location_search = locationSearch;
+      if (addedAfter) baseParams.added_after = addedAfter;
+      if (addedBefore) baseParams.added_before = addedBefore;
+      if (tagFilter) baseParams.tag_id = tagFilter;
+      while (true) {
+        const data = await getContacts(id, { ...baseParams, page: p });
+        const batch = data.contacts || [];
+        allIds.push(...batch.map((c) => c.id));
+        if (allIds.length >= (data.total || 0) || batch.length === 0) break;
+        p++;
+      }
+      setSelected(new Set(allIds));
       setAllSelected(true);
     } catch { /* ignore */ }
   };
