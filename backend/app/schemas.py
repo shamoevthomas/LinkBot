@@ -155,6 +155,7 @@ class CampaignResponse(BaseModel):
     error_message: Optional[str] = None
     reply_rate: Optional[float] = None
     connection_rate: Optional[float] = None
+    next_action_at: Optional[datetime] = None
 
 class CampaignActionResponse(BaseModel):
     id: int

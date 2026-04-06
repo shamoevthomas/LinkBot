@@ -26,6 +26,7 @@ from app.scheduler import (
     pause_campaign_job,
     resume_campaign_job,
     cancel_campaign_job,
+    get_campaign_next_run_time,
 )
 
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
@@ -61,6 +62,14 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
             total = (c.total_succeeded or 0) + (c.total_failed or 0)
             connection_rate = round((c.total_succeeded or 0) / total * 100, 1) if total > 0 else 0.0
 
+    # Get next scheduled action time from APScheduler
+    next_action_at = None
+    if c.status == "running":
+        nrt = get_campaign_next_run_time(c.id)
+        if nrt:
+            # Convert to naive UTC if timezone-aware
+            next_action_at = nrt.replace(tzinfo=None) if nrt.tzinfo else nrt
+
     return CampaignResponse(
         id=c.id,
         name=c.name,
@@ -86,6 +95,7 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         error_message=c.error_message,
         reply_rate=reply_rate,
         connection_rate=connection_rate,
+        next_action_at=next_action_at,
     )
 
 

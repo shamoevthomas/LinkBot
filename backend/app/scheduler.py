@@ -234,6 +234,16 @@ def resume_campaign_job(campaign_id: int) -> None:
         logger.info("Resumed campaign job %s", job_id)
 
 
+def get_campaign_next_run_time(campaign_id: int):
+    """Return the next scheduled run time for a campaign job, or None."""
+    from datetime import datetime as _dt
+    scheduler = get_scheduler()
+    job = scheduler.get_job(_job_id(campaign_id))
+    if job and job.next_run_time:
+        return job.next_run_time
+    return None
+
+
 def cancel_campaign_job(campaign_id: int) -> None:
     """Remove the job for the given campaign entirely."""
     scheduler = get_scheduler()

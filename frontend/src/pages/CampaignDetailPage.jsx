@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy } from 'lucide-react';
+import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer } from 'lucide-react';
 import { getCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, getCampaignActions, getCampaignContacts } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
@@ -75,6 +75,33 @@ export default function CampaignDetailPage() {
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
   };
 
+  // Countdown to next action
+  const [countdown, setCountdown] = useState(null);
+  useEffect(() => {
+    if (!campaign?.next_action_at || campaign.status !== 'running') {
+      setCountdown(null);
+      return;
+    }
+    const update = () => {
+      const now = new Date();
+      const target = new Date(campaign.next_action_at);
+      const diff = Math.max(0, Math.floor((target - now) / 1000));
+      setCountdown(diff);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [campaign?.next_action_at, campaign?.status]);
+
+  const formatCountdown = (secs) => {
+    if (secs === null || secs === undefined) return null;
+    if (secs <= 0) return 'Imminent...';
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    if (m > 0) return `${m} min ${s.toString().padStart(2, '0')} sec`;
+    return `${s} sec`;
+  };
+
   const progress = campaign?.total_target ? Math.round((campaign.total_processed / campaign.total_target) * 100) : 0;
 
   const showReplyRate = campaign?.type && ['dm', 'connection_dm'].includes(campaign.type);
@@ -139,6 +166,16 @@ export default function CampaignDetailPage() {
             campaign.status === 'failed' ? 'bg-red-500' : ''
           }`} style={campaign.status !== 'completed' && campaign.status !== 'failed' ? { background: 'var(--blue)', width: `${progress}%` } : { width: `${progress}%` }} />
         </div>
+
+        {/* Next action countdown */}
+        {campaign.status === 'running' && countdown !== null && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg w-fit">
+            <Timer size={16} className="text-indigo-500" />
+            <span className="text-sm text-indigo-700">
+              Prochaine action dans <span className="font-bold">{formatCountdown(countdown)}</span>
+            </span>
+          </div>
+        )}
 
         {/* Rates */}
         {(showReplyRate || showConnectionRate) && (
