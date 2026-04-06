@@ -50,6 +50,29 @@ def seed_db():
         db.close()
 
 
+def _recover_running_campaigns():
+    """Re-register scheduler jobs for campaigns that are still 'running'.
+
+    MemoryJobStore loses all jobs on restart, so this must be called at startup.
+    """
+    from app.models import Campaign
+    from app.scheduler import schedule_campaign_job, get_scheduler
+    import logging
+
+    logger = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        running = db.query(Campaign).filter(Campaign.status == "running").all()
+        for c in running:
+            scheduler = get_scheduler()
+            job_id = f"campaign_{c.id}"
+            if not scheduler.get_job(job_id):
+                schedule_campaign_job(c.id, c.type)
+                logger.info("Recovered campaign job %d (%s)", c.id, c.type)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -57,6 +80,7 @@ async def lifespan(app: FastAPI):
     seed_db()
     from app.scheduler import init_scheduler, shutdown_scheduler
     init_scheduler()
+    _recover_running_campaigns()
     yield
     # Shutdown
     shutdown_scheduler()

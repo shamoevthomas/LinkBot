@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from sqlalchemy import func
 from app.dependencies import get_db, get_current_user
-from app.models import User, Campaign, CampaignAction, CampaignMessage, CampaignContact, CRM, Contact
+from app.models import User, Campaign, CampaignAction, CampaignMessage, CampaignContact, CRM, Contact, AppSettings
 from app.schemas import (
     CampaignCreate,
     CampaignResponse,
@@ -64,11 +64,32 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
 
     # Get next scheduled action time from APScheduler
     next_action_at = None
+    paused_reason = None
     if c.status == "running":
+        from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit
         nrt = get_campaign_next_run_time(c.id)
         if nrt:
-            # Convert to naive UTC if timezone-aware
             next_action_at = nrt.replace(tzinfo=None) if nrt.tzinfo else nrt
+        else:
+            paused_reason = "Aucun job programme — redemarrez la campagne"
+
+        if not is_within_schedule(db):
+            paused_reason = "Hors de la fenetre horaire programmee"
+        else:
+            # Check daily limits
+            if c.type in ("dm",):
+                dm_types = ["dm_send"] + [f"followup_{i}" for i in range(1, 8)]
+                limit_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
+                limit = get_effective_daily_limit(int(limit_row.value) if limit_row else 50, db)
+                used = get_global_actions_today(dm_types, db)
+                if used >= limit:
+                    paused_reason = f"Limite quotidienne atteinte ({used}/{limit} DMs)"
+            elif c.type in ("connection", "connection_dm"):
+                limit_row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
+                limit = get_effective_daily_limit(int(limit_row.value) if limit_row else 25, db)
+                used = get_global_actions_today(["connection_request"], db)
+                if used >= limit:
+                    paused_reason = f"Limite quotidienne atteinte ({used}/{limit} connexions)"
 
     return CampaignResponse(
         id=c.id,
@@ -96,6 +117,7 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         reply_rate=reply_rate,
         connection_rate=connection_rate,
         next_action_at=next_action_at,
+        paused_reason=paused_reason,
     )
 
 

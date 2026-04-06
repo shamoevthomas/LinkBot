@@ -156,6 +156,7 @@ class CampaignResponse(BaseModel):
     reply_rate: Optional[float] = None
     connection_rate: Optional[float] = None
     next_action_at: Optional[datetime] = None
+    paused_reason: Optional[str] = None
 
 class CampaignActionResponse(BaseModel):
     id: int

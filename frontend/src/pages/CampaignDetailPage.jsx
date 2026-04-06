@@ -173,8 +173,14 @@ export default function CampaignDetailPage() {
           }`} style={campaign.status !== 'completed' && campaign.status !== 'failed' ? { background: 'var(--blue)', width: `${progress}%` } : { width: `${progress}%` }} />
         </div>
 
-        {/* Next action countdown */}
-        {campaign.status === 'running' && countdown !== null && (
+        {/* Next action countdown or paused reason */}
+        {campaign.status === 'running' && campaign.paused_reason && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg w-fit">
+            <AlertCircle size={16} className="text-amber-500" />
+            <span className="text-sm text-amber-700">{campaign.paused_reason}</span>
+          </div>
+        )}
+        {campaign.status === 'running' && !campaign.paused_reason && countdown !== null && (
           <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg w-fit">
             <Timer size={16} className="text-indigo-500" />
             <span className="text-sm text-indigo-700">
