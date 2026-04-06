@@ -1,0 +1,20 @@
+import client from './client';
+
+export const getCampaigns = (params) =>
+  client.get('/campaigns', { params }).then((r) => r.data);
+export const createCampaign = (data) =>
+  client.post('/campaigns', data).then((r) => r.data);
+export const getCampaign = (id) =>
+  client.get(`/campaigns/${id}`).then((r) => r.data);
+export const pauseCampaign = (id) =>
+  client.post(`/campaigns/${id}/pause`).then((r) => r.data);
+export const resumeCampaign = (id) =>
+  client.post(`/campaigns/${id}/resume`).then((r) => r.data);
+export const cancelCampaign = (id) =>
+  client.post(`/campaigns/${id}/cancel`).then((r) => r.data);
+export const duplicateCampaign = (id) =>
+  client.post(`/campaigns/${id}/duplicate`).then((r) => r.data);
+export const getCampaignActions = (id, params) =>
+  client.get(`/campaigns/${id}/actions`, { params }).then((r) => r.data);
+export const getCampaignContacts = (id, params) =>
+  client.get(`/campaigns/${id}/contacts`, { params }).then((r) => r.data);

@@ -1,0 +1,233 @@
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+
+
+# Auth
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+# User
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    profile_picture_path: Optional[str] = None
+    job_role: Optional[str] = None
+    reason_for_using: Optional[str] = None
+    linkedin_profile_url: Optional[str] = None
+    cookies_valid: bool
+    onboarding_completed: bool
+
+class CookiesUpdate(BaseModel):
+    li_at: str
+    jsessionid: str
+
+class CookiesStatus(BaseModel):
+    valid: bool
+
+# CRM
+class CRMCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class CRMUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class CRMResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    contact_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+class ContactResponse(BaseModel):
+    id: int
+    crm_id: int
+    urn_id: str
+    public_id: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    headline: Optional[str] = None
+    location: Optional[str] = None
+    profile_picture_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    connection_status: str
+    last_interaction_at: Optional[datetime] = None
+    added_at: datetime
+    tags: List["TagResponse"] = []
+
+class ContactAdd(BaseModel):
+    urn_id: Optional[str] = None
+    linkedin_url: Optional[str] = None
+
+class BulkDelete(BaseModel):
+    contact_ids: List[int]
+
+class BulkMove(BaseModel):
+    contact_ids: List[int]
+    target_crm_id: int
+
+class BulkUpdateStatus(BaseModel):
+    contact_ids: List[int]
+    connection_status: str
+
+# Campaigns
+class CampaignCreate(BaseModel):
+    name: str
+    type: str  # search, dm, connection
+    crm_id: Optional[int] = None
+    keywords: Optional[str] = None
+    message_template: Optional[str] = None
+    use_ai: bool = False
+    total_target: Optional[int] = None
+    max_per_day: Optional[int] = None
+    spread_over_days: Optional[int] = None
+
+class CampaignMessageSchema(BaseModel):
+    sequence: int
+    message_template: str
+    delay_days: int = 0
+
+class DMCampaignCreate(BaseModel):
+    name: str
+    crm_id: int
+    context_text: Optional[str] = None
+    ai_prompt: Optional[str] = None
+    use_ai: bool = False
+    full_personalize: bool = False  # AI writes entire message per contact
+    messages: List[CampaignMessageSchema]  # main + follow-ups (or empty for full_personalize)
+    total_target: Optional[int] = None
+    max_per_day: Optional[int] = None
+    spread_over_days: Optional[int] = None
+    delay_minutes: Optional[int] = 2  # minutes between each action
+    is_connection_dm: bool = False  # connection + DM combo campaign
+    keywords: Optional[str] = None  # search keywords (for connection_dm)
+
+class GenerateCampaignMessagesRequest(BaseModel):
+    ai_prompt: str
+    context_text: Optional[str] = None
+    followup_count: int = 0  # 0-7
+    followup_delays: List[int] = []  # days for each follow-up
+
+class PreviewFullPersonalizationRequest(BaseModel):
+    crm_id: int
+    ai_prompt: str = ""
+    context_text: str = ""
+    followup_count: int = 0
+    followup_delays: List[int] = []
+
+class CampaignResponse(BaseModel):
+    id: int
+    name: str
+    type: str
+    status: str
+    crm_id: Optional[int] = None
+    keywords: Optional[str] = None
+    message_template: Optional[str] = None
+    use_ai: bool = False
+    full_personalize: bool = False
+    context_text: Optional[str] = None
+    ai_prompt: Optional[str] = None
+    total_target: Optional[int] = None
+    total_processed: int
+    total_succeeded: int
+    total_failed: int
+    total_skipped: int
+    max_per_day: Optional[int] = None
+    spread_over_days: Optional[int] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    error_message: Optional[str] = None
+    reply_rate: Optional[float] = None
+    connection_rate: Optional[float] = None
+
+class CampaignActionResponse(BaseModel):
+    id: int
+    campaign_id: int
+    contact_id: Optional[int] = None
+    action_type: str
+    status: str
+    error_message: Optional[str] = None
+    created_at: datetime
+    # Contact info (joined)
+    contact_first_name: Optional[str] = None
+    contact_last_name: Optional[str] = None
+    contact_headline: Optional[str] = None
+    contact_location: Optional[str] = None
+    contact_profile_picture_url: Optional[str] = None
+    contact_linkedin_url: Optional[str] = None
+    contact_connection_status: Optional[str] = None
+
+class CampaignContactResponse(BaseModel):
+    id: int
+    campaign_id: int
+    contact_id: Optional[int] = None
+    status: str
+    last_sequence_sent: int
+    main_sent_at: Optional[datetime] = None
+    last_sent_at: Optional[datetime] = None
+    replied_at: Optional[datetime] = None
+    # Contact info
+    contact_first_name: Optional[str] = None
+    contact_last_name: Optional[str] = None
+    contact_headline: Optional[str] = None
+    contact_profile_picture_url: Optional[str] = None
+
+# Config
+class SettingsUpdate(BaseModel):
+    max_connections_per_day: Optional[int] = None
+    max_dms_per_day: Optional[int] = None
+    default_spread_days: Optional[int] = None
+    delay_between_actions: Optional[int] = None  # minutes
+    schedule_start_hour: Optional[str] = None    # "HH:MM"
+    schedule_end_hour: Optional[str] = None      # "HH:MM"
+    warmup_enabled: Optional[bool] = None
+    warmup_start_limit: Optional[int] = None
+    warmup_target_limit: Optional[int] = None
+    warmup_days: Optional[int] = None
+
+class SendMessageRequest(BaseModel):
+    message: str
+
+class GenerateAIMessageRequest(BaseModel):
+    instructions: str
+
+class BlacklistCreate(BaseModel):
+    urn_id: str
+    public_id: Optional[str] = None
+    name: Optional[str] = None
+    reason: Optional[str] = None
+
+class BlacklistResponse(BaseModel):
+    id: int
+    urn_id: str
+    public_id: Optional[str] = None
+    name: Optional[str] = None
+    reason: Optional[str] = None
+    created_at: datetime
+
+class TagCreate(BaseModel):
+    name: str
+    color: str = "#0A66C2"
+
+class TagResponse(BaseModel):
+    id: int
+    name: str
+    color: str
+
+class BulkTagAssign(BaseModel):
+    contact_ids: List[int]
+    tag_id: int
+
+class ImportConnectionsRequest(BaseModel):
+    crm_id: int
