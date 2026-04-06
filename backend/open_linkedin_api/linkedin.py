@@ -318,7 +318,7 @@ class Linkedin(object):
 
             # Hardcoded queryId for search
             query_id = "voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0"
-            res = self._fetch(
+            search_url = (
                 f"/graphql?variables=(start:{default_params['start']},origin:{default_params['origin']},"
                 f"query:("
                 f"{keywords}"
@@ -326,7 +326,12 @@ class Linkedin(object):
                 f"queryParameters:{default_params['filters']},"
                 f"includeFiltersInResponse:false))&queryId={query_id}"
             )
+            self.logger.info("[SEARCH] URL filters: %s", default_params.get('filters', ''))
+            res = self._fetch(search_url)
             data = res.json()
+
+            self.logger.info("[SEARCH] Response status: %s, top keys: %s, included count: %d",
+                             res.status_code, list(data.keys()), len(data.get("included", [])))
 
             # Build lookup from included entities (normalized JSON format)
             included_map = {}
@@ -342,6 +347,9 @@ class Linkedin(object):
             data_clusters = inner.get("searchDashClustersByAll", {})
 
             if not data_clusters:
+                self.logger.warning("[SEARCH] No searchDashClustersByAll found. inner keys: %s, data.data keys: %s",
+                                    list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__,
+                                    list(data.get("data", {}).keys()) if isinstance(data.get("data"), dict) else "N/A")
                 return []
 
             # Accept both _type and $type fields
