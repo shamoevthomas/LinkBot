@@ -69,7 +69,8 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit
         nrt = get_campaign_next_run_time(c.id)
         if nrt:
-            next_action_at = nrt.replace(tzinfo=None) if nrt.tzinfo else nrt
+            from datetime import timezone
+            next_action_at = nrt.replace(tzinfo=timezone.utc)
         else:
             paused_reason = "Aucun job programme — redemarrez la campagne"
 
@@ -201,6 +202,12 @@ def create_campaign(
 
     total_target = body.total_target or 50
 
+    # For connection campaigns, use the actual CRM contact count as target
+    if body.type == "connection" and body.crm_id:
+        crm_count = db.query(Contact).filter(Contact.crm_id == body.crm_id).count()
+        if crm_count > 0:
+            total_target = crm_count
+
     campaign = Campaign(
         name=body.name,
         type=body.type,
@@ -221,6 +228,24 @@ def create_campaign(
         campaign_id=campaign.id,
         campaign_type=campaign.type,
     )
+
+    # Auto-create a companion connection campaign if requested
+    if body.type == "search" and body.auto_connect and body.crm_id:
+        conn_campaign = Campaign(
+            name=f"{body.name} — Connexions",
+            type="connection",
+            status="running",
+            crm_id=body.crm_id,
+            total_target=total_target,
+            started_at=datetime.utcnow(),
+        )
+        db.add(conn_campaign)
+        db.commit()
+        db.refresh(conn_campaign)
+        schedule_campaign_job(
+            campaign_id=conn_campaign.id,
+            campaign_type="connection",
+        )
 
     return _campaign_to_response(campaign, db)
 
@@ -269,6 +294,12 @@ def create_dm_campaign(
         main_template = ""
 
     total_target = body.total_target or 50
+
+    # For DM/connection_dm campaigns, use CRM contact count as target
+    if body.crm_id:
+        crm_count = db.query(Contact).filter(Contact.crm_id == body.crm_id).count()
+        if crm_count > 0:
+            total_target = crm_count
 
     followup_count = len(body.messages) - 1 if body.messages else 0
 

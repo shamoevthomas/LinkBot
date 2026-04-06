@@ -23,7 +23,7 @@ export default function CampaignsPage() {
   const [showNew, setShowNew] = useState(null); // 'search' | 'dm' | 'connection' | null
   const [showDropdown, setShowDropdown] = useState(false);
   const [crms, setCrms] = useState([]);
-  const [form, setForm] = useState({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false });
+  const [form, setForm] = useState({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false });
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ export default function CampaignsPage() {
 
   const openNew = async (type) => {
     setCrms(await getCRMs());
-    setForm({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100 });
+    setForm({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false });
     setShowNew(type);
     setShowDropdown(false);
   };
@@ -58,6 +58,7 @@ export default function CampaignsPage() {
         crm_id: form.crm_id ? parseInt(form.crm_id) : null,
         total_target: parseInt(form.total_target) || 100,
         use_ai: form.use_ai,
+        auto_connect: form.autoConnect,
       });
       toast.success('Campagne créée et lancée');
       setShowNew(null);
@@ -227,6 +228,19 @@ export default function CampaignsPage() {
               <input type="number" value={form.total_target} onChange={(e) => set('total_target', e.target.value)}
                 className="input-glass" min={1} />
             </div>
+          )}
+
+          {/* Recherche + Connexion toggle */}
+          {showNew === 'search' && (
+            <label className="flex items-center gap-3 p-3 border border-blue-200 rounded-lg cursor-pointer" style={{ background: 'rgba(0,132,255,0.08)' }}>
+              <input type="checkbox" checked={form.autoConnect} onChange={(e) => set('autoConnect', e.target.checked)}
+                className="w-4 h-4 rounded" style={{ accentColor: 'var(--blue)' }} />
+              <UserPlus size={16} style={{ color: 'var(--blue)' }} />
+              <div>
+                <span className="text-sm font-medium text-blue-700">Recherche + Connexion</span>
+                <p className="text-xs text-blue-500">Envoyer automatiquement une demande de connexion aux contacts trouvés</p>
+              </div>
+            </label>
           )}
 
           {/* Connexion + DM toggle */}

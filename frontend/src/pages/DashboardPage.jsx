@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Rocket, Activity, Zap, Plus, ArrowRight, Loader2, MessageSquare, UserPlus } from 'lucide-react';
+import { Users, Rocket, Activity, Zap, Plus, ArrowRight, Loader2, MessageSquare, UserPlus, RefreshCw } from 'lucide-react';
 import { getDashboardStats } from '../api/dashboard';
+import { syncConnections } from '../api/config';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
+import toast from 'react-hot-toast';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,6 +41,19 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="f" style={{ fontWeight: 700, fontSize: 24, color: 'var(--text)' }}>Tableau de bord</h1>
         <div className="flex gap-2">
+          <button onClick={async () => {
+              setSyncing(true);
+              try {
+                await syncConnections();
+                toast.success('Synchronisation lancée');
+                setTimeout(() => getDashboardStats().then(setStats), 5000);
+              } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
+              finally { setSyncing(false); }
+            }}
+            disabled={syncing}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50">
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} /> Actualiser
+          </button>
           <button onClick={() => navigate('/dashboard/crms')}
             className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
             <Plus size={16} /> Nouveau CRM

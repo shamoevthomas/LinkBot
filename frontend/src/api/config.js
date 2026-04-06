@@ -10,3 +10,4 @@ export const importCSV = (formData) =>
   }).then((r) => r.data);
 export const getLogs = (params) => client.get('/config/logs', { params }).then((r) => r.data);
 export const getImportStatus = () => client.get('/config/import-status').then((r) => r.data);
+export const syncConnections = () => client.post('/config/sync-connections').then((r) => r.data);

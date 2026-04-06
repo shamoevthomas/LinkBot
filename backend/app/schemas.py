@@ -96,6 +96,7 @@ class CampaignCreate(BaseModel):
     total_target: Optional[int] = None
     max_per_day: Optional[int] = None
     spread_over_days: Optional[int] = None
+    auto_connect: bool = False
 
 class CampaignMessageSchema(BaseModel):
     sequence: int

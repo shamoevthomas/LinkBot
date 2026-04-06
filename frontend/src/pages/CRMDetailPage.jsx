@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Trash2, ArrowRightLeft, Plus, Loader2, Send, ExternalLink, MapPin, Briefcase, X, Link, Sparkles, Tag, ChevronDown, Download, ShieldOff, Filter, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Search, Trash2, ArrowRightLeft, Plus, Loader2, Send, ExternalLink, MapPin, Briefcase, X, Link, Sparkles, Tag, ChevronDown, Download, ShieldOff, Filter, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import { getCRM, getContacts, deleteContacts, moveContacts, updateContactsStatus, getCRMs, addContact, sendMessageToContact, searchLinkedInPeople, generateAIMessage, exportContacts } from '../api/crm';
 import { getTags, createTag, deleteTag, assignTag, removeTag } from '../api/tags';
 import { addToBlacklist } from '../api/blacklist';
+import { syncConnections } from '../api/config';
 import client from '../api/client';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
@@ -46,6 +47,7 @@ export default function CRMDetailPage() {
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
   const [exporting, setExporting] = useState(false);
   const [allSelected, setAllSelected] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Add contact state
   const [addMode, setAddMode] = useState('search'); // 'search' | 'url'
@@ -328,6 +330,19 @@ export default function CRMDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button onClick={async () => {
+              setSyncing(true);
+              try {
+                await syncConnections();
+                toast.success('Synchronisation lancée — les statuts seront mis à jour');
+                setTimeout(load, 5000);
+              } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
+              finally { setSyncing(false); }
+            }}
+            disabled={syncing}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> <span className="hidden sm:inline">Actualiser</span>
+          </button>
           <button onClick={handleExport} disabled={exporting}
             className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50">
             {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} <span className="hidden sm:inline">Exporter</span>

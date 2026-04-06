@@ -146,6 +146,34 @@ def get_import_status(
 
 
 # ---------------------------------------------------------------------------
+# Sync connections (manual trigger)
+# ---------------------------------------------------------------------------
+
+@router.post("/sync-connections", status_code=status.HTTP_202_ACCEPTED)
+def sync_connections_manual(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Manually trigger a connection sync: import new connections into 'Mon Réseau'
+    and update connection_status across all CRMs."""
+    if not user.li_at_cookie or not user.cookies_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valid LinkedIn cookies are required.",
+        )
+
+    from app.jobs.sync_connections import sync_and_update_statuses
+
+    background_tasks.add_task(
+        sync_and_update_statuses,
+        li_at=user.li_at_cookie,
+        jsessionid=user.jsessionid_cookie,
+    )
+    return {"message": "Sync started"}
+
+
+# ---------------------------------------------------------------------------
 # CSV Import
 # ---------------------------------------------------------------------------
 

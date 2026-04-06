@@ -138,3 +138,31 @@ def health():
 def ai_status():
     from app.utils.ai_message import is_ollama_available
     return {"available": is_ollama_available()}
+
+
+@app.get("/api/cron/sync-connections")
+async def cron_sync_connections(key: str = ""):
+    """Endpoint for external cron (cron-job.org) to trigger connection sync."""
+    from app.config import CRON_SECRET
+    if key != CRON_SECRET:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    from app.database import SessionLocal
+    from app.models import User
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).first()
+        if not user or not user.li_at_cookie or not user.cookies_valid:
+            return {"status": "skipped", "reason": "No valid cookies"}
+    finally:
+        db.close()
+
+    from app.jobs.sync_connections import sync_and_update_statuses
+    import asyncio
+    asyncio.create_task(sync_and_update_statuses(
+        li_at=user.li_at_cookie,
+        jsessionid=user.jsessionid_cookie,
+    ))
+    return {"status": "started"}

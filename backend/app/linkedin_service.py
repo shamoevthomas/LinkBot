@@ -113,6 +113,7 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
         try:
             profile = await get_profile(client, urn_id=contact.urn_id)
             if profile and profile.get("profile_id"):
+                _update_connection_status(contact, profile)
                 return contact.urn_id
         except Exception:
             pass
@@ -134,6 +135,7 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
                     contact.urn_id = new_urn
                     if not contact.public_id:
                         contact.public_id = pub_id
+                    _update_connection_status(contact, profile)
                     return new_urn
         except Exception:
             pass
@@ -158,6 +160,13 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
             pass
 
     return None
+
+
+def _update_connection_status(contact, profile: dict) -> None:
+    """Update contact.connection_status from LinkedIn profile data."""
+    distance = profile.get("distance")
+    if distance:
+        contact.connection_status = str(distance)
 
 
 # ---------------------------------------------------------------------------

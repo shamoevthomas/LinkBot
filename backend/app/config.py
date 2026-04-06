@@ -21,6 +21,9 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.
 # Gemini AI
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
+# Cron secret (for external cron-job.org triggers)
+CRON_SECRET = os.environ.get("CRON_SECRET", "linkbot-cron-change-me")
+
 # Supabase Storage (for persistent file uploads in prod)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
