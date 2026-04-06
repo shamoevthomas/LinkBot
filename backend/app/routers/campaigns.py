@@ -756,6 +756,22 @@ def cancel_campaign(
     return _campaign_to_response(campaign, db)
 
 
+@router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Delete a campaign and all its related data (actions, contacts, messages)."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if campaign.status == "running":
+        cancel_campaign_job(campaign_id)
+    db.delete(campaign)
+    db.commit()
+
+
 @router.post("/{campaign_id}/duplicate", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
 def duplicate_campaign(
     campaign_id: int,

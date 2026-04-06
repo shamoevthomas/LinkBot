@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Clock } from 'lucide-react';
-import { getCRMs, createCRM } from '../api/crm';
+import { Plus, Users, Clock, Trash2 } from 'lucide-react';
+import { getCRMs, createCRM, deleteCRM } from '../api/crm';
 import PageWrapper from '../components/layout/PageWrapper';
 import Modal from '../components/ui/Modal';
 import toast from 'react-hot-toast';
@@ -72,7 +72,16 @@ export default function CRMListPage() {
                 <div className="w-11 h-11 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(0,132,255,0.08)' }}>
                   <Users size={22} style={{ color: 'var(--blue)' }} />
                 </div>
-                <span className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{crm.contact_count}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{crm.contact_count}</span>
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Supprimer "${crm.name}" et tous ses contacts ?`)) return;
+                    deleteCRM(crm.id).then(() => { toast.success('CRM supprime'); load(); }).catch(() => toast.error('Erreur'));
+                  }} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
               <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text)' }}>{crm.name}</h3>
               {crm.description && <p className="text-sm mb-3 line-clamp-2" style={{ color: 'var(--text2)' }}>{crm.description}</p>}

@@ -14,6 +14,8 @@ export const resumeCampaign = (id) =>
   client.post(`/campaigns/${id}/resume`).then((r) => r.data);
 export const cancelCampaign = (id) =>
   client.post(`/campaigns/${id}/cancel`).then((r) => r.data);
+export const deleteCampaign = (id) =>
+  client.delete(`/campaigns/${id}`).then((r) => r.data);
 export const duplicateCampaign = (id) =>
   client.post(`/campaigns/${id}/duplicate`).then((r) => r.data);
 export const diagnoseCampaign = (id) =>

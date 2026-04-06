@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, MessageSquare, UserPlus, ChevronDown, Sparkles, MessageCircle } from 'lucide-react';
-import { getCampaigns, createCampaign } from '../api/campaigns';
+import { Plus, Search, MessageSquare, UserPlus, ChevronDown, Sparkles, MessageCircle, Trash2 } from 'lucide-react';
+import { getCampaigns, createCampaign, deleteCampaign } from '../api/campaigns';
 import { getCRMs } from '../api/crm';
 import client from '../api/client';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -134,7 +134,16 @@ export default function CampaignsPage() {
                   <Badge status={c.type} />
                   <Badge status={c.status} />
                 </div>
-                <span className="text-sm text-gray-500">{new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500">{new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    if (!confirm('Supprimer cette campagne ?')) return;
+                    deleteCampaign(c.id).then(() => { toast.success('Campagne supprimee'); load(); }).catch(() => toast.error('Erreur'));
+                  }} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex-1 bg-gray-100 rounded-full h-2">
