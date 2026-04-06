@@ -6,7 +6,6 @@ import { getMe } from '../api/user';
 import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -30,7 +29,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const data = await register(username, email, password);
+      const data = await register(email, password);
       localStorage.setItem('linkbot_token', data.access_token);
       await refreshUser();
       navigate('/dashboard');
@@ -81,17 +80,6 @@ export default function RegisterPage() {
           )}
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Nom d'utilisateur</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="input-glass"
-                placeholder="Choisissez un identifiant"
-                required
-              />
-            </div>
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Email</label>
               <input

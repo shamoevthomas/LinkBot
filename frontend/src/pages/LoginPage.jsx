@@ -4,7 +4,7 @@ import { Link, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,7 +16,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const user = await login(username, password);
+      const user = await login(email, password);
       navigate(user.onboarding_completed ? '/dashboard' : '/dashboard');
     } catch {
       setError('Identifiants incorrects');
@@ -67,13 +67,13 @@ export default function LoginPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Identifiant</label>
+              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Email</label>
               <input
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="input-glass"
-                placeholder="Entrez votre identifiant"
+                placeholder="votre@email.com"
                 required
               />
             </div>

@@ -10,15 +10,21 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == req.username).first():
-        raise HTTPException(status_code=400, detail="Ce nom d'utilisateur est déjà pris")
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="Le mot de passe doit faire au moins 6 caractères")
 
+    # Auto-generate username from email prefix
+    base_username = req.email.split("@")[0]
+    username = base_username
+    counter = 1
+    while db.query(User).filter(User.username == username).first():
+        username = f"{base_username}{counter}"
+        counter += 1
+
     user = User(
-        username=req.username,
+        username=username,
         email=req.email,
         password_hash=hash_password(req.password),
     )
@@ -31,7 +37,10 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == req.username).first()
+    # Try email first, then fallback to username (for legacy TEKA login)
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user:
+        user = db.query(User).filter(User.username == req.email).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

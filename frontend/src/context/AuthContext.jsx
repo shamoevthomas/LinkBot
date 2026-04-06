@@ -25,8 +25,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { refreshUser(); }, [refreshUser]);
 
-  const login = async (username, password) => {
-    const data = await apiLogin(username, password);
+  const login = async (email, password) => {
+    const data = await apiLogin(email, password);
     localStorage.setItem('linkbot_token', data.access_token);
     setToken(data.access_token);
     const me = await getMe();
