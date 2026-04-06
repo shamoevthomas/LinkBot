@@ -20,6 +20,7 @@ _PAGE_SIZE = 49
 
 async def sync_new_connections() -> None:
     """Check for new LinkedIn connections and add them to 'Mon Réseau' CRM."""
+    print("[SYNC] Starting sync_new_connections", flush=True)
     db = SessionLocal()
     try:
         # Find the "Mon Réseau" CRM
@@ -75,10 +76,12 @@ async def sync_new_connections() -> None:
                 contact = Contact(
                     crm_id=crm.id,
                     urn_id=person_urn,
+                    public_id=person.get("public_id"),
                     first_name=first_name,
                     last_name=last_name,
                     headline=person.get("jobtitle"),
                     location=person.get("location"),
+                    profile_picture_url=person.get("picture_url"),
                     linkedin_url=person.get("navigation_url"),
                     connection_status="connected",
                 )
@@ -92,8 +95,7 @@ async def sync_new_connections() -> None:
             if len(connections) < _PAGE_SIZE:
                 break
 
-        if total_new > 0:
-            logger.info("sync_connections: added %d new connections to 'Mon Réseau'", total_new)
+        print(f"[SYNC] Done: added {total_new} new connections", flush=True)
 
     except Exception:
         logger.exception("sync_connections: unexpected error")

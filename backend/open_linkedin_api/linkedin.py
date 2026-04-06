@@ -531,6 +531,37 @@ class Linkedin(object):
                 == "OUT_OF_NETWORK"
             ):
                 continue
+            # Extract profile picture URL from image artifacts
+            picture_url = None
+            image_data = item.get("image")
+            if isinstance(image_data, dict):
+                attrs = image_data.get("attributes") or []
+                for attr in attrs:
+                    mini_profile = (attr.get("miniProfile") or {})
+                    pic = mini_profile.get("picture", {})
+                    root = pic.get("com.linkedin.common.VectorImage", {})
+                    artifacts = root.get("artifacts") or []
+                    root_url = root.get("rootUrl", "")
+                    if artifacts and root_url:
+                        # Pick the largest artifact
+                        best = max(artifacts, key=lambda a: a.get("width", 0))
+                        picture_url = root_url + best.get("fileIdentifyingUrlPathSegment", "")
+                        break
+                    # Fallback: vectorImage directly on image
+                    vector = (attr.get("detailData") or {}).get("nonEntityProfilePicture", {}).get("vectorImage", {})
+                    v_artifacts = vector.get("artifacts") or []
+                    v_root = vector.get("rootUrl", "")
+                    if v_artifacts and v_root:
+                        best = max(v_artifacts, key=lambda a: a.get("width", 0))
+                        picture_url = v_root + best.get("fileIdentifyingUrlPathSegment", "")
+                        break
+
+            # Extract public_id from navigation URL
+            nav_url = item.get("navigationUrl", None)
+            public_id = None
+            if nav_url and "/in/" in nav_url:
+                public_id = nav_url.rstrip("/").split("/in/")[-1].split("?")[0]
+
             results.append(
                 {
                     "urn_id": get_id_from_urn(
@@ -542,7 +573,9 @@ class Linkedin(object):
                     "jobtitle": (item.get("primarySubtitle") or {}).get("text", None),
                     "location": (item.get("secondarySubtitle") or {}).get("text", None),
                     "name": (item.get("title") or {}).get("text", None),
-                    "navigation_url": item.get("navigationUrl", None),
+                    "navigation_url": nav_url,
+                    "public_id": public_id,
+                    "picture_url": picture_url,
                 }
             )
 

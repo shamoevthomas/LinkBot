@@ -132,10 +132,12 @@ async def run_search_campaign(campaign_id: int) -> None:
             contact = Contact(
                 crm_id=campaign.crm_id,
                 urn_id=urn_id,
+                public_id=person.get("public_id"),
                 first_name=first_name,
                 last_name=last_name,
                 headline=person.get("jobtitle"),
                 location=person.get("location"),
+                profile_picture_url=person.get("picture_url"),
                 linkedin_url=person.get("navigation_url"),
                 connection_status=person.get("distance", "unknown"),
             )
