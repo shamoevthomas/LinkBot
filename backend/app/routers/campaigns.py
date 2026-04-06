@@ -272,12 +272,10 @@ def create_dm_campaign(
     db.commit()
     db.refresh(campaign)
 
-    # Schedule the background job with user-defined interval
-    delay_seconds = (body.delay_minutes or 2) * 60
+    # Schedule the background job (interval auto-calculated from global settings)
     schedule_campaign_job(
         campaign_id=campaign.id,
         campaign_type=campaign_type,
-        interval_seconds=delay_seconds,
     )
 
     return _campaign_to_response(campaign, db)

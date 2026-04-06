@@ -394,7 +394,7 @@ export default function ConfigPage() {
 
               {(settings.schedule_enabled === 'true' || settings.schedule_enabled === true) ? (
                 <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-xs text-gray-500">Les campagnes ne s'exécutent que pendant cette plage. Les actions sont espacées aléatoirement pour simuler un comportement humain.</p>
+                  <p className="text-xs text-gray-500">Les campagnes ne s'exécutent que pendant cette plage. Les actions sont espacées automatiquement et aléatoirement pour simuler un comportement humain.</p>
                   <div className="flex items-center gap-3">
                     <div className="flex-1">
                       <label className="block text-xs text-gray-500 mb-1">Début</label>
@@ -412,16 +412,7 @@ export default function ConfigPage() {
                   </div>
                 </div>
               ) : (
-                <div>
-                  <p className="text-xs text-gray-500 mb-3">Désactivé — les campagnes tournent en continu. Vous pouvez définir un délai fixe entre chaque action.</p>
-                  <div className="flex items-center gap-3">
-                    <input type="number" min="1" max="60" value={settings.delay_between_actions || ''}
-                      onChange={(e) => setSettings({ ...settings, delay_between_actions: e.target.value })}
-                      placeholder="2"
-                      className="input-glass w-24" />
-                    <span className="text-sm text-gray-500">minutes entre chaque action</span>
-                  </div>
-                </div>
+                <p className="text-xs text-gray-500">Désactivé — les campagnes tournent en continu. Le délai entre les actions est calculé automatiquement à partir de vos limites quotidiennes.</p>
               )}
             </div>
 

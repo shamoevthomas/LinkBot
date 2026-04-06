@@ -175,19 +175,16 @@ def schedule_campaign_job(
         row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
         daily_limit = int(row.value) if row else 25
 
-        # Check if schedule mode is enabled — use window-based random interval
+        # Check if schedule mode is enabled — use window-based interval
         schedule_interval = _get_schedule_interval(daily_limit)
 
-        if schedule_interval and not interval_seconds:
+        if schedule_interval:
+            # Schedule ON: spread actions across the time window
             interval = schedule_interval
             jitter = max(15, int(interval * 0.5))
         else:
-            if not interval_seconds:
-                row = db.query(AppSettings).filter(AppSettings.key == "delay_between_actions").first()
-                if row:
-                    interval_seconds = int(row.value) * 60
-
-            interval = interval_seconds or 120  # default 2 min
+            # Schedule OFF: spread actions across 24h
+            interval = max(30, 86400 // max(1, daily_limit))
             jitter = max(10, int(interval * 0.3))
     finally:
         db.close()

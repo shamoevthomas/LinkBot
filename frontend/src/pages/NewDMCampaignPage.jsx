@@ -22,7 +22,7 @@ export default function NewDMCampaignPage() {
   const [extracting, setExtracting] = useState(false);
   const [useAi, setUseAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [delayMinutes, setDelayMinutes] = useState(2);
+
 
   // Messages
   const [mode, setMode] = useState('template');
@@ -187,7 +187,6 @@ export default function NewDMCampaignPage() {
         full_personalize: mode === 'full',
         messages: msgPayload,
         total_target: totalContacts,
-        delay_minutes: delayMinutes,
       };
       if (connectionConfig) {
         payload.keywords = connectionConfig.keywords || '';
@@ -252,14 +251,6 @@ export default function NewDMCampaignPage() {
                 <option value="">Selectionner...</option>
                 {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count})</option>)}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Delai entre actions</label>
-              <div className="flex items-center gap-2">
-                <input type="number" value={delayMinutes} onChange={(e) => setDelayMinutes(Math.max(1, parseInt(e.target.value) || 2))}
-                  min={1} max={60} className="input-glass w-20" style={{ fontSize: 13 }} />
-                <span className="text-xs text-gray-400">min</span>
-              </div>
             </div>
           </div>
 
