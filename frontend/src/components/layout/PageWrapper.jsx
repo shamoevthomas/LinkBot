@@ -10,7 +10,7 @@ export default function PageWrapper({ children }) {
       <div style={{ paddingTop: 20 }}>
         <Sidebar />
       </div>
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 48px 64px' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px 64px' }}>
         <AlertBanner show={user && !user.cookies_valid} />
         {children}
       </main>

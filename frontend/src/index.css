@@ -107,3 +107,21 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .glass-nav {
+    padding: 8px 12px !important;
+    gap: 4px !important;
+    border-radius: 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .glass-nav > div { gap: 2px !important; }
+  .glass-nav span[style*="fontSize: 18"] { font-size: 15px !important; }
+
+  .g-card { padding: 16px; border-radius: 14px; }
+  .g-card:hover { transform: none; }
+
+  .cta-btn { border-radius: 14px; }
+}

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
-const VIDEO_SRC = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4';
+const ORB_SRC = 'https://future.co/images/homepage/glassy-orb/orb-purple.webm';
 
 function useReveal() {
   const ref = useRef(null);
@@ -61,6 +61,37 @@ function Stat({ value, label, delay = '' }) {
 export default function LandingPage() {
   const navigate = useNavigate();
   const page = useReveal();
+  const [splash, setSplash] = useState(false);
+  const [drops, setDrops] = useState([]);
+  const splashTimer = useRef(null);
+  const orbRef = useRef(null);
+
+  const triggerSplash = useCallback(() => {
+    if (splash) return;
+    setSplash(true);
+    // Generate water droplets that fly across the whole page
+    const newDrops = Array.from({ length: 50 }).map((_, i) => {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 300 + Math.random() * 900;
+      const size = 6 + Math.random() * 22;
+      const duration = 0.8 + Math.random() * 1.2;
+      const delay = Math.random() * 0.25;
+      return {
+        id: i,
+        tx: Math.cos(angle) * speed,
+        ty: Math.sin(angle) * speed - 100 * Math.random(), // slight upward bias
+        size,
+        duration,
+        delay,
+        opacity: 0.4 + Math.random() * 0.5,
+        blur: Math.random() > 0.6 ? 2 : 0,
+      };
+    });
+    setDrops(newDrops);
+    splashTimer.current = setTimeout(() => { setSplash(false); setDrops([]); }, 3000);
+  }, [splash]);
+
+  useEffect(() => () => clearTimeout(splashTimer.current), []);
 
   return (
     <div ref={page} style={{
@@ -99,8 +130,8 @@ export default function LandingPage() {
         }} />
 
         {/* Glass Navbar */}
-        <div style={{ position: 'relative', zIndex: 10, maxWidth: 900, margin: '0 auto', padding: '20px 24px 0' }}>
-          <nav className="glass-nav" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px' }}>
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 900, margin: '0 auto', padding: '12px 16px 0' }}>
+          <nav className="glass-nav" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px' }}>
             <span className="f" style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>
               LinkBot<sup style={{ fontSize: 9, color: 'var(--text3)' }}>®</sup>
             </span>
@@ -125,12 +156,12 @@ export default function LandingPage() {
         </div>
 
         {/* Hero content: text LEFT, orb RIGHT */}
-        <section className="relative z-10" style={{
-          maxWidth: 1200, margin: '0 auto', padding: '80px 48px 120px',
-          display: 'flex', alignItems: 'center', gap: 48, minHeight: 'calc(100vh - 100px)',
+        <section className="relative z-10 flex flex-col md:flex-row items-center" style={{
+          maxWidth: 1200, margin: '0 auto', padding: '40px 20px 60px',
+          gap: 48, minHeight: 'calc(100vh - 100px)',
         }}>
           {/* Left: text */}
-          <div className="animate-fade-rise" style={{ flex: 1 }}>
+          <div className="animate-fade-rise text-center md:text-left" style={{ flex: 1 }}>
             <h1 className="f" style={{
               fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 700,
               lineHeight: 1, letterSpacing: '-2px', color: 'var(--text)',
@@ -140,7 +171,7 @@ export default function LandingPage() {
               avec{' '}
               <span style={{ color: 'var(--blue)' }}>élégance et précision.</span>
             </h1>
-            <p className="animate-fade-rise-delay" style={{
+            <p className="animate-fade-rise-delay mx-auto md:mx-0" style={{
               fontSize: 16, lineHeight: 1.7, color: 'var(--text2)',
               maxWidth: 480, marginTop: 28,
             }}>
@@ -155,54 +186,96 @@ export default function LandingPage() {
             </button>
           </div>
 
-          {/* Right: glass orb */}
-          <div className="animate-fade-rise-delay hidden md:flex" style={{ flex: 1, justifyContent: 'center', position: 'relative' }}>
-            {/* Soft glow behind orb */}
-            <div style={{
-              position: 'absolute', top: '50%', left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 520, height: 520, borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(0,100,255,0.18) 0%, rgba(0,100,255,0.04) 60%, transparent 80%)',
-              filter: 'blur(50px)', pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'relative', width: 400, height: 400, borderRadius: '50%',
-              overflow: 'hidden',
-              background: 'radial-gradient(circle at 35% 30%, #5BA8FF 0%, #0074E8 20%, #0058CC 40%, #003DA6 60%, #001F66 85%, #000D33 100%)',
-              boxShadow: '0 30px 80px rgba(0,50,150,0.35), inset 0 -20px 60px rgba(0,0,0,0.4)',
-            }}>
-              {/* Video as subtle animated texture */}
-              <video
-                autoPlay loop muted playsInline
-                style={{
-                  position: 'absolute', inset: 0, width: '100%', height: '100%',
-                  objectFit: 'cover', opacity: 0.15, mixBlendMode: 'overlay',
-                }}
-              >
-                <source src={VIDEO_SRC} type="video/mp4" />
-              </video>
-              {/* Specular highlight (top-left) */}
+          {/* Right: glass orb video + splash */}
+          <div
+            ref={orbRef}
+            className="animate-fade-rise-delay hidden md:flex"
+            onMouseEnter={triggerSplash}
+            style={{
+              flex: 1, justifyContent: 'center', alignItems: 'center',
+              position: 'relative', overflow: 'visible', cursor: 'pointer',
+              minHeight: 500,
+            }}
+          >
+            {/* The orb video — hides on splash */}
+            <video
+              autoPlay loop muted playsInline
+              style={{
+                width: 500, height: 500,
+                transform: 'scale(1.25)',
+                mixBlendMode: 'screen',
+                filter: 'hue-rotate(-55deg) saturate(250%) brightness(1.2) contrast(1.1)',
+                pointerEvents: 'none',
+                transition: 'opacity 0.3s',
+                opacity: splash ? 0 : 1,
+              }}
+            >
+              <source src={ORB_SRC} type="video/webm" />
+            </video>
+
+            {/* LinkedIn logo with orb glass effect — shows on splash */}
+            {splash && (
               <div style={{
-                position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
-                background: 'radial-gradient(ellipse 55% 40% at 32% 28%, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.10) 40%, transparent 65%)',
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                animation: 'orbLogoIn 0.6s cubic-bezier(0.22,1,0.36,1) forwards',
+              }}>
+                {/* Orb glow */}
+                <div style={{
+                  position: 'absolute', width: 600, height: 600, borderRadius: '50%',
+                  background: 'radial-gradient(circle, rgba(0,132,255,0.25) 0%, rgba(0,100,255,0.08) 50%, transparent 70%)',
+                  filter: 'blur(40px)', pointerEvents: 'none',
+                }} />
+                {/* Glass orb shell */}
+                <div style={{
+                  position: 'absolute', width: 480, height: 480, borderRadius: '50%',
+                  background: 'radial-gradient(circle at 35% 28%, rgba(120,190,255,0.4) 0%, rgba(0,132,255,0.12) 35%, rgba(0,80,200,0.08) 60%, transparent 80%)',
+                  border: '1.5px solid rgba(0,132,255,0.15)',
+                  boxShadow: 'inset 0 4px 30px rgba(255,255,255,0.2), inset 0 -15px 30px rgba(0,60,160,0.1), 0 0 60px rgba(0,132,255,0.15)',
+                  backdropFilter: 'blur(8px)',
+                }} />
+                {/* Specular highlight */}
+                <div style={{
+                  position: 'absolute', width: 480, height: 480, borderRadius: '50%',
+                  background: 'radial-gradient(ellipse 50% 35% at 35% 25%, rgba(255,255,255,0.45) 0%, transparent 60%)',
+                  pointerEvents: 'none',
+                }} />
+                {/* Logo */}
+                <img
+                  src="/linkedin.png" alt="LinkedIn"
+                  style={{
+                    position: 'relative', zIndex: 2,
+                    width: 400, height: 400, objectFit: 'contain',
+                    filter: 'drop-shadow(0 4px 20px rgba(0,132,255,0.4))',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Water droplets explosion */}
+            {drops.map(d => (
+              <div key={d.id} style={{
+                position: 'absolute', top: '50%', left: '50%',
+                width: d.size, height: d.size,
+                borderRadius: '50%',
+                background: `radial-gradient(circle at 35% 30%, rgba(120,200,255,${d.opacity}), rgba(0,132,255,${d.opacity * 0.8}))`,
+                boxShadow: d.blur ? `0 0 ${d.blur * 3}px rgba(0,132,255,0.3)` : 'none',
+                filter: d.blur ? `blur(${d.blur}px)` : 'none',
+                animation: `dropFly ${d.duration}s ${d.delay}s cubic-bezier(0.2,0.8,0.3,1) forwards`,
+                opacity: 0,
+                pointerEvents: 'none',
+                zIndex: 50,
+                '--tx': `${d.tx}px`,
+                '--ty': `${d.ty}px`,
               }} />
-              {/* Edge rim light */}
-              <div style={{
-                position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
-                background: 'radial-gradient(ellipse 100% 100% at 50% 50%, transparent 60%, rgba(0,80,200,0.15) 80%, rgba(0,40,120,0.3) 100%)',
-              }} />
-              {/* Bottom shadow depth */}
-              <div style={{
-                position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
-                background: 'radial-gradient(ellipse 80% 50% at 50% 85%, rgba(0,0,0,0.35) 0%, transparent 60%)',
-              }} />
-            </div>
+            ))}
           </div>
         </section>
       </div>
 
       {/* ── FEATURES ── */}
-      <section id="features" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '128px 48px' }}>
+      <section id="features" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px' }}>
         <SectionTitle sub="Fonctionnalités">
           Tout ce qu'il faut pour{' '}
           <em className="not-italic" style={{ color: 'var(--blue)' }}>dominer LinkedIn.</em>
@@ -225,12 +298,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
         <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── CAMPAIGNS ── */}
-      <section id="campaigns" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '128px 48px' }}>
+      <section id="campaigns" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px' }}>
         <SectionTitle sub="Campagnes">
           Quatre moteurs,{' '}
           <em className="not-italic" style={{ color: 'var(--blue)' }}>une seule interface.</em>
@@ -256,12 +329,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
         <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── AI SECTION ── */}
-      <section id="ai" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '128px 48px' }}>
+      <section id="ai" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '64px 20px' }}>
         <SectionTitle sub="Intelligence artificielle">
           Chaque message{' '}
           <em className="not-italic" style={{ color: 'var(--blue)' }}>est unique.</em>
@@ -326,12 +399,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
         <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── HOW IT WORKS ── */}
-      <section id="how" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '128px 48px' }}>
+      <section id="how" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '64px 20px' }}>
         <SectionTitle sub="Comment ça marche">
           Trois étapes,{' '}
           <em className="not-italic" style={{ color: 'var(--blue)' }}>zéro friction.</em>
@@ -348,12 +421,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
         <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── STATS ── */}
-      <section className="relative" style={{ maxWidth: '900px', margin: '0 auto', padding: '128px 48px' }}>
+      <section className="relative" style={{ maxWidth: '900px', margin: '0 auto', padding: '64px 20px' }}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
           <Stat delay="reveal-delay-1" value="4" label="Types de campagnes" />
           <Stat delay="reveal-delay-2" value="7" label="Relances automatiques" />
@@ -363,12 +436,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 48px' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
         <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
       </div>
 
       {/* ── DETAILS GRID ── */}
-      <section className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '128px 48px' }}>
+      <section className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px' }}>
         <SectionTitle sub="Détails">
           Pensé pour les{' '}
           <em className="not-italic" style={{ color: 'var(--blue)' }}>professionnels exigeants.</em>
@@ -395,7 +468,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA FINAL ── */}
-      <section className="relative" style={{ padding: '128px 48px' }}>
+      <section className="relative" style={{ padding: '64px 20px' }}>
         <div className="reveal text-center" style={{ maxWidth: '800px', margin: '0 auto' }}>
           <h2 className="f text-4xl sm:text-6xl md:text-7xl font-bold mb-6" style={{ color: 'var(--text)', lineHeight: 1, letterSpacing: '-2px' }}>
             Prêt à transformer{' '}
@@ -411,9 +484,9 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 48px 32px' }}>
+      <footer className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 32px' }}>
         <div style={{ height: '1px', marginBottom: '32px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.06), transparent)' }} />
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-0">
           <span className="f text-xl tracking-tight" style={{ color: 'var(--text3)' }}>
             LinkBot<sup className="text-[8px]">®</sup>
           </span>
@@ -422,6 +495,20 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
+
+      {/* Splash keyframes */}
+      <style>{`
+        @keyframes orbLogoIn {
+          0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); }
+          50% { opacity: 1; transform: translate(-50%,-50%) scale(1.1); }
+          100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+        }
+        @keyframes dropFly {
+          0% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+          70% { opacity: 0.8; }
+          100% { opacity: 0; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.2); }
+        }
+      `}</style>
     </div>
   );
 }

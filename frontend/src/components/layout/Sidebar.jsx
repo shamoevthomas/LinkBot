@@ -24,13 +24,15 @@ export default function Sidebar() {
 
   return (
     <nav style={{
-      position: 'sticky', top: 20, zIndex: 40,
+      position: 'sticky', top: 12, zIndex: 40,
       maxWidth: 900, margin: '0 auto',
-      padding: '0 24px',
+      padding: '0 12px',
     }}>
       <div className="glass-nav" style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '10px 20px',
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '8px 12px',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
       }}>
         {/* Logo */}
         <NavLink to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', marginRight: 16 }}>
@@ -41,7 +43,7 @@ export default function Sidebar() {
           }}>
             <Link size={16} color="#fff" />
           </div>
-          <span className="f" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>LinkBot</span>
+          <span className="f hidden sm:inline" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>LinkBot</span>
         </NavLink>
 
         {/* Nav links */}
@@ -64,7 +66,7 @@ export default function Sidebar() {
                   transition: 'all 0.2s',
                 }}>
                   <Icon size={17} />
-                  <span>{label}</span>
+                  <span className="hidden sm:inline">{label}</span>
                   {badgeKey && notifs[badgeKey] > 0 && (
                     <span style={{
                       minWidth: 18, height: 18, padding: '0 5px',
