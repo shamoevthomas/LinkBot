@@ -1194,6 +1194,115 @@ class Linkedin(object):
         """
         return self.search_people(connection_of=urn_id, **kwargs)
 
+    def get_all_connections(self, limit: int = -1, offset: int = 0) -> List:
+        """Fetch ALL of the authenticated user's 1st-degree connections
+        using the dedicated connections endpoint (not the search API).
+
+        This endpoint supports full pagination and is not subject to the
+        ~20 result cap that now affects the search API.
+
+        :param limit: Maximum number of connections to return (-1 for all)
+        :type limit: int
+        :param offset: Starting offset for pagination
+        :type offset: int
+
+        :return: List of connection dicts with keys: urn_id, public_id, name,
+                 first_name, last_name, headline, location, picture_url, navigation_url
+        :rtype: list
+        """
+        _CONN_PAGE_SIZE = 100
+        results = []
+        start = offset
+
+        while True:
+            count = _CONN_PAGE_SIZE
+            if limit > 0 and limit - len(results) < count:
+                count = limit - len(results)
+
+            params = {
+                "decorationId": "com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-15",
+                "count": count,
+                "q": "search",
+                "sortType": "RECENTLY_ADDED",
+                "start": start,
+            }
+
+            try:
+                res = self._fetch(
+                    "/relationships/dash/connections",
+                    params=params,
+                    headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+                )
+                data = res.json()
+            except Exception:
+                self.logger.exception("[CONNECTIONS] Error fetching at start=%d", start)
+                break
+
+            included = data.get("included", [])
+            self.logger.info(
+                "[CONNECTIONS] start=%d, included=%d items", start, len(included)
+            )
+
+            if not included:
+                break
+
+            for item in included:
+                item_type = item.get("$type", "") or item.get("_type", "")
+                # Only process profile entities
+                if "linkedin.voyager" not in item_type and "fsd_profile" not in item.get("entityUrn", ""):
+                    continue
+
+                entity_urn = item.get("entityUrn", "")
+                urn_id = entity_urn.split(":")[-1] if entity_urn else ""
+                if not urn_id:
+                    continue
+
+                first_name = item.get("firstName", "")
+                last_name = item.get("lastName", "")
+                name = f"{first_name} {last_name}".strip()
+
+                # Extract profile picture
+                picture_url = ""
+                picture_data = item.get("profilePicture", {}) or {}
+                artifacts = (
+                    picture_data.get("displayImageReference", {}) or {}
+                ).get("vectorImage", {}) or {}
+                art_list = artifacts.get("artifacts", [])
+                if art_list:
+                    root_url = artifacts.get("rootUrl", "")
+                    # Pick the largest artifact
+                    best = art_list[-1] if art_list else {}
+                    file_seg = best.get("fileIdentifyingUrlPathSegment", "")
+                    if root_url and file_seg:
+                        picture_url = f"{root_url}{file_seg}"
+
+                public_id = item.get("publicIdentifier", "")
+
+                results.append({
+                    "urn_id": urn_id,
+                    "public_id": public_id,
+                    "name": name,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "jobtitle": item.get("headline", ""),
+                    "location": item.get("geoLocationName", ""),
+                    "picture_url": picture_url,
+                    "navigation_url": f"https://www.linkedin.com/in/{public_id}" if public_id else "",
+                })
+
+            start += len(included)
+
+            if 0 < limit <= len(results):
+                break
+
+            # Safety: stop after too many pages
+            if start > 10000:
+                self.logger.warning("[CONNECTIONS] Safety limit reached at start=%d", start)
+                break
+
+        self.logger.info("[CONNECTIONS] Total fetched: %d connections", len(results))
+        return results
+
     def get_profile_experiences(self, urn_id: str) -> List:
         """Fetch experiences for a given LinkedIn profile.
 

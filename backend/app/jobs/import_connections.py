@@ -13,8 +13,6 @@ from app.linkedin_service import get_linkedin_client
 
 logger = logging.getLogger(__name__)
 
-_PAGE_SIZE = 49
-
 
 def run_import_connections(crm_id: int, li_at: str, jsessionid: str, import_job_id: int) -> None:
     """Synchronous entry point for BackgroundTasks."""
@@ -35,39 +33,27 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
 
         import json
 
-        offset = 0
+        # Fetch ALL connections using the dedicated connections endpoint
+        # (bypasses the search API which is limited to ~20 results)
+        logger.info("Fetching all connections via /relationships/dash/connections endpoint")
+        try:
+            all_connections = await asyncio.to_thread(client.get_all_connections)
+        except Exception:
+            logger.exception("Failed to fetch connections via dedicated endpoint")
+            all_connections = []
+
+        logger.info("Fetched %d connections from LinkedIn", len(all_connections))
+
         total_created = 0
         total_skipped = 0
-        skipped_list = []  # [{name, reason}]
-        empty_rounds = 0  # consecutive rounds with 0 results
+        skipped_list = []
 
-        while True:
-            try:
-                # Use network_depths=["F"] to search all 1st-degree connections.
-                # This is more reliable than connectionOf which LinkedIn now limits.
-                connections = await asyncio.to_thread(
-                    client.search_people,
-                    network_depths=["F"],
-                    limit=_PAGE_SIZE,
-                    offset=offset,
-                )
-                connections = connections or []
-            except Exception:
-                logger.exception("Error fetching connections at offset %d", offset)
-                break
+        # Process in batches for progress updates
+        batch_size = 50
+        for i in range(0, len(all_connections), batch_size):
+            batch = all_connections[i:i + batch_size]
 
-            if not connections:
-                empty_rounds += 1
-                if empty_rounds >= 3:
-                    logger.info("3 consecutive empty rounds at offset %d — stopping", offset)
-                    break
-                logger.info("Empty result at offset %d (attempt %d/3), advancing", offset, empty_rounds)
-                offset += _PAGE_SIZE
-                continue
-
-            empty_rounds = 0  # reset on success
-
-            for person in connections:
+            for person in batch:
                 person_urn = person.get("urn_id")
                 person_name = person.get("name", "") or "Inconnu"
 
@@ -84,17 +70,14 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                     skipped_list.append({"name": person_name, "reason": "Déjà présent dans ce CRM"})
                     continue
 
-                parts = person_name.split(" ", 1)
-                first_name = parts[0] if parts else ""
-                last_name = parts[1] if len(parts) > 1 else ""
-
                 contact = Contact(
                     crm_id=crm_id,
                     urn_id=person_urn,
-                    first_name=first_name,
-                    last_name=last_name,
+                    first_name=person.get("first_name") or person_name.split(" ", 1)[0],
+                    last_name=person.get("last_name") or (person_name.split(" ", 1)[1] if " " in person_name else ""),
                     headline=person.get("jobtitle"),
                     location=person.get("location"),
+                    profile_picture_url=person.get("picture_url"),
                     linkedin_url=person.get("navigation_url"),
                     connection_status="connected",
                 )
@@ -105,8 +88,8 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                 db.commit()
             except Exception:
                 db.rollback()
-                # Retry contacts one by one to skip only the duplicates
-                for person in connections:
+                # Retry one by one to skip duplicates
+                for person in batch:
                     person_urn = person.get("urn_id")
                     if not person_urn:
                         continue
@@ -116,14 +99,14 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                     if existing:
                         continue
                     person_name = person.get("name", "") or "Inconnu"
-                    parts = person_name.split(" ", 1)
                     contact = Contact(
                         crm_id=crm_id,
                         urn_id=person_urn,
-                        first_name=parts[0] if parts else "",
-                        last_name=parts[1] if len(parts) > 1 else "",
+                        first_name=person.get("first_name") or person_name.split(" ", 1)[0],
+                        last_name=person.get("last_name") or (person_name.split(" ", 1)[1] if " " in person_name else ""),
                         headline=person.get("jobtitle"),
                         location=person.get("location"),
+                        profile_picture_url=person.get("picture_url"),
                         linkedin_url=person.get("navigation_url"),
                         connection_status="connected",
                     )
@@ -133,22 +116,23 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                     except Exception:
                         db.rollback()
                 db.commit()
-            offset += len(connections)
 
-            # Update progress in real time
+            # Update progress
             if job:
-                job.total_found = offset
+                job.total_found = len(all_connections)
                 job.total_created = total_created
                 job.total_skipped = total_skipped
                 job.skipped_details = json.dumps(skipped_list, ensure_ascii=False) if skipped_list else None
                 db.commit()
 
-            logger.info("Batch done: offset=%d, created=%d, skipped=%d", offset, total_created, total_skipped)
+            logger.info("Batch %d/%d done: created=%d, skipped=%d",
+                        i // batch_size + 1, (len(all_connections) + batch_size - 1) // batch_size,
+                        total_created, total_skipped)
 
         # Mark as completed
         if job:
             job.status = "completed"
-            job.total_found = offset
+            job.total_found = len(all_connections)
             job.total_created = total_created
             job.total_skipped = total_skipped
             job.skipped_details = json.dumps(skipped_list, ensure_ascii=False) if skipped_list else None
