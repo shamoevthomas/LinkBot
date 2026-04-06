@@ -149,9 +149,10 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                         cc.status = "envoye"
                         _log_action(db, campaign_id, contact.id, "dm_send", "failed", "LinkedIn returned error")
                 else:
-                    # Daily DM limit reached, just mark accepted — DM will be sent next tick
+                    # Daily DM limit reached — keep en_attente, DM will be sent next tick via Phase 2
                     cc.status = "envoye"
                     cc.last_sequence_sent = -1  # DM not yet sent
+                    db.commit()
 
             elif cc.main_sent_at and datetime.utcnow() - cc.main_sent_at > timedelta(days=CONNECTION_WAIT_DAYS):
                 # Connection not accepted after 5 days → perdu
@@ -177,6 +178,11 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             for cc in needs_dm:
                 if get_global_actions_today(dm_action_types, db) >= dm_limit:
                     break
+                # Respect dm_delay_hours after connection acceptance
+                if cc.connection_accepted_at:
+                    dm_delay = timedelta(hours=campaign.dm_delay_hours or 0)
+                    if datetime.utcnow() - cc.connection_accepted_at < dm_delay:
+                        continue
                 contact = db.query(Contact).filter(Contact.id == cc.contact_id).first()
                 if not contact:
                     continue
