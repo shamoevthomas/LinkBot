@@ -438,6 +438,41 @@ def get_campaign(
     return _campaign_to_response(campaign, db)
 
 
+@router.post("/{campaign_id}/start", response_model=CampaignResponse)
+def start_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Start a pending campaign."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    if campaign.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot start a campaign with status '{campaign.status}'.",
+        )
+
+    if not user.li_at_cookie or not user.cookies_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valid LinkedIn cookies are required to run campaigns.",
+        )
+
+    campaign.status = "running"
+    campaign.started_at = datetime.utcnow()
+    db.commit()
+    db.refresh(campaign)
+
+    schedule_campaign_job(
+        campaign_id=campaign.id,
+        campaign_type=campaign.type,
+    )
+    return _campaign_to_response(campaign, db)
+
+
 @router.post("/{campaign_id}/pause", response_model=CampaignResponse)
 def pause_campaign(
     campaign_id: int,

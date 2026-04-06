@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer } from 'lucide-react';
-import { getCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, getCampaignActions, getCampaignContacts } from '../api/campaigns';
+import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, getCampaignActions, getCampaignContacts } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -61,6 +61,7 @@ export default function CampaignDetailPage() {
     return () => clearInterval(interval);
   }, [campaign?.status, load]);
 
+  const handleStart = async () => { await startCampaign(id); toast.success('Campagne lancee'); load(); };
   const handlePause = async () => { await pauseCampaign(id); toast.success('Campagne en pause'); load(); };
   const handleResume = async () => { await resumeCampaign(id); toast.success('Campagne relancee'); load(); };
   const handleCancel = async () => {
@@ -133,6 +134,11 @@ export default function CampaignDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {campaign.status === 'pending' && (
+            <button onClick={handleStart} className="px-4 py-2 text-white font-medium rounded-lg text-sm hover:opacity-90 flex items-center gap-2" style={{ background: 'var(--blue)' }}>
+              <Play size={16} /> Lancer
+            </button>
+          )}
           {campaign.status === 'running' && (
             <button onClick={handlePause} className="px-4 py-2 bg-amber-100 text-amber-700 font-medium rounded-lg text-sm hover:bg-amber-200 flex items-center gap-2">
               <Pause size={16} /> Pause
