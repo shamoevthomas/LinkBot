@@ -80,8 +80,8 @@ export default function CampaignsPage() {
         </div>
         <div className="relative">
           <button onClick={() => setShowDropdown(!showDropdown)}
-            className="cta-btn flex items-center gap-2">
-            <Plus size={18} /> Nouvelle campagne <ChevronDown size={16} />
+            className="cta-btn flex items-center gap-1.5" style={{ padding: '8px 16px', fontSize: 13 }}>
+            <Plus size={15} /> Nouvelle campagne <ChevronDown size={14} />
           </button>
           {showDropdown && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-10">

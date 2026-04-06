@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Rocket, Settings, Link } from 'lucide-react';
+import { LayoutDashboard, Users, Rocket, Settings, Link, Contact } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getNotifications } from '../../api/dashboard';
 import UserPopup from '../ui/UserPopup';
@@ -8,6 +8,7 @@ import UserPopup from '../ui/UserPopup';
 const links = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', end: true },
   { to: '/dashboard/crms', icon: Users, label: 'CRM' },
+  { to: '/dashboard/contacts', icon: Contact, label: 'Contacts' },
   { to: '/dashboard/campaigns', icon: Rocket, label: 'Campagnes', badgeKey: 'campaigns_attention' },
   { to: '/dashboard/config', icon: Settings, label: 'Configuration', dotKey: 'cookies_invalid' },
 ];

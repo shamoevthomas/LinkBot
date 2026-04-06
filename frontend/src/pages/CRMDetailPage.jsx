@@ -341,7 +341,7 @@ export default function CRMDetailPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Rechercher un contact..."
-            className="input-glass w-full pl-10 pr-3 py-2 text-sm" />
+            className="input-glass w-full pr-3 py-2 text-sm" style={{ paddingLeft: 36 }} />
         </div>
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="input-glass px-2 py-2 text-sm max-w-[140px]">

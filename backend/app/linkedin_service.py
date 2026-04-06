@@ -94,6 +94,73 @@ async def search_people(
 
 
 # ---------------------------------------------------------------------------
+# URN resolution with fallback
+# ---------------------------------------------------------------------------
+
+async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
+    """Try to resolve a valid urn_id for a contact.
+
+    Strategy:
+    1. Try get_profile with existing urn_id → extract fresh urn
+    2. Try get_profile with public_id (from DB or linkedin_url) → extract urn
+    3. Search by name → match best result → extract urn
+
+    Returns the resolved urn_id or None if all strategies fail.
+    Updates contact fields in-place (caller must commit).
+    """
+    # Strategy 1: existing urn_id
+    if contact.urn_id:
+        try:
+            profile = await get_profile(client, urn_id=contact.urn_id)
+            if profile and profile.get("profile_id"):
+                return contact.urn_id
+        except Exception:
+            pass
+
+    # Strategy 2: public_id
+    pub_id = contact.public_id
+    if not pub_id and contact.linkedin_url:
+        url = contact.linkedin_url.rstrip("/")
+        if "/in/" in url:
+            pub_id = url.split("/in/")[-1].split("?")[0]
+
+    if pub_id:
+        try:
+            profile = await get_profile(client, public_id=pub_id)
+            if profile:
+                new_urn = profile.get("profile_id") or profile.get("urn_id")
+                if new_urn:
+                    logger.info("Resolved urn via public_id %s -> %s", pub_id, new_urn)
+                    contact.urn_id = new_urn
+                    if not contact.public_id:
+                        contact.public_id = pub_id
+                    return new_urn
+        except Exception:
+            pass
+
+    # Strategy 3: search by name
+    name_query = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
+    if name_query:
+        try:
+            results = await search_people(client, keywords=name_query, limit=5)
+            for r in results:
+                r_urn = r.get("urn_id", "")
+                r_name = r.get("name", "").lower()
+                expected = name_query.lower()
+                if r_name == expected or (
+                    contact.first_name and contact.first_name.lower() in r_name
+                    and contact.last_name and contact.last_name.lower() in r_name
+                ):
+                    logger.info("Resolved urn via search '%s' -> %s", name_query, r_urn)
+                    contact.urn_id = r_urn
+                    return r_urn
+        except Exception:
+            pass
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Connection requests
 # ---------------------------------------------------------------------------
 

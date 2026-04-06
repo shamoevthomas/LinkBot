@@ -12,7 +12,7 @@ from datetime import datetime
 
 from app.database import SessionLocal
 from app.models import Campaign, CampaignAction, Contact, AppSettings, User, Blacklist
-from app.linkedin_service import get_linkedin_client, send_connection_request
+from app.linkedin_service import get_linkedin_client, send_connection_request, resolve_contact_urn
 from app.utils.template_engine import render_template
 from app.utils.ai_message import generate_personalized_message
 from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
@@ -93,6 +93,15 @@ async def run_connection_campaign(campaign_id: int) -> None:
             campaign.error_message = "No more contacts to request"
             db.commit()
             cancel_campaign_job(campaign_id)
+            return
+
+        # --- resolve URN ---
+        resolved_urn = await resolve_contact_urn(client, contact)
+        if not resolved_urn:
+            _log_action(db, campaign.id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
+            campaign.total_processed = (campaign.total_processed or 0) + 1
+            campaign.total_failed = (campaign.total_failed or 0) + 1
+            db.commit()
             return
 
         # --- blacklist check ---

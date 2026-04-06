@@ -24,3 +24,5 @@ export const generateAIMessage = (crmId, contactId, instructions) =>
   client.post(`/crms/${crmId}/contacts/${contactId}/generate-message`, { instructions }).then((r) => r.data);
 export const exportContacts = (crmId, params) =>
   client.get(`/crms/${crmId}/contacts/export`, { params, responseType: 'blob' }).then((r) => r.data);
+export const getAllContacts = (params) =>
+  client.get('/crms/all-contacts', { params }).then((r) => r.data);

@@ -12,3 +12,8 @@ export const submitOnboarding = (formData) =>
   client.post('/user/onboarding', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then((r) => r.data);
+
+export const updateProfile = (formData) =>
+  client.put('/user/profile', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then((r) => r.data);

@@ -11,6 +11,7 @@ import CRMDetailPage from './pages/CRMDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import NewDMCampaignPage from './pages/NewDMCampaignPage';
+import ContactsPage from './pages/ContactsPage';
 import ConfigPage from './pages/ConfigPage';
 
 function ProtectedRoute({ children }) {
@@ -48,6 +49,9 @@ function AppRoutes() {
       } />
       <Route path="/dashboard/crm/:id" element={
         <ProtectedRoute><DashboardWrapper><CRMDetailPage /></DashboardWrapper></ProtectedRoute>
+      } />
+      <Route path="/dashboard/contacts" element={
+        <ProtectedRoute><DashboardWrapper><ContactsPage /></DashboardWrapper></ProtectedRoute>
       } />
       <Route path="/dashboard/campaigns" element={
         <ProtectedRoute><DashboardWrapper><CampaignsPage /></DashboardWrapper></ProtectedRoute>

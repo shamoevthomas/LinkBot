@@ -20,7 +20,7 @@ from app.models import (
 )
 from app.linkedin_service import (
     get_linkedin_client, send_connection_request, send_message,
-    get_profile, get_profile_posts, check_contact_replied,
+    get_profile, get_profile_posts, check_contact_replied, resolve_contact_urn,
 )
 from app.utils.template_engine import render_template
 from app.utils.ai_message import (
@@ -351,6 +351,15 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 )
 
                 if contact:
+                    # Resolve URN
+                    resolved_urn = await resolve_contact_urn(client, contact)
+                    if not resolved_urn:
+                        _log_action(db, campaign_id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
+                        campaign.total_processed = (campaign.total_processed or 0) + 1
+                        campaign.total_failed = (campaign.total_failed or 0) + 1
+                        db.commit()
+                        return
+
                     # Blacklist check
                     if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id).first():
                         _log_action(db, campaign_id, contact.id, "connection_request", "skipped", "Blacklisted")

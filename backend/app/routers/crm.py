@@ -34,6 +34,94 @@ router = APIRouter(prefix="/api/crms", tags=["crm"])
 
 
 # ---------------------------------------------------------------------------
+# Global contacts (must be before /{crm_id} routes)
+# ---------------------------------------------------------------------------
+
+@router.get("/all-contacts")
+def list_all_contacts(
+    search: Optional[str] = Query(None),
+    connection_status: Optional[str] = Query(None),
+    crm_id: Optional[int] = Query(None),
+    sort_by: Optional[str] = Query("added_at"),
+    sort_order: Optional[str] = Query("desc"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """List all contacts across all CRMs with search, filter, sort, and pagination."""
+    q = db.query(Contact)
+
+    if crm_id:
+        q = q.filter(Contact.crm_id == crm_id)
+
+    if search:
+        pattern = f"%{search}%"
+        q = q.filter(
+            or_(
+                Contact.first_name.ilike(pattern),
+                Contact.last_name.ilike(pattern),
+                Contact.headline.ilike(pattern),
+                Contact.location.ilike(pattern),
+            )
+        )
+
+    if connection_status:
+        q = q.filter(Contact.connection_status == connection_status)
+
+    total = q.count()
+
+    sort_column = {
+        "name": Contact.first_name,
+        "added_at": Contact.added_at,
+        "last_interaction_at": Contact.last_interaction_at,
+    }.get(sort_by, Contact.added_at)
+
+    if sort_order == "asc":
+        q = q.order_by(sort_column.asc())
+    else:
+        q = q.order_by(sort_column.desc())
+
+    offset = (page - 1) * per_page
+    contacts = q.offset(offset).limit(per_page).all()
+
+    # Build CRM name lookup
+    crm_ids = list({c.crm_id for c in contacts})
+    crm_map = {}
+    if crm_ids:
+        crm_rows = db.query(CRM.id, CRM.name).filter(CRM.id.in_(crm_ids)).all()
+        crm_map = {r.id: r.name for r in crm_rows}
+
+    return {
+        "contacts": [
+            {
+                **ContactResponse(
+                    id=c.id,
+                    crm_id=c.crm_id,
+                    urn_id=c.urn_id,
+                    public_id=c.public_id,
+                    first_name=c.first_name,
+                    last_name=c.last_name,
+                    headline=c.headline,
+                    location=c.location,
+                    profile_picture_url=c.profile_picture_url,
+                    linkedin_url=c.linkedin_url,
+                    connection_status=c.connection_status or "unknown",
+                    last_interaction_at=c.last_interaction_at,
+                    added_at=c.added_at,
+                    tags=[TagResponse(id=t.id, name=t.name, color=t.color) for t in c.tags],
+                ).model_dump(),
+                "crm_name": crm_map.get(c.crm_id, "—"),
+            }
+            for c in contacts
+        ],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    }
+
+
+# ---------------------------------------------------------------------------
 # LinkedIn people search (must be before /{crm_id} routes)
 # ---------------------------------------------------------------------------
 
@@ -195,7 +283,7 @@ def list_contacts(
     sort_by: Optional[str] = Query("added_at", description="Sort field: name, added_at, last_interaction_at"),
     sort_order: Optional[str] = Query("desc", description="asc or desc"),
     page: int = Query(1, ge=1),
-    per_page: int = Query(25, ge=1, le=200),
+    per_page: int = Query(25, ge=1, le=10000),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):

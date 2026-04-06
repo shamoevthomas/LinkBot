@@ -501,7 +501,7 @@ export default function ConfigPage() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={blacklistSearch} onChange={(e) => { setBlacklistSearch(e.target.value); setBlacklistPage(1); }}
                 placeholder="Rechercher..."
-                className="input-glass w-full pl-10" />
+                className="input-glass w-full" style={{ paddingLeft: 36 }} />
             </div>
 
             {blacklistItems.length === 0 ? (
