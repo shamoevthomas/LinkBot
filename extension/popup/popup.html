@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=380">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Loading -->
+  <div id="loading" class="screen">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Login -->
+  <div id="login-screen" class="screen" style="display:none">
+    <div class="logo-section">
+      <div class="logo-icon">L</div>
+      <h1>LinkBot</h1>
+      <p class="subtitle">Connectez-vous pour continuer</p>
+    </div>
+    <form id="login-form">
+      <input type="email" id="login-email" placeholder="Email" required>
+      <input type="password" id="login-password" placeholder="Mot de passe" required>
+      <div id="login-error" class="error" style="display:none"></div>
+      <button type="submit" id="login-btn" class="btn-primary">
+        <span class="btn-text">Se connecter</span>
+        <span class="btn-loading" style="display:none"><span class="spinner-sm"></span></span>
+      </button>
+    </form>
+    <a href="https://link-bot-kappa.vercel.app" target="_blank" class="link-app">Ouvrir LinkBot dans le navigateur</a>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard-screen" class="screen" style="display:none">
+    <div class="header">
+      <div class="header-left">
+        <div class="logo-icon-sm">L</div>
+        <span class="header-name" id="user-name"></span>
+      </div>
+      <div class="header-right">
+        <button id="open-app-btn" class="btn-ghost" title="Ouvrir LinkBot">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+        <button id="logout-btn" class="btn-ghost" title="Deconnexion">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <span class="stat-value" id="stat-contacts">-</span>
+        <span class="stat-label">Contacts</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-campaigns">-</span>
+        <span class="stat-label">Campagnes</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-actions">-</span>
+        <span class="stat-label">Actions</span>
+      </div>
+    </div>
+
+    <!-- CRMs -->
+    <div class="section">
+      <div class="section-title">Vos CRMs</div>
+      <div id="crm-list" class="crm-list">
+        <div class="placeholder">Chargement...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
