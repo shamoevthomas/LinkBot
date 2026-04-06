@@ -36,6 +36,7 @@ CONNECTION_WAIT_DAYS = 5
 
 
 async def run_connection_dm_campaign(campaign_id: int) -> None:
+    print(f"[CONN_DM JOB] Campaign {campaign_id}: tick start", flush=True)
     db = SessionLocal()
     try:
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()

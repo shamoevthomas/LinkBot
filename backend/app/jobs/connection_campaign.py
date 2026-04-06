@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 async def run_connection_campaign(campaign_id: int) -> None:
     """Send a connection request to the next unprocessed contact."""
+    print(f"[CONN JOB] Campaign {campaign_id}: tick start", flush=True)
     db = SessionLocal()
     try:
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()

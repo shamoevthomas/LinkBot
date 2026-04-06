@@ -562,6 +562,55 @@ def diagnose_campaign(
     }
 
 
+@router.post("/{campaign_id}/run-now")
+async def run_campaign_now(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Manually trigger one tick of the campaign job for debugging."""
+    import logging as _log
+    _logger = _log.getLogger(__name__)
+
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.status != "running":
+        raise HTTPException(status_code=400, detail=f"Campaign status is '{campaign.status}', must be 'running'")
+
+    _logger.info("=== MANUAL RUN: campaign %d type=%s ===", campaign_id, campaign.type)
+
+    try:
+        if campaign.type == "dm":
+            from app.jobs.dm_campaign import run_dm_campaign
+            await run_dm_campaign(campaign_id)
+        elif campaign.type == "connection":
+            from app.jobs.connection_campaign import run_connection_campaign
+            await run_connection_campaign(campaign_id)
+        elif campaign.type == "connection_dm":
+            from app.jobs.connection_dm_campaign import run_connection_dm_campaign
+            await run_connection_dm_campaign(campaign_id)
+        elif campaign.type == "search":
+            from app.jobs.search_campaign import run_search_campaign
+            await run_search_campaign(campaign_id)
+        else:
+            return {"ok": False, "error": f"Unknown type: {campaign.type}"}
+
+        # Re-read campaign to get updated state
+        db.expire_all()
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        return {
+            "ok": True,
+            "total_processed": campaign.total_processed,
+            "total_succeeded": campaign.total_succeeded,
+            "total_failed": campaign.total_failed,
+            "error_message": campaign.error_message,
+        }
+    except Exception as exc:
+        _logger.exception("Manual run failed for campaign %d", campaign_id)
+        return {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:500]}"}
+
+
 @router.post("/{campaign_id}/start", response_model=CampaignResponse)
 def start_campaign(
     campaign_id: int,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer } from 'lucide-react';
-import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, getCampaignActions, getCampaignContacts } from '../api/campaigns';
+import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, runCampaignNow, getCampaignActions, getCampaignContacts } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -68,6 +68,22 @@ export default function CampaignDetailPage() {
       const d = await diagnoseCampaign(id);
       setDiagnosis(d);
     } catch { toast.error('Erreur diagnostic'); }
+  };
+  const handleRunNow = async () => {
+    try {
+      toast.loading('Execution manuelle...', { id: 'run-now' });
+      const result = await runCampaignNow(id);
+      toast.dismiss('run-now');
+      if (result.ok) {
+        toast.success(`Tick execute — traites: ${result.total_processed}, erreur: ${result.error_message || 'aucune'}`);
+      } else {
+        toast.error(`Erreur: ${result.error}`);
+      }
+      load();
+    } catch (err) {
+      toast.dismiss('run-now');
+      toast.error(err.response?.data?.detail || 'Erreur execution');
+    }
   };
   const handlePause = async () => { await pauseCampaign(id); toast.success('Campagne en pause'); load(); };
   const handleResume = async () => { await resumeCampaign(id); toast.success('Campagne relancee'); load(); };
@@ -207,9 +223,14 @@ export default function CampaignDetailPage() {
         {/* Diagnose button when stuck at 0% */}
         {campaign.status === 'running' && campaign.total_processed === 0 && (
           <div className="mb-4">
-            <button onClick={handleDiagnose} className="text-sm text-indigo-600 hover:text-indigo-800 underline">
-              Diagnostiquer pourquoi rien ne se passe
-            </button>
+            <div className="flex gap-4">
+              <button onClick={handleDiagnose} className="text-sm text-indigo-600 hover:text-indigo-800 underline">
+                Diagnostiquer
+              </button>
+              <button onClick={handleRunNow} className="text-sm text-orange-600 hover:text-orange-800 underline font-medium">
+                Forcer une execution maintenant
+              </button>
+            </div>
             {diagnosis && (
               <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm space-y-1">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">

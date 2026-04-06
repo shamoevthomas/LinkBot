@@ -36,6 +36,7 @@ FINAL_STATUSES = {"reussi", "perdu"}
 
 
 async def run_dm_campaign(campaign_id: int) -> None:
+    print(f"[DM JOB] Campaign {campaign_id}: tick start", flush=True)
     db = SessionLocal()
     try:
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()

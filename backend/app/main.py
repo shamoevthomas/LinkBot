@@ -1,3 +1,5 @@
+import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +10,17 @@ from app.config import CORS_ORIGINS, UPLOADS_DIR
 from app.database import init_db, SessionLocal
 from app.models import User, AppSettings, CRM
 from app.auth import hash_password
+
+# Configure root logger so all app.* loggers output to stdout
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    stream=sys.stdout,
+    force=True,
+)
+# Quiet down noisy libraries
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 def seed_db():

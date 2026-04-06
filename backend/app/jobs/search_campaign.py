@@ -23,6 +23,7 @@ _BATCH_SIZE = 10
 
 async def run_search_campaign(campaign_id: int) -> None:
     """Execute one search batch for *campaign_id*."""
+    print(f"[SEARCH JOB] Campaign {campaign_id}: tick start", flush=True)
     db = SessionLocal()
     try:
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
