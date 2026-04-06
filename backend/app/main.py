@@ -19,6 +19,7 @@ def seed_db():
             user = User(
                 id=1,
                 username="TEKA",
+                email="admin@linkbot.local",
                 password_hash=hash_password("ADMIN"),
             )
             db.add(user)

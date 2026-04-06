@@ -111,9 +111,16 @@ export default function LandingPage() {
                   onMouseLeave={e => e.target.style.color = 'var(--text2)'}>{label}</a>
               ))}
             </div>
-            <button onClick={() => navigate('/login')} className="cta-btn" style={{ padding: '10px 24px', fontSize: 13, borderRadius: 99 }}>
-              Se connecter
-            </button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate('/login')} style={{ fontSize: 13, color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.target.style.color = 'var(--text)'}
+                onMouseLeave={e => e.target.style.color = 'var(--text2)'}>
+                Se connecter
+              </button>
+              <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '10px 24px', fontSize: 13, borderRadius: 99 }}>
+                S'inscrire
+              </button>
+            </div>
           </nav>
         </div>
 
@@ -141,7 +148,7 @@ export default function LandingPage() {
               LinkBot transforme votre réseau LinkedIn en machine de croissance,
               pendant que vous vous concentrez sur l'essentiel.
             </p>
-            <button onClick={() => navigate('/login')} className="animate-fade-rise-delay-2 cta-btn" style={{
+            <button onClick={() => navigate('/register')} className="animate-fade-rise-delay-2 cta-btn" style={{
               padding: '18px 44px', fontSize: 15, borderRadius: 16, marginTop: 36,
             }}>
               Commencer maintenant
@@ -150,33 +157,44 @@ export default function LandingPage() {
 
           {/* Right: glass orb */}
           <div className="animate-fade-rise-delay hidden md:flex" style={{ flex: 1, justifyContent: 'center', position: 'relative' }}>
-            {/* Glow behind orb */}
+            {/* Soft glow behind orb */}
             <div style={{
               position: 'absolute', top: '50%', left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: 500, height: 500, borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(0,132,255,0.15) 0%, rgba(0,132,255,0.04) 50%, transparent 70%)',
-              filter: 'blur(40px)', pointerEvents: 'none',
+              width: 520, height: 520, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(0,100,255,0.18) 0%, rgba(0,100,255,0.04) 60%, transparent 80%)',
+              filter: 'blur(50px)', pointerEvents: 'none',
             }} />
-            <div style={{ position: 'relative', width: 400, height: 400 }}>
+            <div style={{
+              position: 'relative', width: 400, height: 400, borderRadius: '50%',
+              overflow: 'hidden',
+              background: 'radial-gradient(circle at 35% 30%, #5BA8FF 0%, #0074E8 20%, #0058CC 40%, #003DA6 60%, #001F66 85%, #000D33 100%)',
+              boxShadow: '0 30px 80px rgba(0,50,150,0.35), inset 0 -20px 60px rgba(0,0,0,0.4)',
+            }}>
+              {/* Video as subtle animated texture */}
               <video
                 autoPlay loop muted playsInline
                 style={{
-                  width: 400, height: 400, borderRadius: '50%', objectFit: 'cover',
-                  filter: 'hue-rotate(190deg) saturate(3) brightness(0.55) contrast(1.6)',
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'cover', opacity: 0.15, mixBlendMode: 'overlay',
                 }}
               >
                 <source src={VIDEO_SRC} type="video/mp4" />
               </video>
-              {/* Glass reflection overlay */}
+              {/* Specular highlight (top-left) */}
               <div style={{
                 position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
-                background: 'radial-gradient(ellipse 60% 40% at 35% 30%, rgba(255,255,255,0.35) 0%, transparent 60%)',
+                background: 'radial-gradient(ellipse 55% 40% at 32% 28%, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.10) 40%, transparent 65%)',
               }} />
-              {/* Subtle ring */}
+              {/* Edge rim light */}
               <div style={{
-                position: 'absolute', inset: -2, borderRadius: '50%', pointerEvents: 'none',
-                border: '1.5px solid rgba(0,132,255,0.12)',
+                position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
+                background: 'radial-gradient(ellipse 100% 100% at 50% 50%, transparent 60%, rgba(0,80,200,0.15) 80%, rgba(0,40,120,0.3) 100%)',
+              }} />
+              {/* Bottom shadow depth */}
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
+                background: 'radial-gradient(ellipse 80% 50% at 50% 85%, rgba(0,0,0,0.35) 0%, transparent 60%)',
               }} />
             </div>
           </div>
@@ -386,7 +404,7 @@ export default function LandingPage() {
           <p className="text-base max-w-xl mx-auto mb-12 leading-relaxed" style={{ color: 'var(--text2)' }}>
             Installez LinkBot, connectez votre compte LinkedIn, et lancez votre première campagne en moins de 5 minutes.
           </p>
-          <button onClick={() => navigate('/login')} className="cta-btn rounded-full cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '20px 56px', fontSize: '16px' }}>
+          <button onClick={() => navigate('/register')} className="cta-btn rounded-full cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '20px 56px', fontSize: '16px' }}>
             Commencer gratuitement
           </button>
         </div>
