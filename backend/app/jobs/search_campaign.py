@@ -57,8 +57,8 @@ async def run_search_campaign(campaign_id: int) -> None:
             cancel_campaign_job(campaign_id)
             return
 
-        # --- get LinkedIn client ---
-        user = db.query(User).first()
+        # --- get LinkedIn client (from campaign owner) ---
+        user = db.query(User).filter(User.id == campaign.user_id).first()
         if not user or not user.li_at_cookie or not user.cookies_valid:
             campaign.status = "failed"
             campaign.error_message = "No valid LinkedIn cookies"
@@ -119,7 +119,7 @@ async def run_search_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign.id, existing.id, "search_add", "skipped", "Duplicate")
                 continue
 
-            if db.query(Blacklist).filter(Blacklist.urn_id == urn_id).first():
+            if db.query(Blacklist).filter(Blacklist.urn_id == urn_id, Blacklist.user_id == campaign.user_id).first():
                 skipped += 1
                 _log_action(db, campaign.id, None, "search_add", "skipped", "Blacklisted")
                 continue

@@ -59,10 +59,10 @@ async def complete_onboarding(
 
     # Always import network when cookies are valid
     if cookies_valid and li_at and jsessionid:
-        # Create or find "Mon Réseau" CRM
-        crm = db.query(CRM).filter(CRM.name == "Mon Réseau").first()
+        # Create or find user's "Mon Réseau" CRM
+        crm = db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user.id).first()
         if not crm:
-            crm = CRM(name="Mon Réseau", description="Toutes vos connexions LinkedIn")
+            crm = CRM(name="Mon Réseau", description="Toutes vos connexions LinkedIn", user_id=user.id)
             db.add(crm)
             db.flush()
 

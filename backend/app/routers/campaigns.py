@@ -134,7 +134,7 @@ def list_campaigns(
     _user: User = Depends(get_current_user),
 ):
     """List campaigns with optional type and status filters."""
-    q = db.query(Campaign)
+    q = db.query(Campaign).filter(Campaign.user_id == _user.id)
     if campaign_type:
         q = q.filter(Campaign.type == campaign_type)
     if campaign_status:
@@ -184,9 +184,9 @@ def create_campaign(
             detail="A message template is required for DM campaigns.",
         )
 
-    # Validate CRM exists
+    # Validate CRM exists and belongs to user
     if body.crm_id:
-        crm = db.query(CRM).filter(CRM.id == body.crm_id).first()
+        crm = db.query(CRM).filter(CRM.id == body.crm_id, CRM.user_id == user.id).first()
         if not crm:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -213,6 +213,7 @@ def create_campaign(
         type=body.type,
         status="running",
         crm_id=body.crm_id,
+        user_id=user.id,
         keywords=body.keywords,
         message_template=body.message_template,
         use_ai=body.use_ai,
@@ -236,6 +237,7 @@ def create_campaign(
             type="connection",
             status="running",
             crm_id=body.crm_id,
+            user_id=user.id,
             total_target=total_target,
             started_at=datetime.utcnow(),
         )
@@ -261,8 +263,8 @@ def create_dm_campaign(
     user: User = Depends(get_current_user),
 ):
     """Create a DM campaign with main message + follow-up messages."""
-    # Validate CRM exists
-    crm = db.query(CRM).filter(CRM.id == body.crm_id).first()
+    # Validate CRM exists and belongs to user
+    crm = db.query(CRM).filter(CRM.id == body.crm_id, CRM.user_id == user.id).first()
     if not crm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -310,6 +312,7 @@ def create_dm_campaign(
         type=campaign_type,
         status="running",
         crm_id=body.crm_id,
+        user_id=user.id,
         keywords=body.keywords if body.is_connection_dm else None,
         message_template=main_template,
         use_ai=body.use_ai,
@@ -387,7 +390,7 @@ async def preview_personalization(
     from app.linkedin_service import get_linkedin_client, get_profile, get_profile_posts
     from app.utils.ai_message import generate_full_personalized_messages, extract_post_texts
 
-    crm = db.query(CRM).filter(CRM.id == body.crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == body.crm_id, CRM.user_id == user.id).first()
     if not crm:
         raise HTTPException(status_code=404, detail="CRM not found")
 
@@ -485,7 +488,7 @@ def get_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Get campaign details with progress."""
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return _campaign_to_response(campaign, db)
@@ -500,7 +503,7 @@ def diagnose_campaign(
     """Return diagnostic info about why a campaign may not be making progress."""
     from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit, _campaigns
 
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -516,7 +519,7 @@ def diagnose_campaign(
         issues.append("Le job est en pause dans le scheduler")
 
     # 2. Check cookies
-    user = db.query(User).first()
+    user = _user
     if not user or not user.li_at_cookie:
         issues.append("Pas de cookies LinkedIn configures")
     elif not user.cookies_valid:
@@ -602,7 +605,7 @@ async def run_campaign_now(
     import logging as _log
     _logger = _log.getLogger(__name__)
 
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     if campaign.status != "running":
@@ -648,7 +651,7 @@ def start_campaign(
     user: User = Depends(get_current_user),
 ):
     """Start a pending campaign."""
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
@@ -683,7 +686,7 @@ def pause_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Pause a running campaign."""
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
@@ -708,7 +711,7 @@ def resume_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Resume a paused campaign."""
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
@@ -733,7 +736,7 @@ def cancel_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Cancel a running or paused campaign."""
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
@@ -759,7 +762,7 @@ def duplicate_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Create a copy of the campaign with status 'pending'."""
-    original = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    original = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not original:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
@@ -768,6 +771,7 @@ def duplicate_campaign(
         type=original.type,
         status="pending",
         crm_id=original.crm_id,
+        user_id=_user.id,
         keywords=original.keywords,
         message_template=original.message_template,
         use_ai=original.use_ai,
@@ -805,7 +809,7 @@ def list_actions(
     _user: User = Depends(get_current_user),
 ):
     """Return paginated action log for a campaign."""
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
@@ -848,7 +852,7 @@ def list_campaign_contacts(
     _user: User = Depends(get_current_user),
 ):
     """Return per-contact status for a DM campaign (follow-up cycle tracking)."""
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 

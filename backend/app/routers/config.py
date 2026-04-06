@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user
-from app.models import User, CRM, Contact, AppSettings, CampaignAction, ImportJob
+from app.models import User, CRM, Contact, Campaign, AppSettings, CampaignAction, ImportJob
 from app.schemas import SettingsUpdate, ImportConnectionsRequest, CampaignActionResponse
 from app.utils.csv_parser import parse_csv
 
@@ -77,7 +77,7 @@ def import_connections(
     user: User = Depends(get_current_user),
 ):
     """Start a background job to import all LinkedIn connections into a CRM."""
-    crm = db.query(CRM).filter(CRM.id == body.crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == body.crm_id, CRM.user_id == user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
@@ -118,8 +118,9 @@ def get_import_status(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    """Get the latest import job status."""
-    job = db.query(ImportJob).order_by(ImportJob.id.desc()).first()
+    """Get the latest import job status for the current user."""
+    user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
+    job = db.query(ImportJob).filter(ImportJob.crm_id.in_(user_crm_ids)).order_by(ImportJob.id.desc()).first() if user_crm_ids else None
     if not job:
         return {"status": "none"}
     import json
@@ -169,6 +170,7 @@ def sync_connections_manual(
         sync_and_update_statuses,
         li_at=user.li_at_cookie,
         jsessionid=user.jsessionid_cookie,
+        user_id=user.id,
     )
     return {"message": "Sync started"}
 
@@ -186,7 +188,7 @@ async def import_csv(
     _user: User = Depends(get_current_user),
 ):
     """Upload a CSV file, parse it, and insert contacts into the specified CRM."""
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
@@ -300,8 +302,9 @@ def get_logs(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    """Return a paginated global action log across all campaigns."""
-    q = db.query(CampaignAction)
+    """Return a paginated global action log for the current user's campaigns."""
+    user_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id).all()]
+    q = db.query(CampaignAction).filter(CampaignAction.campaign_id.in_(user_campaign_ids)) if user_campaign_ids else db.query(CampaignAction).filter(False)
     if campaign_id:
         q = q.filter(CampaignAction.campaign_id == campaign_id)
     if action_status:

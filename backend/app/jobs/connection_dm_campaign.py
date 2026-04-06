@@ -60,8 +60,8 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         global_connections_today = get_global_actions_today(["connection_request"], db)
         global_dms_today = get_global_actions_today(dm_action_types, db)
 
-        # --- get LinkedIn client ---
-        user = db.query(User).first()
+        # --- get LinkedIn client (from campaign owner) ---
+        user = db.query(User).filter(User.id == campaign.user_id).first()
         if not user or not user.li_at_cookie or not user.cookies_valid:
             campaign.status = "failed"
             campaign.error_message = "No valid LinkedIn cookies"
@@ -370,7 +370,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                         return
 
                     # Blacklist check
-                    if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id).first():
+                    if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id, Blacklist.user_id == campaign.user_id).first():
                         _log_action(db, campaign_id, contact.id, "connection_request", "skipped", "Blacklisted")
                         campaign.total_processed = (campaign.total_processed or 0) + 1
                         campaign.total_skipped = (campaign.total_skipped or 0) + 1

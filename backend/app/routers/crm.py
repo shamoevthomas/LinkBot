@@ -50,7 +50,9 @@ def list_all_contacts(
     _user: User = Depends(get_current_user),
 ):
     """List all contacts across all CRMs with search, filter, sort, and pagination."""
-    q = db.query(Contact)
+    # Only show contacts from the current user's CRMs
+    user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
+    q = db.query(Contact).filter(Contact.crm_id.in_(user_crm_ids))
 
     if crm_id:
         q = q.filter(Contact.crm_id == crm_id)
@@ -150,7 +152,7 @@ def list_crms(
     _user: User = Depends(get_current_user),
 ):
     """List all CRMs with their contact counts."""
-    crms = db.query(CRM).order_by(CRM.created_at.desc()).all()
+    crms = db.query(CRM).filter(CRM.user_id == _user.id).order_by(CRM.created_at.desc()).all()
     results = []
     for crm in crms:
         count = db.query(func.count(Contact.id)).filter(Contact.crm_id == crm.id).scalar() or 0
@@ -174,13 +176,13 @@ def create_crm(
     _user: User = Depends(get_current_user),
 ):
     """Create a new CRM."""
-    existing = db.query(CRM).filter(CRM.name == body.name).first()
+    existing = db.query(CRM).filter(CRM.name == body.name, CRM.user_id == _user.id).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A CRM named '{body.name}' already exists.",
         )
-    crm = CRM(name=body.name, description=body.description)
+    crm = CRM(name=body.name, description=body.description, user_id=_user.id)
     db.add(crm)
     db.commit()
     db.refresh(crm)
@@ -201,7 +203,7 @@ def get_crm(
     _user: User = Depends(get_current_user),
 ):
     """Get a single CRM by ID."""
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
     count = db.query(func.count(Contact.id)).filter(Contact.crm_id == crm.id).scalar() or 0
@@ -223,13 +225,13 @@ def update_crm(
     _user: User = Depends(get_current_user),
 ):
     """Update CRM name and/or description."""
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
     if body.name is not None:
-        # Check uniqueness
-        dup = db.query(CRM).filter(CRM.name == body.name, CRM.id != crm_id).first()
+        # Check uniqueness per user
+        dup = db.query(CRM).filter(CRM.name == body.name, CRM.user_id == _user.id, CRM.id != crm_id).first()
         if dup:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -259,7 +261,7 @@ def delete_crm(
     _user: User = Depends(get_current_user),
 ):
     """Delete a CRM and all its contacts (cascade)."""
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
     db.delete(crm)
@@ -288,7 +290,7 @@ def list_contacts(
     _user: User = Depends(get_current_user),
 ):
     """List contacts for a CRM with search, filter, sort, and pagination."""
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
@@ -378,7 +380,7 @@ async def add_contact(
     If the user has valid cookies, the contact's profile will be enriched
     from LinkedIn automatically.
     """
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
@@ -580,7 +582,7 @@ def bulk_delete_contacts(
     _user: User = Depends(get_current_user),
 ):
     """Bulk-delete contacts from a CRM."""
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
@@ -599,11 +601,11 @@ def bulk_move_contacts(
     _user: User = Depends(get_current_user),
 ):
     """Move contacts from one CRM to another."""
-    source = db.query(CRM).filter(CRM.id == crm_id).first()
+    source = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source CRM not found")
 
-    target = db.query(CRM).filter(CRM.id == body.target_crm_id).first()
+    target = db.query(CRM).filter(CRM.id == body.target_crm_id, CRM.user_id == _user.id).first()
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target CRM not found")
 
@@ -668,7 +670,7 @@ def export_contacts_csv(
     _user: User = Depends(get_current_user),
 ):
     """Export contacts as CSV with the same filters as list_contacts."""
-    crm = db.query(CRM).filter(CRM.id == crm_id).first()
+    crm = db.query(CRM).filter(CRM.id == crm_id, CRM.user_id == _user.id).first()
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 

@@ -16,7 +16,7 @@ def list_blacklist(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    q = db.query(Blacklist)
+    q = db.query(Blacklist).filter(Blacklist.user_id == _user.id)
     if search:
         q = q.filter(Blacklist.name.ilike(f"%{search}%"))
     offset = (page - 1) * page_size
@@ -24,10 +24,10 @@ def list_blacklist(
 
 @router.post("", response_model=BlacklistResponse, status_code=status.HTTP_201_CREATED)
 def add_to_blacklist(body: BlacklistCreate, db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
-    existing = db.query(Blacklist).filter(Blacklist.urn_id == body.urn_id).first()
+    existing = db.query(Blacklist).filter(Blacklist.urn_id == body.urn_id, Blacklist.user_id == _user.id).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already blacklisted")
-    entry = Blacklist(urn_id=body.urn_id, public_id=body.public_id, name=body.name, reason=body.reason)
+    entry = Blacklist(urn_id=body.urn_id, public_id=body.public_id, name=body.name, reason=body.reason, user_id=_user.id)
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -35,7 +35,7 @@ def add_to_blacklist(body: BlacklistCreate, db: Session = Depends(get_db), _user
 
 @router.delete("/{blacklist_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_from_blacklist(blacklist_id: int, db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
-    entry = db.query(Blacklist).filter(Blacklist.id == blacklist_id).first()
+    entry = db.query(Blacklist).filter(Blacklist.id == blacklist_id, Blacklist.user_id == _user.id).first()
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
     db.delete(entry)

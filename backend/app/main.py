@@ -55,9 +55,9 @@ def seed_db():
             if not existing:
                 db.add(AppSettings(key=key, value=value))
 
-        # Ensure "Mon Réseau" CRM always exists
-        if not db.query(CRM).filter(CRM.name == "Mon Réseau").first():
-            db.add(CRM(name="Mon Réseau", description="Toutes vos connexions LinkedIn"))
+        # Ensure "Mon Réseau" CRM exists for TEKA user
+        if not db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user.id).first():
+            db.add(CRM(name="Mon Réseau", description="Toutes vos connexions LinkedIn", user_id=user.id))
 
         db.commit()
     finally:
@@ -142,7 +142,7 @@ def ai_status():
 
 @app.get("/api/cron/sync-connections")
 async def cron_sync_connections(key: str = ""):
-    """Endpoint for external cron (cron-job.org) to trigger connection sync."""
+    """Endpoint for external cron (cron-job.org) to trigger connection sync for ALL users."""
     from app.config import CRON_SECRET
     if key != CRON_SECRET:
         from fastapi import HTTPException
@@ -153,16 +153,18 @@ async def cron_sync_connections(key: str = ""):
 
     db = SessionLocal()
     try:
-        user = db.query(User).first()
-        if not user or not user.li_at_cookie or not user.cookies_valid:
-            return {"status": "skipped", "reason": "No valid cookies"}
+        users = db.query(User).filter(User.cookies_valid == True, User.li_at_cookie.isnot(None)).all()
+        if not users:
+            return {"status": "skipped", "reason": "No users with valid cookies"}
     finally:
         db.close()
 
     from app.jobs.sync_connections import sync_and_update_statuses
     import asyncio
-    asyncio.create_task(sync_and_update_statuses(
-        li_at=user.li_at_cookie,
-        jsessionid=user.jsessionid_cookie,
-    ))
-    return {"status": "started"}
+    for user in users:
+        asyncio.create_task(sync_and_update_statuses(
+            li_at=user.li_at_cookie,
+            jsessionid=user.jsessionid_cookie,
+            user_id=user.id,
+        ))
+    return {"status": "started", "users": len(users)}

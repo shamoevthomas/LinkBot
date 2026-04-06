@@ -12,14 +12,21 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/stats")
 def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
-    total_contacts = db.query(func.count(Contact.id)).scalar() or 0
-    total_crms = db.query(func.count(CRM.id)).scalar() or 0
-    active_campaigns = db.query(func.count(Campaign.id)).filter(Campaign.status == "running").scalar() or 0
+    # Get user's CRM and campaign IDs for filtering
+    user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
+    user_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id).all()]
+
+    total_contacts = db.query(func.count(Contact.id)).filter(Contact.crm_id.in_(user_crm_ids)).scalar() or 0 if user_crm_ids else 0
+    total_crms = len(user_crm_ids)
+    active_campaigns = db.query(func.count(Campaign.id)).filter(Campaign.user_id == _user.id, Campaign.status == "running").scalar() or 0
 
     today = date.today()
-    actions_today = db.query(func.count(CampaignAction.id)).filter(
-        func.date(CampaignAction.created_at) == today
-    ).scalar() or 0
+    actions_today = 0
+    if user_campaign_ids:
+        actions_today = db.query(func.count(CampaignAction.id)).filter(
+            CampaignAction.campaign_id.in_(user_campaign_ids),
+            func.date(CampaignAction.created_at) == today
+        ).scalar() or 0
 
     # Remaining quotas
     max_conn_row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
@@ -27,20 +34,25 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
     max_conn = int(max_conn_row.value) if max_conn_row else 25
     max_dm = int(max_dm_row.value) if max_dm_row else 50
 
-    conn_today = db.query(func.count(CampaignAction.id)).filter(
-        func.date(CampaignAction.created_at) == today,
-        CampaignAction.action_type.in_(["connection_request", "connection_send"]),
-        CampaignAction.status == "success",
-    ).scalar() or 0
+    conn_today = 0
+    dm_today = 0
+    if user_campaign_ids:
+        conn_today = db.query(func.count(CampaignAction.id)).filter(
+            CampaignAction.campaign_id.in_(user_campaign_ids),
+            func.date(CampaignAction.created_at) == today,
+            CampaignAction.action_type.in_(["connection_request", "connection_send"]),
+            CampaignAction.status == "success",
+        ).scalar() or 0
 
-    dm_today = db.query(func.count(CampaignAction.id)).filter(
-        func.date(CampaignAction.created_at) == today,
-        CampaignAction.action_type.in_(["dm_send", "dm_followup"]),
-        CampaignAction.status == "success",
-    ).scalar() or 0
+        dm_today = db.query(func.count(CampaignAction.id)).filter(
+            CampaignAction.campaign_id.in_(user_campaign_ids),
+            func.date(CampaignAction.created_at) == today,
+            CampaignAction.action_type.in_(["dm_send", "dm_followup"]),
+            CampaignAction.status == "success",
+        ).scalar() or 0
 
     # --- global reply rate (dm + connection_dm campaigns) ---
-    dm_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.type.in_(["dm", "connection_dm"])).all()]
+    dm_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type.in_(["dm", "connection_dm"])).all()]
     global_reply_rate = 0.0
     if dm_campaign_ids:
         total_messaged = db.query(func.count(CampaignContact.id)).filter(
@@ -53,14 +65,13 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
         ).scalar() or 0
         global_reply_rate = round(total_replied / total_messaged * 100, 1) if total_messaged > 0 else 0.0
 
-    # --- global connection rate (connection + connection_dm campaigns) ---
+    # --- global connection rate ---
     global_connection_rate = 0.0
-    conn_dm_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.type == "connection_dm").all()]
-    conn_only_campaigns = db.query(Campaign).filter(Campaign.type == "connection").all()
+    conn_dm_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type == "connection_dm").all()]
+    conn_only_campaigns = db.query(Campaign).filter(Campaign.user_id == _user.id, Campaign.type == "connection").all()
 
     total_conn_requests = 0
     total_conn_accepted = 0
-    # From connection_dm: tracked via CampaignContact
     if conn_dm_ids:
         total_conn_requests += db.query(func.count(CampaignContact.id)).filter(
             CampaignContact.campaign_id.in_(conn_dm_ids),
@@ -70,7 +81,6 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
             CampaignContact.campaign_id.in_(conn_dm_ids),
             CampaignContact.status.notin_(["pending", "en_attente"]),
         ).scalar() or 0
-    # From plain connection campaigns: use succeeded / (succeeded + failed)
     for cc in conn_only_campaigns:
         sent = (cc.total_succeeded or 0) + (cc.total_failed or 0)
         total_conn_requests += sent
@@ -78,15 +88,18 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
     if total_conn_requests > 0:
         global_connection_rate = round(total_conn_accepted / total_conn_requests * 100, 1)
 
-    recent_campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).limit(3).all()
+    recent_campaigns = db.query(Campaign).filter(Campaign.user_id == _user.id).order_by(Campaign.created_at.desc()).limit(3).all()
 
-    recent_actions_q = (
-        db.query(CampaignAction, Contact)
-        .outerjoin(Contact, CampaignAction.contact_id == Contact.id)
-        .order_by(CampaignAction.created_at.desc())
-        .limit(5)
-        .all()
-    )
+    recent_actions_q = []
+    if user_campaign_ids:
+        recent_actions_q = (
+            db.query(CampaignAction, Contact)
+            .outerjoin(Contact, CampaignAction.contact_id == Contact.id)
+            .filter(CampaignAction.campaign_id.in_(user_campaign_ids))
+            .order_by(CampaignAction.created_at.desc())
+            .limit(5)
+            .all()
+        )
 
     return {
         "total_contacts": total_contacts,
@@ -117,6 +130,7 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
 def get_notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     cutoff = datetime.utcnow() - timedelta(hours=24)
     campaigns_attention = db.query(func.count(Campaign.id)).filter(
+        Campaign.user_id == user.id,
         Campaign.status.in_(["completed", "failed"]),
         Campaign.completed_at >= cutoff,
     ).scalar() or 0

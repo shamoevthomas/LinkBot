@@ -9,14 +9,14 @@ router = APIRouter(prefix="/api/tags", tags=["tags"])
 
 @router.get("", response_model=list[TagResponse])
 def list_tags(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
-    return db.query(Tag).order_by(Tag.name).all()
+    return db.query(Tag).filter(Tag.user_id == _user.id).order_by(Tag.name).all()
 
 @router.post("", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
 def create_tag(body: TagCreate, db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
-    existing = db.query(Tag).filter(Tag.name == body.name).first()
+    existing = db.query(Tag).filter(Tag.name == body.name, Tag.user_id == _user.id).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tag already exists")
-    tag = Tag(name=body.name, color=body.color)
+    tag = Tag(name=body.name, color=body.color, user_id=_user.id)
     db.add(tag)
     db.commit()
     db.refresh(tag)
@@ -24,7 +24,7 @@ def create_tag(body: TagCreate, db: Session = Depends(get_db), _user: User = Dep
 
 @router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tag(tag_id: int, db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
-    tag = db.query(Tag).filter(Tag.id == tag_id).first()
+    tag = db.query(Tag).filter(Tag.id == tag_id, Tag.user_id == _user.id).first()
     if not tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
     db.delete(tag)

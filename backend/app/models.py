@@ -31,11 +31,13 @@ class CRM(Base):
     __tablename__ = "crm"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    name = Column(String, nullable=False)
     description = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    user = relationship("User", backref="crms")
     contacts = relationship("Contact", back_populates="crm", cascade="all, delete-orphan")
 
 
@@ -67,6 +69,7 @@ class Campaign(Base):
     __tablename__ = "campaign"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
     name = Column(String, nullable=False)
     type = Column(String, nullable=False)  # search, dm, connection
     status = Column(String, default="pending")  # pending, running, paused, completed, failed, cancelled
@@ -94,6 +97,7 @@ class Campaign(Base):
     context_pdf_path = Column(String)
     full_personalize = Column(Boolean, default=False)
 
+    user = relationship("User", backref="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign", cascade="all, delete-orphan")
     messages = relationship("CampaignMessage", back_populates="campaign", cascade="all, delete-orphan", order_by="CampaignMessage.sequence")
     campaign_contacts = relationship("CampaignContact", back_populates="campaign", cascade="all, delete-orphan")
@@ -172,7 +176,8 @@ class Blacklist(Base):
     __tablename__ = "blacklist"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    urn_id = Column(String, unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    urn_id = Column(String, nullable=False)
     public_id = Column(String)
     name = Column(String)
     reason = Column(Text)
@@ -183,7 +188,8 @@ class Tag(Base):
     __tablename__ = "tag"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    name = Column(String, nullable=False)
     color = Column(String, default="#0A66C2")
     created_at = Column(DateTime, default=datetime.utcnow)
 

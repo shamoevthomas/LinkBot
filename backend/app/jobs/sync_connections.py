@@ -19,30 +19,33 @@ _PAGE_SIZE = 49
 
 
 async def sync_new_connections() -> None:
-    """Check for new LinkedIn connections and add them to 'Mon Réseau' CRM."""
-    print("[SYNC] Starting sync_new_connections", flush=True)
+    """Check for new LinkedIn connections for ALL users with valid cookies."""
+    print("[SYNC] Starting sync_new_connections for all users", flush=True)
     db = SessionLocal()
     try:
-        # Find the "Mon Réseau" CRM
-        crm = db.query(CRM).filter(CRM.name == "Mon Réseau").first()
-        if not crm:
-            return  # No network CRM, nothing to sync
+        users = db.query(User).filter(User.cookies_valid == True, User.li_at_cookie.isnot(None)).all()
+        for user in users:
+            await _sync_user_connections(user.id, user.li_at_cookie, user.jsessionid_cookie)
+    finally:
+        db.close()
 
-        # Get user with valid cookies
-        user = db.query(User).first()
-        if not user or not user.li_at_cookie or not user.cookies_valid:
+
+async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> None:
+    """Sync connections for a single user."""
+    db = SessionLocal()
+    try:
+        crm = db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user_id).first()
+        if not crm:
             return
 
-        client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
+        client = get_linkedin_client(li_at, jsessionid)
 
-        # Get user URN
         me = await asyncio.to_thread(client.get_user_profile, False)
         urn_id = _extract_urn(me)
         if not urn_id:
-            logger.warning("sync_connections: could not determine user URN")
+            logger.warning("sync_connections: could not determine user URN for user %d", user_id)
             return
 
-        # Get existing URNs in the CRM for fast lookup
         existing_urns = set(
             row[0] for row in
             db.query(Contact.urn_id).filter(Contact.crm_id == crm.id).all()
@@ -57,7 +60,7 @@ async def sync_new_connections() -> None:
                     client, urn_id=urn_id, limit=_PAGE_SIZE, offset=offset,
                 )
             except Exception:
-                logger.exception("sync_connections: error at offset %d", offset)
+                logger.exception("sync_connections: error at offset %d for user %d", offset, user_id)
                 break
 
             if not connections:
@@ -70,15 +73,13 @@ async def sync_new_connections() -> None:
 
                 name = person.get("name", "") or ""
                 parts = name.split(" ", 1)
-                first_name = parts[0] if parts else ""
-                last_name = parts[1] if len(parts) > 1 else ""
 
                 contact = Contact(
                     crm_id=crm.id,
                     urn_id=person_urn,
                     public_id=person.get("public_id"),
-                    first_name=first_name,
-                    last_name=last_name,
+                    first_name=parts[0] if parts else "",
+                    last_name=parts[1] if len(parts) > 1 else "",
                     headline=person.get("jobtitle"),
                     location=person.get("location"),
                     profile_picture_url=person.get("picture_url"),
@@ -95,18 +96,18 @@ async def sync_new_connections() -> None:
             if len(connections) < _PAGE_SIZE:
                 break
 
-        print(f"[SYNC] Done: added {total_new} new connections", flush=True)
+        print(f"[SYNC] User {user_id}: added {total_new} new connections", flush=True)
 
     except Exception:
-        logger.exception("sync_connections: unexpected error")
+        logger.exception("sync_connections: unexpected error for user %d", user_id)
         db.rollback()
     finally:
         db.close()
 
 
-async def sync_and_update_statuses(li_at: str, jsessionid: str) -> None:
-    """Manual sync: import new connections to 'Mon Réseau' + update statuses across all CRMs."""
-    print("[SYNC] Manual sync_and_update_statuses started", flush=True)
+async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = None) -> None:
+    """Manual sync: import new connections to user's 'Mon Réseau' + update statuses across user's CRMs."""
+    print(f"[SYNC] Manual sync_and_update_statuses started for user {user_id}", flush=True)
     db = SessionLocal()
     try:
         client = get_linkedin_client(li_at, jsessionid)
@@ -119,7 +120,7 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str) -> None:
             return
 
         # Step 2: Fetch all connections from LinkedIn (single pass, keep full data)
-        all_connections = []  # list of person dicts
+        all_connections = []
         all_connection_urns = set()
         offset = 0
         while True:
@@ -146,8 +147,11 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str) -> None:
 
         print(f"[SYNC] Fetched {len(all_connection_urns)} total connections from LinkedIn", flush=True)
 
-        # Step 3: Add new connections to "Mon Réseau" CRM
-        crm = db.query(CRM).filter(CRM.name == "Mon Réseau").first()
+        # Step 3: Add new connections to user's "Mon Réseau" CRM
+        crm_filter = [CRM.name == "Mon Réseau"]
+        if user_id:
+            crm_filter.append(CRM.user_id == user_id)
+        crm = db.query(CRM).filter(*crm_filter).first()
         total_new = 0
         if crm:
             existing_urns = set(
@@ -179,19 +183,23 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str) -> None:
 
             db.commit()
 
-        # Step 4: Update connection_status across ALL CRMs
+        # Step 4: Update connection_status across user's CRMs only
         updated = 0
         if all_connection_urns:
-            contacts_to_update = db.query(Contact).filter(
+            user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == user_id).all()] if user_id else []
+            contact_filter = [
                 Contact.urn_id.in_(all_connection_urns),
                 Contact.connection_status != "connected",
-            ).all()
+            ]
+            if user_crm_ids:
+                contact_filter.append(Contact.crm_id.in_(user_crm_ids))
+            contacts_to_update = db.query(Contact).filter(*contact_filter).all()
             for contact in contacts_to_update:
                 contact.connection_status = "connected"
                 updated += 1
             db.commit()
 
-        print(f"[SYNC] Manual sync done: {total_new} new in Mon Réseau, {updated} statuses updated across CRMs", flush=True)
+        print(f"[SYNC] Manual sync done for user {user_id}: {total_new} new in Mon Réseau, {updated} statuses updated", flush=True)
 
     except Exception:
         logger.exception("sync_and_update: unexpected error")
