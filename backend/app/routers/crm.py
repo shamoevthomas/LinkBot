@@ -45,7 +45,7 @@ def list_all_contacts(
     sort_by: Optional[str] = Query("added_at"),
     sort_order: Optional[str] = Query("desc"),
     page: int = Query(1, ge=1),
-    per_page: int = Query(25, ge=1, le=200),
+    per_page: int = Query(25, ge=1, le=10000),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
