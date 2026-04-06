@@ -277,8 +277,10 @@ def is_within_schedule(db_session=None) -> bool:
     """Check if the current time is within the configured schedule window.
 
     Returns True (allowed) if schedule is disabled or not configured.
+    Uses the configured timezone (defaults to Europe/Paris).
     """
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone as _tz
+    from zoneinfo import ZoneInfo
     from app.database import SessionLocal
     from app.models import AppSettings
 
@@ -300,7 +302,15 @@ def is_within_schedule(db_session=None) -> bool:
         except (ValueError, AttributeError):
             return True
 
-        now = _dt.now()
+        # Use configured timezone
+        tz_row = db.query(AppSettings).filter(AppSettings.key == "schedule_timezone").first()
+        tz_name = tz_row.value if tz_row and tz_row.value else "Europe/Paris"
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("Europe/Paris")
+
+        now = _dt.now(_tz.utc).astimezone(tz)
         current_minutes = now.hour * 60 + now.minute
         start_minutes = start_h * 60 + start_m
         end_minutes = end_h * 60 + end_m

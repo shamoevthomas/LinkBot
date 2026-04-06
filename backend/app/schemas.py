@@ -204,6 +204,7 @@ class SettingsUpdate(BaseModel):
     schedule_enabled: Optional[bool] = None
     schedule_start_hour: Optional[str] = None    # "HH:MM"
     schedule_end_hour: Optional[str] = None      # "HH:MM"
+    schedule_timezone: Optional[str] = None      # e.g. "Europe/Paris"
     warmup_enabled: Optional[bool] = None
     warmup_start_limit: Optional[int] = None
     warmup_target_limit: Optional[int] = None

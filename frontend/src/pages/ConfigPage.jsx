@@ -410,6 +410,26 @@ export default function ConfigPage() {
               {(settings.schedule_enabled === 'true' || settings.schedule_enabled === true) ? (
                 <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <p className="text-xs text-gray-500">Les campagnes ne s'exécutent que pendant cette plage. Les actions sont espacées automatiquement et aléatoirement pour simuler un comportement humain.</p>
+                  <div className="mb-3">
+                    <label className="block text-xs text-gray-500 mb-1">Fuseau horaire</label>
+                    <select value={settings.schedule_timezone || 'Europe/Paris'}
+                      onChange={(e) => setSettings({ ...settings, schedule_timezone: e.target.value })}
+                      className="input-glass w-full">
+                      <option value="Europe/Paris">Europe/Paris</option>
+                      <option value="Europe/London">Europe/London</option>
+                      <option value="Europe/Berlin">Europe/Berlin</option>
+                      <option value="Europe/Brussels">Europe/Brussels</option>
+                      <option value="Europe/Zurich">Europe/Zurich</option>
+                      <option value="America/New_York">America/New_York</option>
+                      <option value="America/Chicago">America/Chicago</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles</option>
+                      <option value="America/Toronto">America/Toronto</option>
+                      <option value="America/Montreal">America/Montreal</option>
+                      <option value="Asia/Dubai">Asia/Dubai</option>
+                      <option value="Africa/Casablanca">Africa/Casablanca</option>
+                      <option value="UTC">UTC</option>
+                    </select>
+                  </div>
                   <div className="flex items-center gap-3">
                     <div className="flex-1">
                       <label className="block text-xs text-gray-500 mb-1">Début</label>
