@@ -132,7 +132,38 @@ async def _async_import(crm_id: int, li_at: str, jsessionid: str, import_job_id:
                 db.add(contact)
                 total_created += 1
 
-            db.commit()
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                # Retry contacts one by one to skip only the duplicates
+                for person in connections:
+                    person_urn = person.get("urn_id")
+                    if not person_urn:
+                        continue
+                    existing = db.query(Contact).filter(
+                        Contact.crm_id == crm_id, Contact.urn_id == person_urn,
+                    ).first()
+                    if existing:
+                        continue
+                    person_name = person.get("name", "") or "Inconnu"
+                    parts = person_name.split(" ", 1)
+                    contact = Contact(
+                        crm_id=crm_id,
+                        urn_id=person_urn,
+                        first_name=parts[0] if parts else "",
+                        last_name=parts[1] if len(parts) > 1 else "",
+                        headline=person.get("jobtitle"),
+                        location=person.get("location"),
+                        linkedin_url=person.get("navigation_url"),
+                        connection_status="connected",
+                    )
+                    try:
+                        db.add(contact)
+                        db.flush()
+                    except Exception:
+                        db.rollback()
+                db.commit()
             offset += len(connections)
 
             # Update progress in real time
