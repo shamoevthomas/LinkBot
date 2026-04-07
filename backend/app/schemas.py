@@ -196,6 +196,7 @@ class CampaignContactResponse(BaseModel):
     contact_last_name: Optional[str] = None
     contact_headline: Optional[str] = None
     contact_profile_picture_url: Optional[str] = None
+    contact_linkedin_url: Optional[str] = None
 
 # Config
 class SettingsUpdate(BaseModel):

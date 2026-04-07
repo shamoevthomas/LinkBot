@@ -964,6 +964,7 @@ def list_campaign_contacts(
             contact_last_name=c.last_name if c else None,
             contact_headline=c.headline if c else None,
             contact_profile_picture_url=c.profile_picture_url if c else None,
+            contact_linkedin_url=c.linkedin_url if c else None,
         )
         for cc, c in rows
     ]
@@ -991,6 +992,7 @@ def list_campaign_contacts(
                 contact_last_name=c.last_name,
                 contact_headline=c.headline,
                 contact_profile_picture_url=c.profile_picture_url,
+                contact_linkedin_url=c.linkedin_url,
             ))
 
     return results

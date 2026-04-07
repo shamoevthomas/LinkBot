@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check } from 'lucide-react';
-import { getCampaign, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus } from '../api/campaigns';
+import { getCampaign, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -66,7 +66,6 @@ export default function CampaignDetailPage() {
   const [tab, setTab] = useState('contacts'); // 'contacts' | 'actions'
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'kanban'
   const [selectedContact, setSelectedContact] = useState(null);
-  const [diagnosis, setDiagnosis] = useState(null);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
 
@@ -106,12 +105,6 @@ export default function CampaignDetailPage() {
   }, [campaign?.status, load]);
 
   const handleStart = async () => { await startCampaign(id); toast.success('Campagne lancee'); load(); };
-  const handleDiagnose = async () => {
-    try {
-      const d = await diagnoseCampaign(id);
-      setDiagnosis(d);
-    } catch { toast.error('Erreur diagnostic'); }
-  };
   const handleRunNow = async () => {
     try {
       toast.loading('Execution manuelle...', { id: 'run-now' });
@@ -150,6 +143,7 @@ export default function CampaignDetailPage() {
   const showConnectionRate = campaign?.type && ['connection', 'connection_dm'].includes(campaign.type);
 
   // Stats from contacts
+  const isSearch = campaign?.type === 'search';
   const isConnectionDM = campaign?.type === 'connection_dm';
   const statsFromContacts = {
     en_attente: contacts.filter(c => c.status === 'en_attente').length,
@@ -229,13 +223,13 @@ export default function CampaignDetailPage() {
         </div>
 
         {/* Next action countdown or paused reason */}
-        {campaign.status === 'running' && campaign.paused_reason && (
+        {campaign.status === 'running' && !isSearch && campaign.paused_reason && (
           <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg w-fit">
             <AlertCircle size={16} className="text-amber-500" />
             <span className="text-sm text-amber-700">{campaign.paused_reason}</span>
           </div>
         )}
-        {campaign.status === 'running' && !campaign.paused_reason && campaign.next_action_at && (
+        {campaign.status === 'running' && !isSearch && !campaign.paused_reason && campaign.next_action_at && (
           <div className="flex items-center gap-2 mb-4">
             <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
               <Timer size={16} className="text-indigo-500" />
@@ -259,58 +253,6 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
-        {/* Diagnose button when stuck at 0% */}
-        {campaign.status === 'running' && campaign.total_processed === 0 && (
-          <div className="mb-4">
-            <div className="flex gap-4">
-              <button onClick={handleDiagnose} className="text-sm text-indigo-600 hover:text-indigo-800 underline">
-                Diagnostiquer
-              </button>
-              <button onClick={handleRunNow} className="text-sm text-orange-600 hover:text-orange-800 underline font-medium">
-                Forcer une execution maintenant
-              </button>
-            </div>
-            {diagnosis && (
-              <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm space-y-1">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                  <span className="text-gray-500">Job scheduler</span>
-                  <span className={diagnosis.has_scheduler_job ? 'text-emerald-600' : 'text-red-600'}>{diagnosis.has_scheduler_job ? 'Actif' : 'Absent'}</span>
-                  <span className="text-gray-500">Cookies LinkedIn</span>
-                  <span className={diagnosis.cookies_valid ? 'text-emerald-600' : 'text-red-600'}>{diagnosis.cookies_valid ? 'Valides' : 'Invalides'}</span>
-                  <span className="text-gray-500">Fenetre horaire</span>
-                  <span className={diagnosis.within_schedule ? 'text-emerald-600' : 'text-amber-600'}>{diagnosis.within_schedule ? 'OK' : 'Hors fenetre'}</span>
-                  <span className="text-gray-500">Limite DMs</span>
-                  <span>{diagnosis.dm_limit}</span>
-                  <span className="text-gray-500">Limite connexions</span>
-                  <span>{diagnosis.conn_limit}</span>
-                  <span className="text-gray-500">Contacts CRM</span>
-                  <span>{diagnosis.crm_contacts}</span>
-                  <span className="text-gray-500">Non traites</span>
-                  <span>{diagnosis.unprocessed_contacts}</span>
-                  <span className="text-gray-500">Messages configures</span>
-                  <span>{diagnosis.messages_configured}</span>
-                </div>
-                {diagnosis.last_error && (
-                  <div className="mt-2 p-2 bg-red-50 rounded text-red-700 font-mono text-xs">{diagnosis.last_error}</div>
-                )}
-                {diagnosis.issues.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {diagnosis.issues.map((issue, i) => (
-                      <div key={i} className="flex items-center gap-2 text-red-600">
-                        <XCircle size={14} /> {issue}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {diagnosis.ok && (
-                  <div className="mt-2 text-emerald-600 flex items-center gap-2">
-                    <CheckCircle size={14} /> Tout semble OK — verifiez les logs backend
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Rates */}
         {(showReplyRate || showConnectionRate) && (
@@ -336,7 +278,25 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
-        {contacts.length > 0 ? (
+        {isSearch ? (
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg border border-gray-100 p-4">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-2"><CheckCircle size={20} /></div>
+              <div className="text-2xl font-bold text-gray-900">{campaign.total_succeeded}</div>
+              <div className="text-xs text-gray-500">Contacts trouves</div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-100 p-4">
+              <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center mb-2"><Clock size={20} /></div>
+              <div className="text-2xl font-bold text-gray-900">{campaign.total_skipped}</div>
+              <div className="text-xs text-gray-500">Ignores</div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-100 p-4">
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2"><Zap size={20} /></div>
+              <div className="text-2xl font-bold text-gray-900">{campaign.total_target || '-'}</div>
+              <div className="text-xs text-gray-500">Objectif</div>
+            </div>
+          </div>
+        ) : contacts.length > 0 ? (
           <div className={`grid gap-4 ${isConnectionDM ? 'grid-cols-5' : 'grid-cols-4'}`}>
             {isConnectionDM && (
               <div className="bg-white rounded-lg border border-gray-100 p-4">
@@ -395,7 +355,7 @@ export default function CampaignDetailPage() {
       </div>
 
       {/* Tabs */}
-      {contacts.length > 0 && (
+      {(contacts.length > 0 || isSearch) && (
         <div className="flex items-center justify-between mb-4">
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
             <button onClick={() => setTab('contacts')}
@@ -407,7 +367,7 @@ export default function CampaignDetailPage() {
               Journal
             </button>
           </div>
-          {tab === 'contacts' && (
+          {tab === 'contacts' && !isSearch && (
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               <button onClick={() => setViewMode('table')}
                 className={`p-1.5 rounded-md ${viewMode === 'table' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}>
@@ -476,10 +436,19 @@ export default function CampaignDetailPage() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Contact</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Envoye le</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Dernier envoi</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Repondu le</th>
+                {isSearch ? (
+                  <>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Titre</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">LinkedIn</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Envoye le</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Dernier envoi</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Repondu le</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -496,22 +465,38 @@ export default function CampaignDetailPage() {
                       )}
                       <div>
                         <p className="font-medium text-gray-900 text-sm">{cc.contact_first_name} {cc.contact_last_name}</p>
-                        {cc.contact_headline && <p className="text-xs text-gray-400 truncate max-w-[200px]">{cc.contact_headline}</p>}
+                        {!isSearch && cc.contact_headline && <p className="text-xs text-gray-400 truncate max-w-[200px]">{cc.contact_headline}</p>}
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3"><ContactStatusBadge status={cc.status} /></td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {fmtDate(cc.main_sent_at)}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {fmtDate(cc.last_sent_at)}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {cc.replied_at ? (
-                      <span className="text-emerald-600 font-medium">{fmtDate(cc.replied_at)}</span>
-                    ) : '-'}
-                  </td>
+                  {isSearch ? (
+                    <>
+                      <td className="px-4 py-3 text-xs text-gray-500 max-w-[250px] truncate">{cc.contact_headline || '-'}</td>
+                      <td className="px-4 py-3">
+                        {cc.contact_linkedin_url ? (
+                          <a href={cc.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                            style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}
+                            onMouseOver={e => e.currentTarget.style.background = 'rgba(0,132,255,0.15)'}
+                            onMouseOut={e => e.currentTarget.style.background = 'rgba(0,132,255,0.08)'}>
+                            <ExternalLink size={13} /> Profil
+                          </a>
+                        ) : '-'}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3"><ContactStatusBadge status={cc.status} /></td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(cc.main_sent_at)}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(cc.last_sent_at)}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {cc.replied_at ? (
+                          <span className="text-emerald-600 font-medium">{fmtDate(cc.replied_at)}</span>
+                        ) : '-'}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -520,7 +505,7 @@ export default function CampaignDetailPage() {
       )}
 
       {/* Actions tab (or default for non-DM campaigns) */}
-      {(tab === 'actions' || contacts.length === 0) && (
+      {(tab === 'actions' || (!isSearch && contacts.length === 0)) && (
         <div className="g-card overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200">
             <h3 className="font-semibold text-gray-900">Journal d'actions</h3>
@@ -595,7 +580,16 @@ export default function CampaignDetailPage() {
                 {selectedContact.contact_headline && (
                   <p className="text-sm text-gray-500 mt-1">{selectedContact.contact_headline}</p>
                 )}
-                <div className="mt-2"><ContactStatusBadge status={selectedContact.status} /></div>
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <ContactStatusBadge status={selectedContact.status} />
+                  {selectedContact.contact_linkedin_url && (
+                    <a href={selectedContact.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full transition-colors"
+                      style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
+                      <ExternalLink size={12} /> LinkedIn
+                    </a>
+                  )}
+                </div>
                 {selectedContact.status !== 'pending' && (
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <select
