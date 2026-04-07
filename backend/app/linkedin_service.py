@@ -271,57 +271,17 @@ async def get_conversation_details(
         return {}
 
 
-async def get_conversation_events(
-    client: Linkedin,
-    conversation_id: str,
-) -> Dict[str, Any]:
-    """Get messages/events in a conversation."""
-    try:
-        result = await asyncio.to_thread(
-            client.get_conversation, conversation_id
-        )
-        return result or {}
-    except Exception:
-        logger.warning("Could not fetch conversation events for id=%s", conversation_id)
-        return {}
-
-
-def _extract_sender_urn(event: dict) -> str:
-    """Extract sender URN from a conversation event (handles multiple formats)."""
-    from_data = event.get("from", {})
-    if not from_data or not isinstance(from_data, dict):
-        return ""
-
-    # Format 1: Legacy Voyager messaging
-    member = from_data.get("com.linkedin.voyager.messaging.MessagingMember", {})
-    if member:
-        mini = member.get("miniProfile", {})
-        if mini and mini.get("entityUrn"):
-            return mini["entityUrn"]
-
-    # Format 2: entityUrn directly
-    if from_data.get("entityUrn"):
-        return from_data["entityUrn"]
-
-    # Format 3: member field
-    if from_data.get("member"):
-        return from_data["member"]
-
-    # Format 4: participantUrn
-    if from_data.get("participantUrn"):
-        return from_data["participantUrn"]
-
-    return ""
-
-
 async def check_contact_replied(
     client: Linkedin,
     contact_urn_id: str,
 ) -> bool:
     """Check if a contact has sent us a message (i.e. replied).
 
-    Returns True if the last message in the conversation was sent by the
-    contact (not by us).
+    Uses LinkedIn's GraphQL messaging API. The conversation list is cached
+    inside the Linkedin client so multiple calls per tick share one API hit.
+
+    Returns True if the most recent message in the conversation was sent
+    by the contact (not by us).
     """
     try:
         print(f"[REPLY CHECK] Checking urn_id={contact_urn_id}", flush=True)
@@ -331,48 +291,28 @@ async def check_contact_replied(
             print(f"[REPLY CHECK] No conversation found for {contact_urn_id}", flush=True)
             return False
 
-        convo_keys = list(convo.keys())[:15]
-        print(f"[REPLY CHECK] Conversation found, keys={convo_keys}", flush=True)
+        # GraphQL format: messages.elements[0].sender.hostIdentityUrn
+        messages = convo.get("messages", {})
+        elements = messages.get("elements", []) if isinstance(messages, dict) else []
+        if not elements:
+            print(f"[REPLY CHECK] No messages in conversation for {contact_urn_id}", flush=True)
+            return False
 
-        # --- Method 1: Check lastMessages (dash conversation objects) ---
-        last_messages = convo.get("lastMessages", [])
-        if last_messages:
-            last_msg = last_messages[0]
-            sender = last_msg.get("sender", {})
-            sender_urn = sender.get("entityUrn", "") or sender.get("participantUrn", "") or ""
-            print(f"[REPLY CHECK] lastMessages sender={sender_urn}", flush=True)
-            if sender_urn and contact_urn_id in sender_urn:
-                print(f"[REPLY CHECK] REPLY DETECTED via lastMessages", flush=True)
-                return True
+        last_msg = elements[0]
+        sender = last_msg.get("sender", {})
+        sender_urn = sender.get("hostIdentityUrn", "")
 
-        # --- Method 2: Check events embedded in conversation (legacy inbox) ---
-        events = convo.get("events", [])
-        if events:
-            last_event = events[-1]
-            sender_urn = _extract_sender_urn(last_event)
-            print(f"[REPLY CHECK] Inline events sender={sender_urn}", flush=True)
-            if sender_urn and contact_urn_id in sender_urn:
-                print(f"[REPLY CHECK] REPLY DETECTED via inline events", flush=True)
-                return True
+        print(f"[REPLY CHECK] Last message sender={sender_urn}", flush=True)
 
-        # --- Method 3: Fetch events separately via conversation ID ---
-        convo_id = convo.get("id")
-        if convo_id:
-            print(f"[REPLY CHECK] Fetching events for convo_id={convo_id}", flush=True)
-            try:
-                events_data = await get_conversation_events(client, convo_id)
-                elements = events_data.get("elements", [])
-                if elements:
-                    last_event = elements[-1]
-                    sender_urn = _extract_sender_urn(last_event)
-                    print(f"[REPLY CHECK] Fetched events sender={sender_urn}", flush=True)
-                    if sender_urn and contact_urn_id in sender_urn:
-                        print(f"[REPLY CHECK] REPLY DETECTED via fetched events", flush=True)
-                        return True
-                else:
-                    print(f"[REPLY CHECK] No events returned", flush=True)
-            except Exception as e:
-                print(f"[REPLY CHECK] Events fetch failed: {e}", flush=True)
+        # Normalize contact URN for comparison
+        if contact_urn_id.startswith("urn:"):
+            contact_id = contact_urn_id.split(":")[-1]
+        else:
+            contact_id = contact_urn_id
+
+        if sender_urn and contact_id in sender_urn:
+            print(f"[REPLY CHECK] REPLY DETECTED for {contact_urn_id}", flush=True)
+            return True
 
         print(f"[REPLY CHECK] No reply detected for {contact_urn_id}", flush=True)
         return False
