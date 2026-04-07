@@ -55,6 +55,15 @@ async function showDashboard(user) {
     ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
     : '';
 
+  // Show profile picture
+  const avatarEl = $('user-avatar');
+  if (user && user.profile_picture_path) {
+    const base = 'https://linkbot-api.onrender.com';
+    avatarEl.innerHTML = `<img src="${base}${user.profile_picture_path.startsWith('/') ? '' : '/'}${user.profile_picture_path}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+  } else {
+    avatarEl.innerHTML = user ? (user.first_name || user.email || 'L').charAt(0).toUpperCase() : 'L';
+  }
+
   // Load stats and CRMs in parallel
   const [statsRes, crmsRes] = await Promise.all([
     send({ action: 'getStats' }),

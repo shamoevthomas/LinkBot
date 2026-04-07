@@ -48,6 +48,8 @@ body {
   font-size: 16px; font-weight: 700;
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 .logo-section h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; }
 .subtitle { font-size: 13px; color: #6b7280; margin-top: 4px; }
