@@ -400,7 +400,16 @@ export default function ConfigPage() {
                 <h3 className="font-semibold text-gray-900">Plage horaire</h3>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={String(settings.schedule_enabled).toLowerCase() === 'true'}
-                    onChange={(e) => setSettings({ ...settings, schedule_enabled: e.target.checked ? 'true' : 'false' })}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      const updates = { ...settings, schedule_enabled: enabled ? 'true' : 'false' };
+                      if (enabled) {
+                        if (!settings.schedule_start_hour) updates.schedule_start_hour = '08:00';
+                        if (!settings.schedule_end_hour) updates.schedule_end_hour = '20:00';
+                        if (!settings.schedule_timezone) updates.schedule_timezone = 'Europe/Paris';
+                      }
+                      setSettings(updates);
+                    }}
                     className="sr-only peer" />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
                     style={{ backgroundColor: (String(settings.schedule_enabled).toLowerCase() === 'true') ? 'var(--blue)' : undefined }}></div>
