@@ -30,6 +30,12 @@ function initials(c) {
   return ((c.contact_first_name?.[0] || '') + (c.contact_last_name?.[0] || '')).toUpperCase() || '?';
 }
 
+function fmtDate(d) {
+  if (!d) return '-';
+  const s = typeof d === 'string' && !d.endsWith('Z') && !d.includes('+') ? d + 'Z' : d;
+  return new Date(s).toLocaleString('fr-FR');
+}
+
 export default function CampaignDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -136,7 +142,7 @@ export default function CampaignDetailPage() {
   const isConnectionDM = campaign?.type === 'connection_dm';
   const statsFromContacts = {
     en_attente: contacts.filter(c => c.status === 'en_attente').length,
-    envoye: contacts.filter(c => c.status === 'envoye').length,
+    envoye: contacts.filter(c => c.main_sent_at).length,
     relance: contacts.filter(c => c.status.startsWith('relance_')).length,
     reussi: contacts.filter(c => c.status === 'reussi').length,
     perdu: contacts.filter(c => c.status === 'perdu').length,
@@ -464,14 +470,14 @@ export default function CampaignDetailPage() {
                   </td>
                   <td className="px-4 py-3"><ContactStatusBadge status={cc.status} /></td>
                   <td className="px-4 py-3 text-xs text-gray-500">
-                    {cc.main_sent_at ? new Date(cc.main_sent_at).toLocaleString('fr-FR') : '-'}
+                    {fmtDate(cc.main_sent_at)}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
-                    {cc.last_sent_at ? new Date(cc.last_sent_at).toLocaleString('fr-FR') : '-'}
+                    {fmtDate(cc.last_sent_at)}
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {cc.replied_at ? (
-                      <span className="text-emerald-600 font-medium">{new Date(cc.replied_at).toLocaleString('fr-FR')}</span>
+                      <span className="text-emerald-600 font-medium">{fmtDate(cc.replied_at)}</span>
                     ) : '-'}
                   </td>
                 </tr>
@@ -517,7 +523,7 @@ export default function CampaignDetailPage() {
                         </div>
                       ) : <span className="text-xs text-gray-400">-</span>}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{new Date(a.created_at).toLocaleString('fr-FR')}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(a.created_at)}</td>
                     <td className="px-4 py-3 text-gray-700">{a.action_type}</td>
                     <td className="px-4 py-3"><Badge status={a.status} /></td>
                     <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">{a.error_message || '-'}</td>
@@ -589,13 +595,13 @@ export default function CampaignDetailPage() {
                   <div className="bg-gray-50 rounded-lg p-3">
                     <span className="text-gray-400">Message envoye</span>
                     <p className="font-medium text-gray-700 mt-0.5">
-                      {selectedContact.main_sent_at ? new Date(selectedContact.main_sent_at).toLocaleString('fr-FR') : '-'}
+                      {fmtDate(selectedContact.main_sent_at)}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
                     <span className="text-gray-400">Dernier envoi</span>
                     <p className="font-medium text-gray-700 mt-0.5">
-                      {selectedContact.last_sent_at ? new Date(selectedContact.last_sent_at).toLocaleString('fr-FR') : '-'}
+                      {fmtDate(selectedContact.last_sent_at)}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
@@ -607,7 +613,7 @@ export default function CampaignDetailPage() {
                   <div className={`rounded-lg p-3 ${selectedContact.replied_at ? 'bg-emerald-50' : 'bg-gray-50'}`}>
                     <span className={selectedContact.replied_at ? 'text-emerald-500' : 'text-gray-400'}>Repondu le</span>
                     <p className={`font-medium mt-0.5 ${selectedContact.replied_at ? 'text-emerald-700' : 'text-gray-700'}`}>
-                      {selectedContact.replied_at ? new Date(selectedContact.replied_at).toLocaleString('fr-FR') : 'Pas encore'}
+                      {selectedContact.replied_at ? fmtDate(selectedContact.replied_at) : 'Pas encore'}
                     </p>
                   </div>
                 </div>

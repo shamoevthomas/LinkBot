@@ -486,13 +486,18 @@ async def _render_message(campaign, template, contact, client):
         except Exception:
             pass
 
-        msgs = await asyncio.to_thread(
-            generate_full_personalized_messages,
-            contact_data, profile_data, recent_posts,
-            campaign.context_text or "", campaign.ai_prompt or "",
-            0, [],
-        )
-        return msgs[0]["rendered"] if msgs and msgs[0]["rendered"] else render_template(template, contact_data)
+        try:
+            msgs = await asyncio.to_thread(
+                generate_full_personalized_messages,
+                contact_data, profile_data, recent_posts,
+                campaign.context_text or "", campaign.ai_prompt or "",
+                0, [],
+            )
+            if msgs and msgs[0].get("rendered"):
+                return msgs[0]["rendered"]
+        except Exception as exc:
+            logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
+        return render_template(template, contact_data)
 
     elif campaign.use_ai and "{compliment}" in template:
         profile_data = None
@@ -507,10 +512,14 @@ async def _render_message(campaign, template, contact, client):
         except Exception:
             pass
 
-        compliment = await asyncio.to_thread(
-            generate_compliment, contact_data, profile_data, recent_posts,
-            campaign.context_text or "", campaign.ai_prompt or "",
-        )
+        try:
+            compliment = await asyncio.to_thread(
+                generate_compliment, contact_data, profile_data, recent_posts,
+                campaign.context_text or "", campaign.ai_prompt or "",
+            )
+        except Exception as exc:
+            logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)
+            compliment = ""
         contact_data["compliment"] = compliment
         return render_template(template, contact_data)
 
