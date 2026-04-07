@@ -152,6 +152,8 @@ class CampaignResponse(BaseModel):
     total_succeeded: int
     total_failed: int
     total_skipped: int
+    total_sent: int = 0
+    total_relance: int = 0
     max_per_day: Optional[int] = None
     spread_over_days: Optional[int] = None
     started_at: Optional[datetime] = None

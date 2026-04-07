@@ -57,7 +57,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
         raw_limit = int(row.value) if row else 50
         max_per_day = get_effective_daily_limit(raw_limit, db)
 
-        dm_action_types = ["dm_send"] + [f"followup_{i}" for i in range(1, 8)]
+        dm_action_types = ["dm_send"]
         global_today = get_global_actions_today(dm_action_types, db)
 
         # --- get LinkedIn client (from campaign owner) ---
@@ -80,111 +80,10 @@ async def run_dm_campaign(campaign_id: int) -> None:
         )
         max_followup_seq = max((f.sequence for f in followups), default=0)
 
-        # NOTE: Reply checking moved to reply_checker.py (runs every 5 min)
+        # NOTE: Reply checking + follow-up sends moved to reply_checker.py (runs every 5 min)
 
         # =====================================================================
-        # PHASE 1: Send follow-ups where delay has been reached
-        # =====================================================================
-        if global_today < max_per_day and followups:
-            for cc in (
-                db.query(CampaignContact)
-                .filter(
-                    CampaignContact.campaign_id == campaign_id,
-                    CampaignContact.status.in_(ACTIVE_STATUSES),
-                    CampaignContact.last_sequence_sent < max_followup_seq,
-                )
-                .order_by(CampaignContact.last_sent_at.asc())
-                .all()
-            ):
-                if get_global_actions_today(dm_action_types, db) >= max_per_day:
-                    break
-
-                next_seq = cc.last_sequence_sent + 1
-                followup_msg = next((f for f in followups if f.sequence == next_seq), None)
-                if not followup_msg:
-                    continue
-
-                # Check if enough time has passed
-                delay = timedelta(days=followup_msg.delay_days)
-                if cc.last_sent_at and datetime.utcnow() - cc.last_sent_at < delay:
-                    continue
-
-                contact = db.query(Contact).filter(Contact.id == cc.contact_id).first()
-                if not contact:
-                    continue
-
-                # Check reply one more time before sending
-                try:
-                    replied = await check_contact_replied(client, contact.urn_id)
-                except Exception:
-                    replied = False
-
-                if replied:
-                    cc.status = "reussi"
-                    cc.replied_at = datetime.utcnow()
-                    campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
-                    _log_action(db, campaign_id, contact.id, "reply_detected", "success")
-                    db.commit()
-                    continue
-
-                # Resolve URN before sending
-                resolved_urn = await resolve_contact_urn(client, contact)
-                if not resolved_urn:
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "failed", "Could not resolve LinkedIn URN")
-                    db.commit()
-                    continue
-
-                # Render and send follow-up with retry (3 attempts, 1-3 min intervals)
-                send_ok = False
-                last_error = None
-                for attempt in range(1, 4):
-                    try:
-                        message_body = await _render_message(
-                            campaign, followup_msg.message_template, contact, client
-                        )
-                    except Exception as exc:
-                        last_error = f"Render failed: {exc}"
-                        message_body = None
-
-                    if not message_body or not message_body.strip():
-                        last_error = last_error or "Empty message"
-                        if attempt < 3:
-                            delay = random.randint(60, 180)
-                            print(f"[DM JOB] Campaign {campaign_id}: followup attempt {attempt}/3 failed for contact {contact.id}, retry in {delay}s", flush=True)
-                            await asyncio.sleep(delay)
-                        continue
-
-                    try:
-                        success = await send_message(client, contact.urn_id, message_body)
-                    except Exception as exc:
-                        last_error = str(exc)[:500]
-                        success = False
-
-                    if success:
-                        send_ok = True
-                        break
-                    else:
-                        last_error = last_error or "LinkedIn returned error"
-                        if attempt < 3:
-                            delay = random.randint(60, 180)
-                            print(f"[DM JOB] Campaign {campaign_id}: followup attempt {attempt}/3 failed for contact {contact.id}, retry in {delay}s", flush=True)
-                            await asyncio.sleep(delay)
-
-                if send_ok:
-                    cc.last_sequence_sent = next_seq
-                    cc.last_sent_at = datetime.utcnow()
-                    cc.status = f"relance_{next_seq}"
-                    contact.last_interaction_at = datetime.utcnow()
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "success")
-                    logger.info("Campaign %d: followup %d sent to contact %d", campaign_id, next_seq, contact.id)
-                else:
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "failed", f"3 attempts failed: {last_error}")
-
-                db.commit()
-                break  # One send per tick
-
-        # =====================================================================
-        # PHASE 3: Mark "perdu" - contacts with all follow-ups sent + delay passed
+        # PHASE 1: Mark "perdu" - contacts with all follow-ups sent + delay passed
         # =====================================================================
         if max_followup_seq > 0:
             last_followup = followups[-1] if followups else None

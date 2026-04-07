@@ -57,7 +57,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         dm_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
         dm_limit = get_effective_daily_limit(int(dm_row.value) if dm_row else 50, db)
 
-        dm_action_types = ["dm_send"] + [f"followup_{i}" for i in range(1, 8)]
+        dm_action_types = ["dm_send"]
         global_connections_today = get_global_actions_today(["connection_request"], db)
         global_dms_today = get_global_actions_today(dm_action_types, db)
 
@@ -207,74 +207,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
 
         # NOTE: Reply checking moved to reply_checker.py (runs every 5 min)
 
-        # =====================================================================
-        # PHASE 4: Send follow-ups where delay has been reached
-        # =====================================================================
-        if get_global_actions_today(dm_action_types, db) < dm_limit and followups:
-            for cc in (
-                db.query(CampaignContact)
-                .filter(
-                    CampaignContact.campaign_id == campaign_id,
-                    CampaignContact.status.in_(ACTIVE_STATUSES),
-                    CampaignContact.last_sequence_sent >= 0,
-                    CampaignContact.last_sequence_sent < max_followup_seq,
-                )
-                .order_by(CampaignContact.last_sent_at.asc())
-                .all()
-            ):
-                if get_global_actions_today(dm_action_types, db) >= dm_limit:
-                    break
-
-                next_seq = cc.last_sequence_sent + 1
-                followup_msg = next((f for f in followups if f.sequence == next_seq), None)
-                if not followup_msg:
-                    continue
-
-                delay = timedelta(days=followup_msg.delay_days)
-                if cc.last_sent_at and datetime.utcnow() - cc.last_sent_at < delay:
-                    continue
-
-                contact = db.query(Contact).filter(Contact.id == cc.contact_id).first()
-                if not contact:
-                    continue
-
-                # Check reply before sending
-                try:
-                    replied = await check_contact_replied(client, contact.urn_id)
-                except Exception:
-                    replied = False
-                if replied:
-                    cc.status = "reussi"
-                    cc.replied_at = datetime.utcnow()
-                    campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
-                    _log_action(db, campaign_id, contact.id, "reply_detected", "success")
-                    create_notification(db, campaign.user_id, "reply_received",
-                        f"{contact.first_name} {contact.last_name} a repondu",
-                        f"Campagne \"{campaign.name}\"")
-                    db.commit()
-                    continue
-
-                message_body = await _render_message(
-                    campaign, followup_msg.message_template, contact, client
-                )
-                try:
-                    success = await send_message(client, contact.urn_id, message_body)
-                except Exception as exc:
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "failed", str(exc)[:500])
-                    db.commit()
-                    continue
-
-                if success:
-                    cc.last_sequence_sent = next_seq
-                    cc.last_sent_at = datetime.utcnow()
-                    cc.status = f"relance_{next_seq}"
-                    contact.last_interaction_at = datetime.utcnow()
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "success")
-                else:
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "failed", "LinkedIn returned error")
-
-                db.commit()
-                break  # One send per tick
+        # NOTE: Follow-up sends moved to reply_checker.py (runs every 5 min)
 
         # =====================================================================
         # PHASE 5: Mark "perdu" for contacts with all follow-ups exhausted

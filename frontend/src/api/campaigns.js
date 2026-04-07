@@ -6,6 +6,8 @@ export const createCampaign = (data) =>
   client.post('/campaigns', data).then((r) => r.data);
 export const getCampaign = (id) =>
   client.get(`/campaigns/${id}`).then((r) => r.data);
+export const updateCampaign = (id, data) =>
+  client.patch(`/campaigns/${id}`, data).then((r) => r.data);
 export const startCampaign = (id) =>
   client.post(`/campaigns/${id}/start`).then((r) => r.data);
 export const pauseCampaign = (id) =>

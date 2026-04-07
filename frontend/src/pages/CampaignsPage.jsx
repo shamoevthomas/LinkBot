@@ -154,9 +154,20 @@ export default function CampaignsPage() {
                 </span>
               </div>
               <div className="flex gap-6 mt-3 text-xs text-gray-500">
-                <span>Reussis: {c.total_succeeded}</span>
-                <span>Echoues: {c.total_failed}</span>
-                <span>Ignores: {c.total_skipped}</span>
+                {(c.type === 'dm' || c.type === 'connection_dm') ? (
+                  <>
+                    <span>Envoyes: {c.total_sent}</span>
+                    <span>Relances: {c.total_relance}</span>
+                    <span className="text-emerald-600 font-medium">Repondu: {c.total_succeeded}</span>
+                    <span>Perdu: {c.total_failed}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Reussis: {c.total_succeeded}</span>
+                    <span>Echoues: {c.total_failed}</span>
+                    <span>Ignores: {c.total_skipped}</span>
+                  </>
+                )}
                 {c.connection_rate != null && <span className="text-sky-600 font-medium">Connexion: {c.connection_rate}%</span>}
                 {c.reply_rate != null && <span className="text-emerald-600 font-medium">Reponse: {c.reply_rate}%</span>}
               </div>

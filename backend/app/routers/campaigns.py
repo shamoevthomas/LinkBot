@@ -86,7 +86,7 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         else:
             # Check daily limits
             if c.type in ("dm",):
-                dm_types = ["dm_send"] + [f"followup_{i}" for i in range(1, 8)]
+                dm_types = ["dm_send"]
                 limit_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
                 limit = get_effective_daily_limit(int(limit_row.value) if limit_row else 50, db)
                 used = get_global_actions_today(dm_types, db)
@@ -103,7 +103,12 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
     real_succeeded = 0
     real_failed = 0
     real_processed = c.total_processed or 0
+    real_sent = 0
+    real_relance = 0
     if db:
+        real_processed = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id == c.id,
+        ).scalar() or 0
         real_succeeded = db.query(func.count(CampaignContact.id)).filter(
             CampaignContact.campaign_id == c.id,
             CampaignContact.status == "reussi",
@@ -111,6 +116,14 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         real_failed = db.query(func.count(CampaignContact.id)).filter(
             CampaignContact.campaign_id == c.id,
             CampaignContact.status == "perdu",
+        ).scalar() or 0
+        real_sent = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id == c.id,
+            CampaignContact.main_sent_at.isnot(None),
+        ).scalar() or 0
+        real_relance = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id == c.id,
+            CampaignContact.status.like("relance_%"),
         ).scalar() or 0
 
     return CampaignResponse(
@@ -130,6 +143,8 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         total_succeeded=real_succeeded,
         total_failed=real_failed,
         total_skipped=c.total_skipped or 0,
+        total_sent=real_sent,
+        total_relance=real_relance,
         max_per_day=c.max_per_day,
         spread_over_days=c.spread_over_days,
         started_at=c.started_at,
@@ -513,6 +528,23 @@ def get_campaign(
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    return _campaign_to_response(campaign, db)
+
+
+@router.patch("/{campaign_id}", response_model=CampaignResponse)
+def update_campaign(
+    campaign_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if "name" in body:
+        campaign.name = body["name"]
+    db.commit()
+    db.refresh(campaign)
     return _campaign_to_response(campaign, db)
 
 

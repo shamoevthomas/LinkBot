@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3 } from 'lucide-react';
-import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus } from '../api/campaigns';
+import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check } from 'lucide-react';
+import { getCampaign, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -47,6 +47,8 @@ export default function CampaignDetailPage() {
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'kanban'
   const [selectedContact, setSelectedContact] = useState(null);
   const [diagnosis, setDiagnosis] = useState(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -164,7 +166,21 @@ export default function CampaignDetailPage() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="f text-2xl font-bold text-gray-900">{campaign.name}</h1>
+            {editingName ? (
+              <form onSubmit={async (e) => { e.preventDefault(); if (nameValue.trim() && nameValue !== campaign.name) { await updateCampaign(id, { name: nameValue.trim() }); load(); } setEditingName(false); }} className="flex items-center gap-2">
+                <input autoFocus value={nameValue} onChange={e => setNameValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Escape' && setEditingName(false)}
+                  className="text-2xl font-bold text-gray-900 border-b-2 border-blue-400 outline-none bg-transparent px-0 py-0" />
+                <button type="submit" className="p-1 hover:bg-emerald-50 rounded"><Check size={18} className="text-emerald-600" /></button>
+                <button type="button" onClick={() => setEditingName(false)} className="p-1 hover:bg-red-50 rounded"><X size={18} className="text-red-400" /></button>
+              </form>
+            ) : (
+              <h1 className="f text-2xl font-bold text-gray-900 cursor-pointer group flex items-center gap-2"
+                onClick={() => { setNameValue(campaign.name); setEditingName(true); }}>
+                {campaign.name}
+                <Pencil size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+              </h1>
+            )}
             <Badge status={campaign.type} />
             <Badge status={campaign.status} />
           </div>
