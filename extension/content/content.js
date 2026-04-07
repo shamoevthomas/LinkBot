@@ -85,7 +85,19 @@
       toggleDropdown(btn);
     });
 
-    container.appendChild(btn);
+    // Find the "..." button and insert before it
+    const allChildren = [...container.children];
+    const moreBtn = allChildren.find((el) => {
+      const t = el.textContent.trim();
+      return t === '' || t === '…' || t === '···' || (el.querySelector && el.querySelector('[type="more-icon"], .artdeco-dropdown'));
+    });
+    if (moreBtn) {
+      container.insertBefore(btn, moreBtn);
+    } else {
+      // Fallback: insert before last child (the "..." is usually last)
+      const last = container.lastElementChild;
+      container.insertBefore(btn, last);
+    }
   }
 
   // --- Dropdown ---
