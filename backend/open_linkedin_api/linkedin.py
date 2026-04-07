@@ -15,7 +15,6 @@ from time import sleep
 from urllib.parse import urlencode, quote
 from typing import Dict, Union, Optional, List, Literal
 
-import requests as _requests
 from bs4 import BeautifulSoup
 
 from open_linkedin_api.exceptions import (
@@ -104,46 +103,25 @@ class Linkedin(object):
             else:
                 self.client.authenticate(username, password)
 
-    def _request_with_retry(self, method, uri, evade=default_evade, base_request=False, **kwargs):
-        """Execute an HTTP request with retry on 429 and transient errors."""
-        _logger = logging.getLogger(__name__)
-        max_retries = 3
-        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
-
-        for attempt in range(max_retries + 1):
-            self.client.rate_limiter.wait()
-            evade()
-
-            try:
-                res = getattr(self.client.session, method)(url, **kwargs)
-            except (_requests.ConnectionError, _requests.Timeout) as e:
-                if attempt < max_retries:
-                    delay = 5 * (3 ** attempt)  # 5s, 15s, 45s
-                    _logger.warning("Connection error on %s %s, retry %d in %ds: %s", method.upper(), uri, attempt + 1, delay, e)
-                    time.sleep(delay)
-                    continue
-                raise
-
-            if res.status_code == 401:
-                raise UnauthorizedException()
-
-            if res.status_code == 429:
-                if attempt < 2:
-                    _logger.warning("429 rate limited on %s %s, waiting 60s before retry", method.upper(), uri)
-                    time.sleep(60)
-                    continue
-                raise LinkedInRequestException(res.status_code, res.text)
-
-            if not (200 <= res.status_code < 300):
-                raise LinkedInRequestException(res.status_code, res.text)
-
-            return res
-
-        raise LinkedInRequestException(0, "Max retries exceeded")
-
     def _fetch(self, uri: str, evade=default_evade, base_request=False, **kwargs):
         """GET request to Linkedin API"""
-        return self._request_with_retry("get", uri, evade=evade, base_request=base_request, **kwargs)
+        # Apply rate limiting before making request
+        self.client.rate_limiter.wait()
+
+        evade()
+
+        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
+        res = self.client.session.get(url, **kwargs)
+
+        if res.status_code == 401:
+            raise UnauthorizedException()
+
+        if not (
+            200 <= res.status_code < 300
+        ):  # I don't know all status_codes successfully of LkIn
+            raise LinkedInRequestException(res.status_code, res.text)
+
+        return res
 
     def _cookies(self):
         """Return client cookies"""
@@ -155,11 +133,49 @@ class Linkedin(object):
 
     def _post(self, uri: str, evade=default_evade, base_request=False, **kwargs):
         """POST request to Linkedin API"""
-        return self._request_with_retry("post", uri, evade=evade, base_request=base_request, **kwargs)
+        # Apply rate limiting before making request
+        self.client.rate_limiter.wait()
+
+        evade()
+
+        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
+
+        res = self.client.session.post(url, **kwargs)
+        if res.status_code == 401:
+            raise UnauthorizedException()
+
+        if not (
+            200 <= res.status_code < 300
+        ):  # I don't know all status_codes successfully of LkIn
+            raise LinkedInRequestException(res.status_code, res.text)
+
+        return res
 
     def _put(self, uri: str, evade=default_evade, base_request=False, **kwargs):
-        """PUT request to Linkedin API"""
-        return self._request_with_retry("put", uri, evade=evade, base_request=base_request, **kwargs)
+        """PUT request to Linkedin API
+
+        Note: This method is currently not used for CDN image uploads (see schedule_post).
+        Image uploads use self.client.session.put() directly because they go to an external
+        CDN URL, not the LinkedIn API endpoint, and therefore don't need rate limiting or evade.
+        This method is kept for potential future PUT operations to LinkedIn API endpoints.
+        """
+        # Apply rate limiting before making request
+        self.client.rate_limiter.wait()
+
+        evade()
+
+        url = f"{self.client.API_BASE_URL if not base_request else self.client.LINKEDIN_BASE_URL}{uri}"
+
+        res = self.client.session.put(url, **kwargs)
+        if res.status_code == 401:
+            raise UnauthorizedException()
+
+        if not (
+            200 <= res.status_code < 300
+        ):  # I don't know all status_codes successfully of LkIn
+            raise LinkedInRequestException(res.status_code, res.text)
+
+        return res
 
     def get_profile_posts(
         self,
@@ -302,7 +318,7 @@ class Linkedin(object):
 
             # Hardcoded queryId for search
             query_id = "voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0"
-            search_url = (
+            res = self._fetch(
                 f"/graphql?variables=(start:{default_params['start']},origin:{default_params['origin']},"
                 f"query:("
                 f"{keywords}"
@@ -310,12 +326,7 @@ class Linkedin(object):
                 f"queryParameters:{default_params['filters']},"
                 f"includeFiltersInResponse:false))&queryId={query_id}"
             )
-            self.logger.info("[SEARCH] URL filters: %s", default_params.get('filters', ''))
-            res = self._fetch(search_url)
             data = res.json()
-
-            self.logger.info("[SEARCH] Response status: %s, top keys: %s, included count: %d",
-                             res.status_code, list(data.keys()), len(data.get("included", [])))
 
             # Build lookup from included entities (normalized JSON format)
             included_map = {}
@@ -331,9 +342,6 @@ class Linkedin(object):
             data_clusters = inner.get("searchDashClustersByAll", {})
 
             if not data_clusters:
-                self.logger.warning("[SEARCH] No searchDashClustersByAll found. inner keys: %s, data.data keys: %s",
-                                    list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__,
-                                    list(data.get("data", {}).keys()) if isinstance(data.get("data"), dict) else "N/A")
                 break  # Don't wipe accumulated results — just stop paginating
 
             # Accept both _type and $type fields
@@ -523,37 +531,6 @@ class Linkedin(object):
                 == "OUT_OF_NETWORK"
             ):
                 continue
-            # Extract profile picture URL from image artifacts
-            picture_url = None
-            image_data = item.get("image")
-            if isinstance(image_data, dict):
-                attrs = image_data.get("attributes") or []
-                for attr in attrs:
-                    mini_profile = (attr.get("miniProfile") or {})
-                    pic = mini_profile.get("picture", {})
-                    root = pic.get("com.linkedin.common.VectorImage", {})
-                    artifacts = root.get("artifacts") or []
-                    root_url = root.get("rootUrl", "")
-                    if artifacts and root_url:
-                        # Pick the largest artifact
-                        best = max(artifacts, key=lambda a: a.get("width", 0))
-                        picture_url = root_url + best.get("fileIdentifyingUrlPathSegment", "")
-                        break
-                    # Fallback: vectorImage directly on image
-                    vector = (attr.get("detailData") or {}).get("nonEntityProfilePicture", {}).get("vectorImage", {})
-                    v_artifacts = vector.get("artifacts") or []
-                    v_root = vector.get("rootUrl", "")
-                    if v_artifacts and v_root:
-                        best = max(v_artifacts, key=lambda a: a.get("width", 0))
-                        picture_url = v_root + best.get("fileIdentifyingUrlPathSegment", "")
-                        break
-
-            # Extract public_id from navigation URL
-            nav_url = item.get("navigationUrl", None)
-            public_id = None
-            if nav_url and "/in/" in nav_url:
-                public_id = nav_url.rstrip("/").split("/in/")[-1].split("?")[0]
-
             results.append(
                 {
                     "urn_id": get_id_from_urn(
@@ -565,9 +542,7 @@ class Linkedin(object):
                     "jobtitle": (item.get("primarySubtitle") or {}).get("text", None),
                     "location": (item.get("secondarySubtitle") or {}).get("text", None),
                     "name": (item.get("title") or {}).get("text", None),
-                    "navigation_url": nav_url,
-                    "public_id": public_id,
-                    "picture_url": picture_url,
+                    "navigation_url": item.get("navigationUrl", None),
                 }
             )
 
@@ -1254,7 +1229,6 @@ class Linkedin(object):
                         "[CONNECTIONS] included[%d]: $type=%s, entityUrn=%s, keys=%s",
                         i, inc.get("$type", "?"), inc.get("entityUrn", "?"), list(inc.keys())[:10]
                     )
-                # Log first fsd_profile item
                 for inc in included:
                     if "fsd_profile" in inc.get("entityUrn", ""):
                         self.logger.info(
@@ -1273,18 +1247,15 @@ class Linkedin(object):
             profiles = []
             for conn_urn in element_refs:
                 conn = included_map.get(conn_urn, {})
-                # Get profile URN from connection object
                 profile_urn = conn.get("*connectedMemberResolutionResult") or conn.get("connectedMember") or ""
                 if not profile_urn:
                     continue
-                # Ensure it's a URN string
                 if isinstance(profile_urn, dict):
                     profile_urn = profile_urn.get("entityUrn", "")
                 urn_id = profile_urn.split(":")[-1] if profile_urn else ""
                 if not urn_id or urn_id in seen_urns:
                     continue
                 seen_urns.add(urn_id)
-                # Resolve profile from included
                 profile = included_map.get(profile_urn, {})
                 profiles.append((urn_id, profile))
 
@@ -1322,9 +1293,7 @@ class Linkedin(object):
                 picture_url = ""
                 picture_data = profile.get("profilePicture") or profile.get("picture") or {}
                 if isinstance(picture_data, dict):
-                    # Try dash format
                     vec = (picture_data.get("displayImageReference") or {}).get("vectorImage") or {}
-                    # Try legacy format
                     if not vec:
                         vec = picture_data.get("com.linkedin.common.VectorImage") or {}
                     art_list = vec.get("artifacts") or []
@@ -1349,8 +1318,6 @@ class Linkedin(object):
                     "navigation_url": f"https://www.linkedin.com/in/{public_id}" if public_id else "",
                 })
 
-            # Paginate: increment by the requested page size (not profile count,
-            # since LinkedIn paginates by connection count)
             # Use element_refs count for pagination (matches LinkedIn's page size)
             start += len(element_refs) if element_refs else len(profiles)
 
@@ -1708,31 +1675,85 @@ class Linkedin(object):
     def get_conversation_details(self, profile_urn_id):
         """Fetch conversation (message thread) details for a given LinkedIn profile.
 
+        Tries the legacy messaging API first, then falls back to searching
+        recent conversations from the dash API.
+
         :param profile_urn_id: LinkedIn URN ID for a profile
         :type profile_urn_id: str
 
         :return: Conversation data
         :rtype: dict
         """
-        # passing `params` doesn't work properly, think it's to do with List().
-        # Might be a bug in `requests`?
-        params = {
-            "keyVersion": "LEGACY_INBOX",
-            "q": "participants",
-            "recipients": f"List({profile_urn_id})",
-        }
-        query = urlencode(params, safe="(),")
-        res = self._fetch(f"/messaging/conversations?{query}")
+        # Try legacy API first
+        try:
+            params = {
+                "keyVersion": "LEGACY_INBOX",
+                "q": "participants",
+                "recipients": f"List({profile_urn_id})",
+            }
+            query = urlencode(params, safe="(),")
+            res = self._fetch(f"/messaging/conversations?{query}")
+            data = res.json()
 
-        data = res.json()
+            if data.get("elements"):
+                item = data["elements"][0]
+                item["id"] = get_id_from_urn(item["entityUrn"])
+                return item
+        except Exception:
+            pass
 
-        if data["elements"] == []:
+        # Fallback: search recent conversations via dash API
+        try:
+            return self._find_conversation_dash(profile_urn_id)
+        except Exception:
+            self.logger.warning("Could not find conversation for %s via dash API", profile_urn_id)
             return {}
 
-        item = data["elements"][0]
-        item["id"] = get_id_from_urn(item["entityUrn"])
+    def _find_conversation_dash(self, profile_urn_id: str) -> dict:
+        """Find a conversation with a specific person using the dash messaging API.
 
-        return item
+        :param profile_urn_id: LinkedIn URN ID (without urn:li:fsd_profile: prefix)
+        :return: Conversation dict with 'id' key, or empty dict
+        """
+        mailbox_urn = self._get_mailbox_urn()
+        if not mailbox_urn:
+            return {}
+
+        # Normalize the profile URN for matching
+        if not profile_urn_id.startswith("urn:"):
+            full_profile_urn = f"urn:li:fsd_profile:{profile_urn_id}"
+        else:
+            full_profile_urn = profile_urn_id
+
+        # Fetch recent conversations from dash API
+        params = {
+            "decorationId": "com.linkedin.voyager.dash.deco.messaging.FullConversation-2",
+            "q": "search",
+            "count": 20,
+        }
+        try:
+            res = self._fetch(f"/voyagerMessagingDashConversations?{urlencode(params)}")
+            data = res.json()
+        except Exception:
+            # Try alternate endpoint
+            params2 = {"count": 20, "start": 0}
+            res = self._fetch(f"/voyagerMessagingDashConversations", params=params2)
+            data = res.json()
+
+        elements = data.get("elements", [])
+        for convo in elements:
+            participants = convo.get("conversationParticipants", [])
+            for p in participants:
+                p_urn = p.get("participantUrn", "") or ""
+                mini = p.get("participantProfile", {}) or {}
+                mini_urn = mini.get("entityUrn", "") or ""
+                if (profile_urn_id in p_urn or profile_urn_id in mini_urn
+                        or full_profile_urn == p_urn or full_profile_urn == mini_urn):
+                    convo_urn = convo.get("entityUrn", "")
+                    convo["id"] = get_id_from_urn(convo_urn) if convo_urn else ""
+                    return convo
+
+        return {}
 
     def get_conversations(self):
         """Fetch list of conversations the user is in.
