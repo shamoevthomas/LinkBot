@@ -154,11 +154,11 @@ def _get_schedule_interval(max_per_day: int) -> int | None:
 
         start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
         end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
-        if not start_row or not end_row:
-            return None
+        start_val = start_row.value if start_row and start_row.value else "08:00"
+        end_val = end_row.value if end_row and end_row.value else "20:00"
 
-        start_h, start_m = map(int, start_row.value.split(":"))
-        end_h, end_m = map(int, end_row.value.split(":"))
+        start_h, start_m = map(int, start_val.split(":"))
+        end_h, end_m = map(int, end_val.split(":"))
         start_min = start_h * 60 + start_m
         end_min = end_h * 60 + end_m
 
@@ -293,12 +293,13 @@ def is_within_schedule(db_session=None) -> bool:
         start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
         end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
 
-        if not start_row or not end_row:
-            return True
+        # Default to 08:00-20:00 when schedule is enabled but hours not configured
+        start_val = start_row.value if start_row and start_row.value else "08:00"
+        end_val = end_row.value if end_row and end_row.value else "20:00"
 
         try:
-            start_h, start_m = map(int, start_row.value.split(":"))
-            end_h, end_m = map(int, end_row.value.split(":"))
+            start_h, start_m = map(int, start_val.split(":"))
+            end_h, end_m = map(int, end_val.split(":"))
         except (ValueError, AttributeError):
             return True
 
@@ -338,12 +339,10 @@ def get_next_schedule_start(db_session=None):
     db = db_session or SessionLocal()
     try:
         start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
-        end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
-        if not start_row or not end_row:
-            return None
+        start_val = start_row.value if start_row and start_row.value else "08:00"
 
         try:
-            start_h, start_m = map(int, start_row.value.split(":"))
+            start_h, start_m = map(int, start_val.split(":"))
         except (ValueError, AttributeError):
             return None
 
