@@ -298,10 +298,20 @@ async def check_contact_replied(
     try:
         convo = await get_conversation_details(client, contact_urn_id)
         if not convo:
+            logger.debug("No conversation found for urn_id=%s", contact_urn_id)
             return False
 
-        # The conversation object has lastActivityAt and participants.
-        # The events contain the actual messages.
+        # --- Method 1: Check lastMessages in dash conversation object ---
+        last_messages = convo.get("lastMessages", [])
+        if last_messages:
+            last_msg = last_messages[0] if last_messages else None
+            if last_msg:
+                sender = last_msg.get("sender", {})
+                sender_urn = sender.get("entityUrn", "") or sender.get("participantUrn", "") or ""
+                if sender_urn and contact_urn_id in sender_urn:
+                    return True
+
+        # --- Method 2: Fetch conversation events (legacy) ---
         convo_id = convo.get("id")
         if not convo_id:
             return False
@@ -315,29 +325,43 @@ async def check_contact_replied(
         last_event = elements[-1]
 
         # Check who sent the last message.
-        # The sender info is in "from" -> "messaging.MessagingMember" ->
-        # "miniProfile" -> "entityUrn" or in "from" -> "member" URN.
         from_data = last_event.get("from", {})
         if not from_data:
             return False
 
-        # Try to get the sender's URN
+        # Try to get the sender's URN (multiple possible formats)
         sender_urn = None
+
+        # Format 1: Legacy Voyager messaging
         member = from_data.get("com.linkedin.voyager.messaging.MessagingMember", {})
         if member:
             mini = member.get("miniProfile", {})
             if mini:
                 sender_urn = mini.get("entityUrn", "")
+
+        # Format 2: Dash messaging
+        if not sender_urn:
+            sender_urn = from_data.get("entityUrn", "")
+
+        # Format 3: Direct member field
         if not sender_urn:
             member2 = from_data.get("member", "")
             if member2:
                 sender_urn = member2
 
+        # Format 4: participantUrn
         if not sender_urn:
+            sender_urn = from_data.get("participantUrn", "")
+
+        if not sender_urn:
+            logger.debug("Could not extract sender URN from conversation for urn_id=%s", contact_urn_id)
             return False
 
         # If the sender URN contains the contact's urn_id, they replied
-        return contact_urn_id in sender_urn
+        replied = contact_urn_id in sender_urn
+        if replied:
+            logger.info("Reply detected from %s (sender: %s)", contact_urn_id, sender_urn)
+        return replied
 
     except Exception:
         logger.exception("Error checking reply for urn_id=%s", contact_urn_id)

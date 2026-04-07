@@ -387,7 +387,7 @@ export default function CampaignDetailPage() {
       {/* Kanban view */}
       {tab === 'contacts' && viewMode === 'kanban' && contacts.length > 0 && (() => {
         const columns = [
-          { key: 'en_attente', label: 'En attente', color: '#eab308', bg: '#fefce8', filter: c => c.status === 'en_attente' },
+          { key: 'en_attente', label: 'En attente', color: '#eab308', bg: '#fefce8', filter: c => c.status === 'en_attente' || c.status === 'pending' },
           { key: 'envoye', label: 'Envoye', color: '#3b82f6', bg: '#eff6ff', filter: c => c.status === 'envoye' },
           { key: 'relance', label: 'En relance', color: '#f59e0b', bg: '#fffbeb', filter: c => c.status?.startsWith('relance_') },
           { key: 'reussi', label: 'Repondu', color: '#10b981', bg: '#ecfdf5', filter: c => c.status === 'reussi' },

@@ -891,7 +891,7 @@ def list_campaign_contacts(
     q = q.order_by(CampaignContact.last_sent_at.desc().nullslast())
     rows = q.all()
 
-    return [
+    results = [
         CampaignContactResponse(
             id=cc.id,
             campaign_id=cc.campaign_id,
@@ -908,3 +908,30 @@ def list_campaign_contacts(
         )
         for cc, c in rows
     ]
+
+    # Include unprocessed CRM contacts as "pending"
+    if not status_filter or status_filter == "pending":
+        already_ids = {cc.contact_id for cc, _ in rows}
+        unprocessed = (
+            db.query(Contact)
+            .filter(
+                Contact.crm_id == campaign.crm_id,
+                ~Contact.id.in_(already_ids) if already_ids else True,
+            )
+            .order_by(Contact.added_at.asc())
+            .all()
+        )
+        for c in unprocessed:
+            results.append(CampaignContactResponse(
+                id=-c.id,
+                campaign_id=campaign_id,
+                contact_id=c.id,
+                status="pending",
+                last_sequence_sent=0,
+                contact_first_name=c.first_name,
+                contact_last_name=c.last_name,
+                contact_headline=c.headline,
+                contact_profile_picture_url=c.profile_picture_url,
+            ))
+
+    return results
