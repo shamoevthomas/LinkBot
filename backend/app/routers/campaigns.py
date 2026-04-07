@@ -935,3 +935,37 @@ def list_campaign_contacts(
             ))
 
     return results
+
+
+@router.patch("/{campaign_id}/contacts/{contact_id}/status")
+def update_campaign_contact_status(
+    campaign_id: int,
+    contact_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Manually update the status of a campaign contact."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    cc = db.query(CampaignContact).filter(
+        CampaignContact.campaign_id == campaign_id,
+        CampaignContact.contact_id == contact_id,
+    ).first()
+    if not cc:
+        raise HTTPException(status_code=404, detail="Contact not found in campaign")
+
+    new_status = body.get("status")
+    valid = {"envoye", "reussi", "perdu"} | {f"relance_{i}" for i in range(1, 8)}
+    if new_status not in valid:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {new_status}")
+
+    old_status = cc.status
+    cc.status = new_status
+    if new_status == "reussi" and not cc.replied_at:
+        cc.replied_at = datetime.utcnow()
+        campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
+    db.commit()
+    return {"ok": True, "old_status": old_status, "new_status": new_status}

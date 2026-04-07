@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3 } from 'lucide-react';
-import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, runCampaignNow, getCampaignActions, getCampaignContacts } from '../api/campaigns';
+import { getCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, diagnoseCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -558,6 +558,30 @@ export default function CampaignDetailPage() {
                   <p className="text-sm text-gray-500 mt-1">{selectedContact.contact_headline}</p>
                 )}
                 <div className="mt-2"><ContactStatusBadge status={selectedContact.status} /></div>
+                {selectedContact.status !== 'pending' && (
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <select
+                      value={selectedContact.status}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value;
+                        try {
+                          await updateContactStatus(id, selectedContact.contact_id, newStatus);
+                          setSelectedContact({ ...selectedContact, status: newStatus, replied_at: newStatus === 'reussi' ? (selectedContact.replied_at || new Date().toISOString()) : selectedContact.replied_at });
+                          load();
+                          toast.success('Statut mis a jour');
+                        } catch { toast.error('Erreur lors du changement de statut'); }
+                      }}
+                      className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="envoye">Envoye</option>
+                      <option value="relance_1">Relance 1</option>
+                      <option value="relance_2">Relance 2</option>
+                      <option value="relance_3">Relance 3</option>
+                      <option value="reussi">Repondu</option>
+                      <option value="perdu">Perdu</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3">
