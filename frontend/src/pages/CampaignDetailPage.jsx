@@ -57,7 +57,13 @@ export default function CampaignDetailPage() {
       ]);
       setCampaign(c);
       setActions(a.actions || a || []);
-      setContacts(cc || []);
+      const statusOrder = { reussi: 0, envoye: 1, perdu: 2, en_attente: 3, pending: 4 };
+      const sorted = (cc || []).sort((a, b) => {
+        const oa = a.status?.startsWith('relance_') ? 1 : (statusOrder[a.status] ?? 2);
+        const ob = b.status?.startsWith('relance_') ? 1 : (statusOrder[b.status] ?? 2);
+        return oa - ob;
+      });
+      setContacts(sorted);
     } finally { setLoading(false); }
   }, [id]);
 

@@ -8,19 +8,23 @@ from app.schemas import BlacklistCreate, BlacklistResponse
 
 router = APIRouter(prefix="/api/blacklist", tags=["blacklist"])
 
-@router.get("", response_model=list[BlacklistResponse])
+@router.get("")
 def list_blacklist(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    per_page: int = Query(None, ge=1, le=200),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
+    limit = per_page or page_size
     q = db.query(Blacklist).filter(Blacklist.user_id == _user.id)
     if search:
         q = q.filter(Blacklist.name.ilike(f"%{search}%"))
-    offset = (page - 1) * page_size
-    return q.order_by(Blacklist.created_at.desc()).offset(offset).limit(page_size).all()
+    total = q.count()
+    offset = (page - 1) * limit
+    items = q.order_by(Blacklist.created_at.desc()).offset(offset).limit(limit).all()
+    return {"items": [BlacklistResponse(id=i.id, urn_id=i.urn_id, public_id=i.public_id, name=i.name, reason=i.reason, created_at=i.created_at) for i in items], "total": total}
 
 @router.post("", response_model=BlacklistResponse, status_code=status.HTTP_201_CREATED)
 def add_to_blacklist(body: BlacklistCreate, db: Session = Depends(get_db), _user: User = Depends(get_current_user)):

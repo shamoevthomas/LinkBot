@@ -192,6 +192,7 @@ async def import_csv(
     crm_id: int = Form(...),
     column_mapping: str = Form(""),
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
@@ -294,7 +295,66 @@ async def import_csv(
             detail=f"Database error: {exc}",
         )
 
+    # Kick off background enrichment for newly imported contacts
+    if created > 0 and background_tasks and _user.li_at_cookie and _user.cookies_valid:
+        background_tasks.add_task(_enrich_csv_contacts, _user.id, crm_id)
+
     return {"created": created, "skipped": skipped, "total_rows": len(contacts)}
+
+
+async def _enrich_csv_contacts(user_id: int, crm_id: int) -> None:
+    """Background task: resolve LinkedIn URNs for CSV-imported contacts."""
+    import asyncio
+    from app.database import SessionLocal
+    from app.linkedin_service import get_linkedin_client, get_profile, resolve_contact_urn
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.li_at_cookie or not user.cookies_valid:
+            return
+
+        client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
+
+        # Find contacts that need enrichment: urn_id doesn't start with "ACoAA" (not a real LinkedIn URN)
+        contacts = db.query(Contact).filter(
+            Contact.crm_id == crm_id,
+            ~Contact.urn_id.like("ACoAA%"),
+        ).all()
+
+        logger.info("[CSV ENRICH] %d contacts to enrich in CRM %d", len(contacts), crm_id)
+        enriched = 0
+        for contact in contacts:
+            try:
+                resolved = await resolve_contact_urn(client, contact)
+                if resolved:
+                    # Also fetch full profile for extra data
+                    try:
+                        profile = await get_profile(client, urn_id=contact.urn_id)
+                        if profile:
+                            contact.first_name = profile.get("firstName") or contact.first_name
+                            contact.last_name = profile.get("lastName") or contact.last_name
+                            contact.headline = profile.get("headline") or contact.headline
+                            contact.location = profile.get("locationName") or contact.location
+                            pic = profile.get("displayPictureUrl")
+                            if pic:
+                                artifacts = profile.get("img_400_400") or profile.get("img_200_200") or ""
+                                contact.profile_picture_url = f"{pic}{artifacts}" if artifacts else pic
+                            if not contact.public_id:
+                                contact.public_id = profile.get("public_id")
+                    except Exception:
+                        pass
+                    enriched += 1
+                    db.commit()
+            except Exception:
+                logger.warning("[CSV ENRICH] Failed for contact %d", contact.id)
+            await asyncio.sleep(3)  # Rate limit
+
+        logger.info("[CSV ENRICH] Done: %d/%d enriched", enriched, len(contacts))
+    except Exception:
+        logger.exception("[CSV ENRICH] Error")
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------

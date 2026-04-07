@@ -99,6 +99,20 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
                 if used >= limit:
                     paused_reason = f"Limite quotidienne atteinte ({used}/{limit} connexions)"
 
+    # Compute real stats from CampaignContact records
+    real_succeeded = 0
+    real_failed = 0
+    real_processed = c.total_processed or 0
+    if db:
+        real_succeeded = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id == c.id,
+            CampaignContact.status == "reussi",
+        ).scalar() or 0
+        real_failed = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id == c.id,
+            CampaignContact.status == "perdu",
+        ).scalar() or 0
+
     return CampaignResponse(
         id=c.id,
         name=c.name,
@@ -112,9 +126,9 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         context_text=c.context_text,
         ai_prompt=c.ai_prompt,
         total_target=c.total_target,
-        total_processed=c.total_processed or 0,
-        total_succeeded=c.total_succeeded or 0,
-        total_failed=c.total_failed or 0,
+        total_processed=real_processed,
+        total_succeeded=real_succeeded,
+        total_failed=real_failed,
         total_skipped=c.total_skipped or 0,
         max_per_day=c.max_per_day,
         spread_over_days=c.spread_over_days,
