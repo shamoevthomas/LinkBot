@@ -58,8 +58,12 @@ async function showDashboard(user) {
   // Show profile picture
   const avatarEl = $('user-avatar');
   if (user && user.profile_picture_path) {
-    const base = 'https://linkbot-api.onrender.com';
-    avatarEl.innerHTML = `<img src="${base}${user.profile_picture_path.startsWith('/') ? '' : '/'}${user.profile_picture_path}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+    let picUrl = user.profile_picture_path;
+    // If relative path, prepend backend base URL
+    if (picUrl.startsWith('/')) {
+      picUrl = 'https://linkbot-api.onrender.com' + picUrl;
+    }
+    avatarEl.innerHTML = `<img src="${picUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
   } else {
     avatarEl.innerHTML = user ? (user.first_name || user.email || 'L').charAt(0).toUpperCase() : 'L';
   }

@@ -35,39 +35,38 @@
     if (document.getElementById(BUTTON_ID)) return;
     if (!location.pathname.startsWith('/in/')) return;
 
-    // Strategy: find the "..." (more) button or "Message" button on the profile,
-    // then insert our button next to it in the same parent container.
-    let anchor = null;
-
-    // 1. Try the "more actions" overflow button (the "..." button) — always present
-    const moreButtons = document.querySelectorAll('div.artdeco-dropdown button, button.artdeco-button--muted');
-    for (const b of moreButtons) {
-      const parent = b.closest('.pvs-profile-actions, .pv-top-card-v2-ctas, .scaffold-layout__detail');
-      if (parent && b.querySelector('svg, li-icon, [data-test-icon]')) {
-        anchor = b;
-        break;
-      }
-    }
-
-    // 2. Fallback: find any button with text "Message", "Se connecter", "Suivre", "Prendre un rendez-vous"
-    if (!anchor) {
-      const allBtns = document.querySelectorAll('button, a.artdeco-button');
-      for (const b of allBtns) {
-        const text = b.textContent.trim().toLowerCase();
-        if (
-          (text.includes('message') || text.includes('connecter') || text.includes('connect') ||
-           text.includes('suivre') || text.includes('follow') || text.includes('rendez-vous')) &&
-          b.offsetParent !== null // visible
-        ) {
-          anchor = b;
+    // Find the "Message" button on the profile — it's always an <a> or <button>
+    // with the text "Message" inside the profile action bar.
+    let messageBtn = null;
+    const candidates = document.querySelectorAll('a, button');
+    for (const el of candidates) {
+      const text = el.textContent.trim();
+      // Match "Message" button specifically (not messaging nav link)
+      if (text === 'Message' || text === '  Message') {
+        // Make sure it's in the profile area, not the top nav
+        const rect = el.getBoundingClientRect();
+        if (rect.top > 200 && rect.top < 700) {
+          messageBtn = el;
           break;
         }
       }
     }
 
-    if (!anchor) return;
+    // Fallback: try "Se connecter", "Suivre", "Prendre un rendez-vous"
+    if (!messageBtn) {
+      for (const el of candidates) {
+        const text = el.textContent.trim().toLowerCase();
+        if ((text.includes('connecter') || text.includes('suivre') || text.includes('rendez-vous')) &&
+            el.getBoundingClientRect().top > 200) {
+          messageBtn = el;
+          break;
+        }
+      }
+    }
 
-    const container = anchor.parentElement;
+    if (!messageBtn) return;
+
+    const container = messageBtn.parentElement;
     if (!container) return;
 
     const btn = document.createElement('button');
@@ -75,9 +74,7 @@
     btn.className = 'linkbot-btn';
     btn.innerHTML = `
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-        <polyline points="17 21 17 13 7 13 7 21"/>
-        <polyline points="7 3 7 8 15 8"/>
+        <path d="M12 5v14M5 12h14"/>
       </svg>
       Importer
     `;
@@ -88,7 +85,6 @@
       toggleDropdown(btn);
     });
 
-    // Insert after the last button in the container
     container.appendChild(btn);
   }
 
