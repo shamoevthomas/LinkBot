@@ -40,7 +40,7 @@ async def run_reply_checks() -> None:
             db.query(Campaign)
             .filter(
                 Campaign.status == "running",
-                Campaign.campaign_type.in_(["dm", "connection_dm"]),
+                Campaign.type.in_(["dm", "connection_dm"]),
             )
             .all()
         )
