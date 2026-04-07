@@ -286,6 +286,34 @@ async def get_conversation_events(
         return {}
 
 
+def _extract_sender_urn(event: dict) -> str:
+    """Extract sender URN from a conversation event (handles multiple formats)."""
+    from_data = event.get("from", {})
+    if not from_data or not isinstance(from_data, dict):
+        return ""
+
+    # Format 1: Legacy Voyager messaging
+    member = from_data.get("com.linkedin.voyager.messaging.MessagingMember", {})
+    if member:
+        mini = member.get("miniProfile", {})
+        if mini and mini.get("entityUrn"):
+            return mini["entityUrn"]
+
+    # Format 2: entityUrn directly
+    if from_data.get("entityUrn"):
+        return from_data["entityUrn"]
+
+    # Format 3: member field
+    if from_data.get("member"):
+        return from_data["member"]
+
+    # Format 4: participantUrn
+    if from_data.get("participantUrn"):
+        return from_data["participantUrn"]
+
+    return ""
+
+
 async def check_contact_replied(
     client: Linkedin,
     contact_urn_id: str,
@@ -306,82 +334,48 @@ async def check_contact_replied(
         convo_keys = list(convo.keys())[:15]
         print(f"[REPLY CHECK] Conversation found, keys={convo_keys}", flush=True)
 
-        # --- Method 1: Check lastMessages in dash conversation object ---
+        # --- Method 1: Check lastMessages (dash conversation objects) ---
         last_messages = convo.get("lastMessages", [])
         if last_messages:
             last_msg = last_messages[0]
             sender = last_msg.get("sender", {})
             sender_urn = sender.get("entityUrn", "") or sender.get("participantUrn", "") or ""
-            print(f"[REPLY CHECK] Method1 lastMessages sender={sender_urn}", flush=True)
+            print(f"[REPLY CHECK] lastMessages sender={sender_urn}", flush=True)
             if sender_urn and contact_urn_id in sender_urn:
                 print(f"[REPLY CHECK] REPLY DETECTED via lastMessages", flush=True)
                 return True
 
-        # --- Method 2: Fetch conversation events (legacy) ---
+        # --- Method 2: Check events embedded in conversation (legacy inbox) ---
+        events = convo.get("events", [])
+        if events:
+            last_event = events[-1]
+            sender_urn = _extract_sender_urn(last_event)
+            print(f"[REPLY CHECK] Inline events sender={sender_urn}", flush=True)
+            if sender_urn and contact_urn_id in sender_urn:
+                print(f"[REPLY CHECK] REPLY DETECTED via inline events", flush=True)
+                return True
+
+        # --- Method 3: Fetch events separately via conversation ID ---
         convo_id = convo.get("id")
-        if not convo_id:
-            print(f"[REPLY CHECK] No conversation id found", flush=True)
-            return False
+        if convo_id:
+            print(f"[REPLY CHECK] Fetching events for convo_id={convo_id}", flush=True)
+            try:
+                events_data = await get_conversation_events(client, convo_id)
+                elements = events_data.get("elements", [])
+                if elements:
+                    last_event = elements[-1]
+                    sender_urn = _extract_sender_urn(last_event)
+                    print(f"[REPLY CHECK] Fetched events sender={sender_urn}", flush=True)
+                    if sender_urn and contact_urn_id in sender_urn:
+                        print(f"[REPLY CHECK] REPLY DETECTED via fetched events", flush=True)
+                        return True
+                else:
+                    print(f"[REPLY CHECK] No events returned", flush=True)
+            except Exception as e:
+                print(f"[REPLY CHECK] Events fetch failed: {e}", flush=True)
 
-        print(f"[REPLY CHECK] Fetching events for convo_id={convo_id}", flush=True)
-        events_data = await get_conversation_events(client, convo_id)
-        elements = events_data.get("elements", [])
-        if not elements:
-            print(f"[REPLY CHECK] No events found, keys={list(events_data.keys())[:10]}", flush=True)
-            return False
-
-        print(f"[REPLY CHECK] Got {len(elements)} events", flush=True)
-
-        # Events are ordered by time. The last element is the most recent.
-        last_event = elements[-1]
-        last_event_keys = list(last_event.keys())[:15]
-        print(f"[REPLY CHECK] Last event keys={last_event_keys}", flush=True)
-
-        # Check who sent the last message.
-        from_data = last_event.get("from", {})
-        if not from_data:
-            print(f"[REPLY CHECK] No 'from' in last event", flush=True)
-            return False
-
-        from_keys = list(from_data.keys()) if isinstance(from_data, dict) else str(type(from_data))
-        print(f"[REPLY CHECK] from_data keys={from_keys}", flush=True)
-
-        # Try to get the sender's URN (multiple possible formats)
-        sender_urn = None
-
-        # Format 1: Legacy Voyager messaging
-        member = from_data.get("com.linkedin.voyager.messaging.MessagingMember", {})
-        if member:
-            mini = member.get("miniProfile", {})
-            if mini:
-                sender_urn = mini.get("entityUrn", "")
-
-        # Format 2: Dash messaging
-        if not sender_urn:
-            sender_urn = from_data.get("entityUrn", "")
-
-        # Format 3: Direct member field
-        if not sender_urn:
-            member2 = from_data.get("member", "")
-            if member2:
-                sender_urn = member2
-
-        # Format 4: participantUrn
-        if not sender_urn:
-            sender_urn = from_data.get("participantUrn", "")
-
-        print(f"[REPLY CHECK] sender_urn={sender_urn}, contact_urn={contact_urn_id}", flush=True)
-
-        if not sender_urn:
-            # Dump from_data for debugging
-            import json
-            print(f"[REPLY CHECK] FULL from_data={json.dumps(from_data, default=str)[:500]}", flush=True)
-            return False
-
-        # If the sender URN contains the contact's urn_id, they replied
-        replied = contact_urn_id in sender_urn
-        print(f"[REPLY CHECK] Result: replied={replied}", flush=True)
-        return replied
+        print(f"[REPLY CHECK] No reply detected for {contact_urn_id}", flush=True)
+        return False
 
     except Exception as exc:
         print(f"[REPLY CHECK] EXCEPTION for {contact_urn_id}: {exc}", flush=True)

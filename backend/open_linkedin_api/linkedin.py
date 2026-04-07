@@ -1675,8 +1675,10 @@ class Linkedin(object):
     def get_conversation_details(self, profile_urn_id):
         """Fetch conversation (message thread) details for a given LinkedIn profile.
 
-        Tries the legacy messaging API first, then falls back to searching
-        recent conversations from the dash API.
+        Tries multiple strategies since LinkedIn's API endpoints change:
+        1. Scan unfiltered inbox for matching participant
+        2. Direct fetch via constructed conversation URN (dash API)
+        3. Legacy filtered API (often returns 500, kept as fallback)
 
         :param profile_urn_id: LinkedIn URN ID for a profile
         :type profile_urn_id: str
@@ -1684,7 +1686,31 @@ class Linkedin(object):
         :return: Conversation data
         :rtype: dict
         """
-        # Try legacy API first
+        # Normalize target ID for matching (strip urn prefix)
+        if profile_urn_id.startswith("urn:"):
+            target_id = profile_urn_id.split(":")[-1]
+        else:
+            target_id = profile_urn_id
+
+        # Strategy 1: Scan unfiltered inbox
+        try:
+            result = self._find_conversation_in_inbox(target_id)
+            if result:
+                print(f"[CONVO LOOKUP] Found via inbox scan, id={result.get('id')}", flush=True)
+                return result
+        except Exception as e:
+            print(f"[CONVO LOOKUP] Inbox scan failed: {e}", flush=True)
+
+        # Strategy 2: Direct conversation fetch by constructed URN
+        try:
+            result = self._get_conversation_by_urn(profile_urn_id)
+            if result:
+                print(f"[CONVO LOOKUP] Found via direct URN fetch", flush=True)
+                return result
+        except Exception as e:
+            print(f"[CONVO LOOKUP] Direct URN fetch failed: {e}", flush=True)
+
+        # Strategy 3: Legacy filtered API (may return 500)
         try:
             params = {
                 "keyVersion": "LEGACY_INBOX",
@@ -1694,67 +1720,83 @@ class Linkedin(object):
             query = urlencode(params, safe="(),")
             res = self._fetch(f"/messaging/conversations?{query}")
             data = res.json()
-            print(f"[CONVO LOOKUP] Legacy API status={res.status_code} elements={len(data.get('elements', []))}", flush=True)
-
             if data.get("elements"):
                 item = data["elements"][0]
                 item["id"] = get_id_from_urn(item["entityUrn"])
+                print(f"[CONVO LOOKUP] Found via legacy filtered API", flush=True)
                 return item
         except Exception as e:
-            print(f"[CONVO LOOKUP] Legacy API failed: {e}", flush=True)
+            print(f"[CONVO LOOKUP] Legacy filtered API failed: {e}", flush=True)
 
-        # Fallback: search recent conversations via dash API
-        try:
-            result = self._find_conversation_dash(profile_urn_id)
-            print(f"[CONVO LOOKUP] Dash fallback returned: {'found' if result else 'empty'}", flush=True)
-            return result
-        except Exception as e:
-            print(f"[CONVO LOOKUP] Dash fallback failed: {e}", flush=True)
-            return {}
+        print(f"[CONVO LOOKUP] All strategies failed for {profile_urn_id}", flush=True)
+        return {}
 
-    def _find_conversation_dash(self, profile_urn_id: str) -> dict:
-        """Find a conversation with a specific person using the dash messaging API.
+    def _find_conversation_in_inbox(self, target_id: str) -> dict:
+        """Search through unfiltered inbox conversations for a matching participant.
 
-        :param profile_urn_id: LinkedIn URN ID (without urn:li:fsd_profile: prefix)
+        :param target_id: Profile ID to search for (without urn prefix)
+        :return: Conversation dict with 'id' key, or empty dict
+        """
+        params = {"keyVersion": "LEGACY_INBOX"}
+        res = self._fetch("/messaging/conversations", params=params)
+        data = res.json()
+
+        elements = data.get("elements", [])
+        print(f"[CONVO LOOKUP] Inbox scan: {len(elements)} conversations", flush=True)
+
+        for convo in elements:
+            participants = convo.get("participants", [])
+            for p in participants:
+                # Legacy format: MessagingMember with miniProfile
+                member = p.get("com.linkedin.voyager.messaging.MessagingMember", {})
+                if member:
+                    mini = member.get("miniProfile", {})
+                    entity_urn = mini.get("entityUrn", "")
+                    # urn:li:fs_miniProfile:ACoXXX -> compare ACoXXX part
+                    if target_id in entity_urn:
+                        convo["id"] = get_id_from_urn(convo.get("entityUrn", ""))
+                        return convo
+
+                # Alternative: direct participant URNs
+                p_urn = p.get("entityUrn", "") or p.get("participantUrn", "")
+                if target_id in p_urn:
+                    convo["id"] = get_id_from_urn(convo.get("entityUrn", ""))
+                    return convo
+
+        return {}
+
+    def _get_conversation_by_urn(self, profile_urn_id: str) -> dict:
+        """Directly fetch a conversation by constructing its URN from mailbox + contact URN.
+
+        :param profile_urn_id: LinkedIn URN ID (with or without urn prefix)
         :return: Conversation dict with 'id' key, or empty dict
         """
         mailbox_urn = self._get_mailbox_urn()
         if not mailbox_urn:
+            print(f"[CONVO LOOKUP] Cannot get mailbox URN", flush=True)
             return {}
 
-        # Normalize the profile URN for matching
         if not profile_urn_id.startswith("urn:"):
             full_profile_urn = f"urn:li:fsd_profile:{profile_urn_id}"
         else:
             full_profile_urn = profile_urn_id
 
-        # Fetch recent conversations from dash API
-        params = {
-            "decorationId": "com.linkedin.voyager.dash.deco.messaging.FullConversation-2",
-            "q": "search",
-            "count": 20,
-        }
-        try:
-            res = self._fetch(f"/voyagerMessagingDashConversations?{urlencode(params)}")
-            data = res.json()
-        except Exception:
-            # Try alternate endpoint
-            params2 = {"count": 20, "start": 0}
-            res = self._fetch(f"/voyagerMessagingDashConversations", params=params2)
-            data = res.json()
+        # Conversation URN format: urn:li:msg_conversation:(mailbox,recipient)
+        conversation_urn = f"urn:li:msg_conversation:({mailbox_urn},{full_profile_urn})"
+        encoded_urn = quote(conversation_urn, safe="")
 
-        elements = data.get("elements", [])
-        for convo in elements:
-            participants = convo.get("conversationParticipants", [])
-            for p in participants:
-                p_urn = p.get("participantUrn", "") or ""
-                mini = p.get("participantProfile", {}) or {}
-                mini_urn = mini.get("entityUrn", "") or ""
-                if (profile_urn_id in p_urn or profile_urn_id in mini_urn
-                        or full_profile_urn == p_urn or full_profile_urn == mini_urn):
-                    convo_urn = convo.get("entityUrn", "")
-                    convo["id"] = get_id_from_urn(convo_urn) if convo_urn else ""
-                    return convo
+        res = self._fetch(
+            f"/voyagerMessagingDashConversations/{encoded_urn}",
+            params={"decorationId": "com.linkedin.voyager.dash.deco.messaging.FullConversation-2"},
+        )
+        data = res.json()
+
+        # Response may be wrapped in {"data": {...}, "included": [...]}
+        convo = data.get("data", data)
+        if convo and convo.get("entityUrn"):
+            entity_urn = convo["entityUrn"]
+            convo["id"] = get_id_from_urn(entity_urn)
+            return convo
 
         return {}
 
