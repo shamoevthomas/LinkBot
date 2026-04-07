@@ -1694,19 +1694,22 @@ class Linkedin(object):
             query = urlencode(params, safe="(),")
             res = self._fetch(f"/messaging/conversations?{query}")
             data = res.json()
+            print(f"[CONVO LOOKUP] Legacy API status={res.status_code} elements={len(data.get('elements', []))}", flush=True)
 
             if data.get("elements"):
                 item = data["elements"][0]
                 item["id"] = get_id_from_urn(item["entityUrn"])
                 return item
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[CONVO LOOKUP] Legacy API failed: {e}", flush=True)
 
         # Fallback: search recent conversations via dash API
         try:
-            return self._find_conversation_dash(profile_urn_id)
-        except Exception:
-            self.logger.warning("Could not find conversation for %s via dash API", profile_urn_id)
+            result = self._find_conversation_dash(profile_urn_id)
+            print(f"[CONVO LOOKUP] Dash fallback returned: {'found' if result else 'empty'}", flush=True)
+            return result
+        except Exception as e:
+            print(f"[CONVO LOOKUP] Dash fallback failed: {e}", flush=True)
             return {}
 
     def _find_conversation_dash(self, profile_urn_id: str) -> dict:

@@ -296,38 +296,55 @@ async def check_contact_replied(
     contact (not by us).
     """
     try:
+        print(f"[REPLY CHECK] Checking urn_id={contact_urn_id}", flush=True)
+
         convo = await get_conversation_details(client, contact_urn_id)
         if not convo:
-            logger.debug("No conversation found for urn_id=%s", contact_urn_id)
+            print(f"[REPLY CHECK] No conversation found for {contact_urn_id}", flush=True)
             return False
+
+        convo_keys = list(convo.keys())[:15]
+        print(f"[REPLY CHECK] Conversation found, keys={convo_keys}", flush=True)
 
         # --- Method 1: Check lastMessages in dash conversation object ---
         last_messages = convo.get("lastMessages", [])
         if last_messages:
-            last_msg = last_messages[0] if last_messages else None
-            if last_msg:
-                sender = last_msg.get("sender", {})
-                sender_urn = sender.get("entityUrn", "") or sender.get("participantUrn", "") or ""
-                if sender_urn and contact_urn_id in sender_urn:
-                    return True
+            last_msg = last_messages[0]
+            sender = last_msg.get("sender", {})
+            sender_urn = sender.get("entityUrn", "") or sender.get("participantUrn", "") or ""
+            print(f"[REPLY CHECK] Method1 lastMessages sender={sender_urn}", flush=True)
+            if sender_urn and contact_urn_id in sender_urn:
+                print(f"[REPLY CHECK] REPLY DETECTED via lastMessages", flush=True)
+                return True
 
         # --- Method 2: Fetch conversation events (legacy) ---
         convo_id = convo.get("id")
         if not convo_id:
+            print(f"[REPLY CHECK] No conversation id found", flush=True)
             return False
 
+        print(f"[REPLY CHECK] Fetching events for convo_id={convo_id}", flush=True)
         events_data = await get_conversation_events(client, convo_id)
         elements = events_data.get("elements", [])
         if not elements:
+            print(f"[REPLY CHECK] No events found, keys={list(events_data.keys())[:10]}", flush=True)
             return False
+
+        print(f"[REPLY CHECK] Got {len(elements)} events", flush=True)
 
         # Events are ordered by time. The last element is the most recent.
         last_event = elements[-1]
+        last_event_keys = list(last_event.keys())[:15]
+        print(f"[REPLY CHECK] Last event keys={last_event_keys}", flush=True)
 
         # Check who sent the last message.
         from_data = last_event.get("from", {})
         if not from_data:
+            print(f"[REPLY CHECK] No 'from' in last event", flush=True)
             return False
+
+        from_keys = list(from_data.keys()) if isinstance(from_data, dict) else str(type(from_data))
+        print(f"[REPLY CHECK] from_data keys={from_keys}", flush=True)
 
         # Try to get the sender's URN (multiple possible formats)
         sender_urn = None
@@ -353,17 +370,21 @@ async def check_contact_replied(
         if not sender_urn:
             sender_urn = from_data.get("participantUrn", "")
 
+        print(f"[REPLY CHECK] sender_urn={sender_urn}, contact_urn={contact_urn_id}", flush=True)
+
         if not sender_urn:
-            logger.debug("Could not extract sender URN from conversation for urn_id=%s", contact_urn_id)
+            # Dump from_data for debugging
+            import json
+            print(f"[REPLY CHECK] FULL from_data={json.dumps(from_data, default=str)[:500]}", flush=True)
             return False
 
         # If the sender URN contains the contact's urn_id, they replied
         replied = contact_urn_id in sender_urn
-        if replied:
-            logger.info("Reply detected from %s (sender: %s)", contact_urn_id, sender_urn)
+        print(f"[REPLY CHECK] Result: replied={replied}", flush=True)
         return replied
 
-    except Exception:
+    except Exception as exc:
+        print(f"[REPLY CHECK] EXCEPTION for {contact_urn_id}: {exc}", flush=True)
         logger.exception("Error checking reply for urn_id=%s", contact_urn_id)
         return False
 
