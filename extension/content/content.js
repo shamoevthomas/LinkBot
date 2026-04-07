@@ -69,6 +69,26 @@
     const container = messageBtn.parentElement;
     if (!container) return;
 
+    // Find the "..." (More) button — it's the last button/div in the action bar,
+    // typically has aria-label containing "Plus" or "More" or contains only an icon
+    let moreBtn = null;
+    const children = container.children;
+    for (let i = children.length - 1; i >= 0; i--) {
+      const child = children[i];
+      const ariaLabel = (child.getAttribute('aria-label') || '').toLowerCase();
+      const text = child.textContent.trim();
+      // The "..." button has aria-label "Plus"/"More actions" or has no meaningful text
+      if (ariaLabel.includes('plus') || ariaLabel.includes('more') ||
+          (child.tagName === 'DIV' && text.length <= 3 && child.querySelector('svg'))) {
+        moreBtn = child;
+        break;
+      }
+    }
+    // Fallback: use the very last child
+    if (!moreBtn) {
+      moreBtn = container.lastElementChild;
+    }
+
     const btn = document.createElement('button');
     btn.id = BUTTON_ID;
     btn.className = 'linkbot-btn';
@@ -85,8 +105,8 @@
       toggleDropdown(btn);
     });
 
-    // Insert before the last child (the "..." button is always last)
-    container.insertBefore(btn, container.lastElementChild);
+    // Insert right before the "..." button
+    container.insertBefore(btn, moreBtn);
   }
 
   // --- Dropdown ---

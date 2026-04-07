@@ -324,6 +324,53 @@ def is_within_schedule(db_session=None) -> bool:
             db.close()
 
 
+def get_next_schedule_start(db_session=None):
+    """Return the next schedule window start as a timezone-aware UTC datetime.
+
+    If the schedule start is later today, return today at start time.
+    If we're past the window (or in an overnight gap), return tomorrow at start time.
+    """
+    from datetime import datetime as _dt, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo
+    from app.database import SessionLocal
+    from app.models import AppSettings
+
+    db = db_session or SessionLocal()
+    try:
+        start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
+        end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
+        if not start_row or not end_row:
+            return None
+
+        try:
+            start_h, start_m = map(int, start_row.value.split(":"))
+        except (ValueError, AttributeError):
+            return None
+
+        tz_row = db.query(AppSettings).filter(AppSettings.key == "schedule_timezone").first()
+        tz_name = tz_row.value if tz_row and tz_row.value else "Europe/Paris"
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("Europe/Paris")
+
+        now = _dt.now(_tz.utc).astimezone(tz)
+        # Build today's start time in the configured timezone
+        today_start = now.replace(hour=start_h, minute=start_m, second=0, microsecond=0)
+
+        if now < today_start:
+            # Start is later today
+            return today_start.astimezone(_tz.utc)
+        else:
+            # Start is tomorrow
+            return (today_start + timedelta(days=1)).astimezone(_tz.utc)
+    except Exception:
+        return None
+    finally:
+        if not db_session:
+            db.close()
+
+
 def get_global_actions_today(action_types: list, db_session=None) -> int:
     """Count today's successful actions across ALL campaigns."""
     from datetime import datetime as _dt, date as _date

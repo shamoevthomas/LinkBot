@@ -108,8 +108,8 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
     Returns the resolved urn_id or None if all strategies fail.
     Updates contact fields in-place (caller must commit).
     """
-    # Strategy 1: existing urn_id
-    if contact.urn_id:
+    # Strategy 1: existing urn_id (skip if purely numeric – wrong format)
+    if contact.urn_id and not contact.urn_id.isdigit():
         try:
             profile = await get_profile(client, urn_id=contact.urn_id)
             if profile and profile.get("profile_id"):
@@ -129,7 +129,8 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
         try:
             profile = await get_profile(client, public_id=pub_id)
             if profile:
-                new_urn = profile.get("profile_id") or profile.get("urn_id")
+                # Prefer urn_id (fsd_profile format) over profile_id (numeric member ID)
+                new_urn = profile.get("urn_id") or profile.get("profile_id")
                 if new_urn:
                     logger.info("Resolved urn via public_id %s -> %s", pub_id, new_urn)
                     contact.urn_id = new_urn

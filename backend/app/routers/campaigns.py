@@ -75,6 +75,13 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
             paused_reason = "Aucun job programme — redemarrez la campagne"
 
         if not is_within_schedule(db):
+            # Compute next schedule start as next_action_at
+            from app.scheduler import get_next_schedule_start
+            next_start = get_next_schedule_start(db)
+            if next_start:
+                next_action_at = next_start
+            else:
+                next_action_at = None
             paused_reason = "Hors de la fenetre horaire programmee"
         else:
             # Check daily limits
