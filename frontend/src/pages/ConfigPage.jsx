@@ -113,14 +113,14 @@ export default function ConfigPage() {
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    if (tab === 'credentials') getCookiesStatus().then(setCookieStatus).catch(() => {});
-    if (tab === 'settings') getSettings().then(setSettings).catch(() => {});
+    if (tab === 'credentials') getCookiesStatus().then(setCookieStatus).catch(() => toast.error('Erreur chargement cookies'));
+    if (tab === 'settings') getSettings().then(setSettings).catch(() => toast.error('Erreur chargement parametres'));
     if (tab === 'import') {
-      getCRMs().then(setCrms).catch(() => {});
+      getCRMs().then(setCrms).catch(() => toast.error('Erreur chargement CRMs'));
       getImportStatus().then(setImportStatus).catch(() => {});
     }
     if (tab === 'blacklist') loadBlacklist();
-    if (tab === 'logs') getLogs({ page: 1, per_page: 100 }).then((d) => setLogs(d.logs || d || [])).catch(() => {});
+    if (tab === 'logs') getLogs({ page: 1, per_page: 100 }).then((d) => setLogs(d.logs || d || [])).catch(() => toast.error('Erreur chargement logs'));
   }, [tab]);
 
   const loadBlacklist = () => {

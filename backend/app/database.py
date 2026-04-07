@@ -54,6 +54,14 @@ def _run_migrations():
             "DELETE FROM contact WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '5 minutes'"
         )) if is_pg else None
 
+        # Performance indexes (idempotent)
+        for idx_sql in [
+            'CREATE INDEX IF NOT EXISTS ix_cc_campaign_status ON campaign_contact(campaign_id, status)',
+            'CREATE INDEX IF NOT EXISTS ix_campaign_user_status ON campaign(user_id, status)',
+            'CREATE INDEX IF NOT EXISTS ix_action_campaign_created ON campaign_action(campaign_id, created_at)',
+        ]:
+            conn.execute(text(idx_sql))
+
         # Drop old unique constraints that should now be per-user
         if is_pg:
             # These constraint names are PostgreSQL auto-generated defaults

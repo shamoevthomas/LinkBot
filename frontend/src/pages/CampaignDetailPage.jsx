@@ -26,6 +26,26 @@ function ContactStatusBadge({ status }) {
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>;
 }
 
+function CountdownTimer({ nextActionAt, status }) {
+  const [countdown, setCountdown] = useState(null);
+  useEffect(() => {
+    if (!nextActionAt || status !== 'running') { setCountdown(null); return; }
+    const update = () => {
+      const target = new Date(nextActionAt);
+      const diff = Math.max(0, Math.floor((target - new Date()) / 1000));
+      setCountdown(diff);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [nextActionAt, status]);
+  if (countdown === null || countdown === undefined) return null;
+  if (countdown <= 0) return <span>Imminent...</span>;
+  const m = Math.floor(countdown / 60);
+  const s = countdown % 60;
+  return <span>{m > 0 ? `${m} min ${s.toString().padStart(2, '0')} sec` : `${s} sec`}</span>;
+}
+
 function initials(c) {
   return ((c.contact_first_name?.[0] || '') + (c.contact_last_name?.[0] || '')).toUpperCase() || '?';
 }
@@ -50,13 +70,18 @@ export default function CampaignDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
 
+  const abortRef = useRef(null);
   const load = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const [c, a, cc] = await Promise.all([
         getCampaign(id),
         getCampaignActions(id, { page: 1, per_page: 50 }),
-        getCampaignContacts(id).catch(() => []),
+        getCampaignContacts(id),
       ]);
+      if (controller.signal.aborted) return;
       setCampaign(c);
       setActions(a.actions || a || []);
       const statusOrder = { reussi: 0, envoye: 1, perdu: 2, en_attente: 3, pending: 4 };
@@ -66,14 +91,17 @@ export default function CampaignDetailPage() {
         return oa - ob;
       });
       setContacts(sorted);
+    } catch (err) {
+      if (err?.name === 'CanceledError' || controller.signal.aborted) return;
+      toast.error('Erreur chargement campagne');
     } finally { setLoading(false); }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { if (abortRef.current) abortRef.current.abort(); }; }, [load]);
 
   useEffect(() => {
     if (campaign?.status !== 'running') return;
-    const interval = setInterval(load, 5000);
+    const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
   }, [campaign?.status, load]);
 
@@ -114,32 +142,7 @@ export default function CampaignDetailPage() {
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
   };
 
-  // Countdown to next action
-  const [countdown, setCountdown] = useState(null);
-  useEffect(() => {
-    if (!campaign?.next_action_at || campaign.status !== 'running') {
-      setCountdown(null);
-      return;
-    }
-    const update = () => {
-      const now = new Date();
-      const target = new Date(campaign.next_action_at);
-      const diff = Math.max(0, Math.floor((target - now) / 1000));
-      setCountdown(diff);
-    };
-    update();
-    const timer = setInterval(update, 1000);
-    return () => clearInterval(timer);
-  }, [campaign?.next_action_at, campaign?.status]);
-
-  const formatCountdown = (secs) => {
-    if (secs === null || secs === undefined) return null;
-    if (secs <= 0) return 'Imminent...';
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    if (m > 0) return `${m} min ${s.toString().padStart(2, '0')} sec`;
-    return `${s} sec`;
-  };
+  // Countdown extracted to <CountdownTimer /> component
 
   const progress = campaign?.total_target ? Math.round((campaign.total_processed / campaign.total_target) * 100) : 0;
 
@@ -232,12 +235,12 @@ export default function CampaignDetailPage() {
             <span className="text-sm text-amber-700">{campaign.paused_reason}</span>
           </div>
         )}
-        {campaign.status === 'running' && !campaign.paused_reason && countdown !== null && (
+        {campaign.status === 'running' && !campaign.paused_reason && campaign.next_action_at && (
           <div className="flex items-center gap-2 mb-4">
             <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
               <Timer size={16} className="text-indigo-500" />
               <span className="text-sm text-indigo-700">
-                Prochaine action dans <span className="font-bold">{formatCountdown(countdown)}</span>
+                Prochaine action dans <span className="font-bold"><CountdownTimer nextActionAt={campaign.next_action_at} status={campaign.status} /></span>
               </span>
             </div>
             <button onClick={handleRunNow} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors" style={{ background: 'var(--blue)' }}

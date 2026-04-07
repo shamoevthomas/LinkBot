@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
 
-from sqlalchemy import func
+from sqlalchemy import func, case
 from app.dependencies import get_db, get_current_user
 from app.models import User, Campaign, CampaignAction, CampaignMessage, CampaignContact, CRM, Contact, AppSettings
 from app.schemas import (
@@ -32,41 +32,90 @@ from app.scheduler import (
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 
-def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
+# ---------------------------------------------------------------------------
+# Batch helpers — avoid N+1 queries
+# ---------------------------------------------------------------------------
+
+def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
+    """Single GROUP BY query returning CampaignContact stats for all campaigns."""
+    if not campaign_ids:
+        return {}
+    rows = db.query(
+        CampaignContact.campaign_id,
+        func.count(CampaignContact.id).label("total"),
+        func.count(case((CampaignContact.status == "reussi", 1))).label("reussi"),
+        func.count(case((CampaignContact.status == "perdu", 1))).label("perdu"),
+        func.count(case((CampaignContact.main_sent_at.isnot(None), 1))).label("sent"),
+        func.count(case((CampaignContact.status.like("relance_%"), 1))).label("relance"),
+        func.count(case((CampaignContact.status.notin_(["pending", "en_attente"]), 1))).label("messaged"),
+        func.count(case((CampaignContact.status != "pending", 1))).label("not_pending"),
+    ).filter(
+        CampaignContact.campaign_id.in_(campaign_ids)
+    ).group_by(CampaignContact.campaign_id).all()
+
+    return {r.campaign_id: {
+        "total": r.total, "reussi": r.reussi, "perdu": r.perdu,
+        "sent": r.sent, "relance": r.relance,
+        "messaged": r.messaged, "not_pending": r.not_pending,
+    } for r in rows}
+
+_EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0}
+
+
+def _compute_limit_info(db: Session) -> dict:
+    """Pre-compute schedule/limit info (same for all campaigns in a single request)."""
+    from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit, get_next_schedule_start
+
+    settings = {s.key: s.value for s in db.query(AppSettings).filter(
+        AppSettings.key.in_(["max_dms_per_day", "max_connections_per_day"])
+    ).all()}
+
+    within_schedule = is_within_schedule(db)
+    dm_limit = get_effective_daily_limit(int(settings.get("max_dms_per_day", 50)), db)
+    dm_used = get_global_actions_today(["dm_send"], db)
+    conn_limit = get_effective_daily_limit(int(settings.get("max_connections_per_day", 25)), db)
+    conn_used = get_global_actions_today(["connection_request"], db)
+    next_schedule_start = get_next_schedule_start(db) if not within_schedule else None
+
+    return {
+        "within_schedule": within_schedule,
+        "dm_limit": dm_limit, "dm_used": dm_used,
+        "conn_limit": conn_limit, "conn_used": conn_used,
+        "next_schedule_start": next_schedule_start,
+    }
+
+
+def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, limit_info: dict = None) -> CampaignResponse:
+    # Use pre-computed stats or fall back to single-campaign query
+    if stats is None and db:
+        stats = _batch_campaign_stats([c.id], db).get(c.id, _EMPTY_STATS)
+    elif stats is None:
+        stats = _EMPTY_STATS
+
     reply_rate = None
     connection_rate = None
 
     if db and c.type in ("dm", "connection_dm"):
-        total_messaged = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id == c.id,
-            CampaignContact.status.notin_(["pending", "en_attente"]),
-        ).scalar() or 0
-        replied = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id == c.id,
-            CampaignContact.status == "reussi",
-        ).scalar() or 0
-        reply_rate = round(replied / total_messaged * 100, 1) if total_messaged > 0 else 0.0
+        messaged = stats["messaged"]
+        replied = stats["reussi"]
+        reply_rate = round(replied / messaged * 100, 1) if messaged > 0 else 0.0
 
     if db and c.type in ("connection", "connection_dm"):
         if c.type == "connection_dm":
-            total_requests = db.query(func.count(CampaignContact.id)).filter(
-                CampaignContact.campaign_id == c.id,
-                CampaignContact.status != "pending",
-            ).scalar() or 0
-            accepted = db.query(func.count(CampaignContact.id)).filter(
-                CampaignContact.campaign_id == c.id,
-                CampaignContact.status.notin_(["pending", "en_attente"]),
-            ).scalar() or 0
+            total_requests = stats["not_pending"]
+            accepted = stats["messaged"]
             connection_rate = round(accepted / total_requests * 100, 1) if total_requests > 0 else 0.0
         else:
             total = (c.total_succeeded or 0) + (c.total_failed or 0)
             connection_rate = round((c.total_succeeded or 0) / total * 100, 1) if total > 0 else 0.0
 
-    # Get next scheduled action time from APScheduler
+    # Schedule / limit info
     next_action_at = None
     paused_reason = None
     if c.status == "running":
-        from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit
+        if limit_info is None and db:
+            limit_info = _compute_limit_info(db)
+
         nrt = get_campaign_next_run_time(c.id)
         if nrt:
             from datetime import timezone
@@ -74,57 +123,15 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         else:
             paused_reason = "Aucun job programme — redemarrez la campagne"
 
-        if not is_within_schedule(db):
-            # Compute next schedule start as next_action_at
-            from app.scheduler import get_next_schedule_start
-            next_start = get_next_schedule_start(db)
-            if next_start:
-                next_action_at = next_start
-            else:
-                next_action_at = None
+        if limit_info and not limit_info["within_schedule"]:
+            ns = limit_info["next_schedule_start"]
+            next_action_at = ns if ns else None
             paused_reason = "Hors de la fenetre horaire programmee"
-        else:
-            # Check daily limits
-            if c.type in ("dm",):
-                dm_types = ["dm_send"]
-                limit_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
-                limit = get_effective_daily_limit(int(limit_row.value) if limit_row else 50, db)
-                used = get_global_actions_today(dm_types, db)
-                if used >= limit:
-                    paused_reason = f"Limite quotidienne atteinte ({used}/{limit} DMs)"
-            elif c.type in ("connection", "connection_dm"):
-                limit_row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
-                limit = get_effective_daily_limit(int(limit_row.value) if limit_row else 25, db)
-                used = get_global_actions_today(["connection_request"], db)
-                if used >= limit:
-                    paused_reason = f"Limite quotidienne atteinte ({used}/{limit} connexions)"
-
-    # Compute real stats from CampaignContact records
-    real_succeeded = 0
-    real_failed = 0
-    real_processed = c.total_processed or 0
-    real_sent = 0
-    real_relance = 0
-    if db:
-        real_processed = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id == c.id,
-        ).scalar() or 0
-        real_succeeded = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id == c.id,
-            CampaignContact.status == "reussi",
-        ).scalar() or 0
-        real_failed = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id == c.id,
-            CampaignContact.status == "perdu",
-        ).scalar() or 0
-        real_sent = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id == c.id,
-            CampaignContact.main_sent_at.isnot(None),
-        ).scalar() or 0
-        real_relance = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id == c.id,
-            CampaignContact.status.like("relance_%"),
-        ).scalar() or 0
+        elif limit_info:
+            if c.type == "dm" and limit_info["dm_used"] >= limit_info["dm_limit"]:
+                paused_reason = f"Limite quotidienne atteinte ({limit_info['dm_used']}/{limit_info['dm_limit']} DMs)"
+            elif c.type in ("connection", "connection_dm") and limit_info["conn_used"] >= limit_info["conn_limit"]:
+                paused_reason = f"Limite quotidienne atteinte ({limit_info['conn_used']}/{limit_info['conn_limit']} connexions)"
 
     return CampaignResponse(
         id=c.id,
@@ -139,12 +146,12 @@ def _campaign_to_response(c: Campaign, db: Session = None) -> CampaignResponse:
         context_text=c.context_text,
         ai_prompt=c.ai_prompt,
         total_target=c.total_target,
-        total_processed=real_processed,
-        total_succeeded=real_succeeded,
-        total_failed=real_failed,
+        total_processed=stats["total"],
+        total_succeeded=stats["reussi"],
+        total_failed=stats["perdu"],
         total_skipped=c.total_skipped or 0,
-        total_sent=real_sent,
-        total_relance=real_relance,
+        total_sent=stats["sent"],
+        total_relance=stats["relance"],
         max_per_day=c.max_per_day,
         spread_over_days=c.spread_over_days,
         started_at=c.started_at,
@@ -176,7 +183,13 @@ def list_campaigns(
     if campaign_status:
         q = q.filter(Campaign.status == campaign_status)
     q = q.order_by(Campaign.created_at.desc())
-    return [_campaign_to_response(c, db) for c in q.all()]
+    campaigns = q.all()
+    if not campaigns:
+        return []
+    # Batch: 1 query for all stats + 1 query for settings/limits
+    all_stats = _batch_campaign_stats([c.id for c in campaigns], db)
+    limit_info = _compute_limit_info(db)
+    return [_campaign_to_response(c, db, stats=all_stats.get(c.id, _EMPTY_STATS), limit_info=limit_info) for c in campaigns]
 
 
 @router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)

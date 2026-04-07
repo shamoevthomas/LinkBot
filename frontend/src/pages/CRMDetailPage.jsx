@@ -93,7 +93,7 @@ export default function CRMDetailPage() {
       setContacts(contactsData.contacts || []);
       setTotal(contactsData.total || 0);
     } finally { setLoading(false); }
-  }, [id, page, debouncedSearch, statusFilter, headlineSearch, locationSearch, addedAfter, addedBefore, tagFilter]);
+  }, [id, page, perPage, debouncedSearch, statusFilter, headlineSearch, locationSearch, addedAfter, addedBefore, tagFilter]);
 
   useEffect(() => { load(); }, [load]);
 

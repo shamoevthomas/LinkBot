@@ -154,20 +154,26 @@ def list_crms(
 ):
     """List all CRMs with their contact counts."""
     crms = db.query(CRM).filter(CRM.user_id == _user.id).order_by(CRM.created_at.desc()).all()
-    results = []
-    for crm in crms:
-        count = db.query(func.count(Contact.id)).filter(Contact.crm_id == crm.id).scalar() or 0
-        results.append(
-            CRMResponse(
-                id=crm.id,
-                name=crm.name,
-                description=crm.description,
-                contact_count=count,
-                created_at=crm.created_at,
-                updated_at=crm.updated_at,
-            )
+    if not crms:
+        return []
+    # Batch contact counts in 1 query instead of N
+    crm_ids = [c.id for c in crms]
+    counts = dict(
+        db.query(Contact.crm_id, func.count(Contact.id))
+        .filter(Contact.crm_id.in_(crm_ids), Contact.deleted_at.is_(None))
+        .group_by(Contact.crm_id).all()
+    )
+    return [
+        CRMResponse(
+            id=crm.id,
+            name=crm.name,
+            description=crm.description,
+            contact_count=counts.get(crm.id, 0),
+            created_at=crm.created_at,
+            updated_at=crm.updated_at,
         )
-    return results
+        for crm in crms
+    ]
 
 
 @router.post("", response_model=CRMResponse, status_code=status.HTTP_201_CREATED)
