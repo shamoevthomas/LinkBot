@@ -211,11 +211,18 @@ export default function CampaignDetailPage() {
           </div>
         )}
         {campaign.status === 'running' && !campaign.paused_reason && countdown !== null && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg w-fit">
-            <Timer size={16} className="text-indigo-500" />
-            <span className="text-sm text-indigo-700">
-              Prochaine action dans <span className="font-bold">{formatCountdown(countdown)}</span>
-            </span>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <Timer size={16} className="text-indigo-500" />
+              <span className="text-sm text-indigo-700">
+                Prochaine action dans <span className="font-bold">{formatCountdown(countdown)}</span>
+              </span>
+            </div>
+            <button onClick={handleRunNow} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors" style={{ background: 'var(--blue)' }}
+              onMouseOver={e => e.currentTarget.style.opacity = '0.85'} onMouseOut={e => e.currentTarget.style.opacity = '1'}>
+              <Zap size={14} />
+              Faire l'action maintenant
+            </button>
           </div>
         )}
 
