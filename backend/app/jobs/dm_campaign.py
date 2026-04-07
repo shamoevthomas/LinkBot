@@ -11,6 +11,7 @@ Each tick:
 
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
 
 from app.database import SessionLocal
@@ -133,19 +134,43 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     db.commit()
                     continue
 
-                # Render and send follow-up
-                message_body = await _render_message(
-                    campaign, followup_msg.message_template, contact, client
-                )
+                # Render and send follow-up with retry (3 attempts, 1-3 min intervals)
+                send_ok = False
+                last_error = None
+                for attempt in range(1, 4):
+                    try:
+                        message_body = await _render_message(
+                            campaign, followup_msg.message_template, contact, client
+                        )
+                    except Exception as exc:
+                        last_error = f"Render failed: {exc}"
+                        message_body = None
 
-                try:
-                    success = await send_message(client, contact.urn_id, message_body)
-                except Exception as exc:
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "failed", str(exc)[:500])
-                    db.commit()
-                    continue
+                    if not message_body or not message_body.strip():
+                        last_error = last_error or "Empty message"
+                        if attempt < 3:
+                            delay = random.randint(60, 180)
+                            print(f"[DM JOB] Campaign {campaign_id}: followup attempt {attempt}/3 failed for contact {contact.id}, retry in {delay}s", flush=True)
+                            await asyncio.sleep(delay)
+                        continue
 
-                if success:
+                    try:
+                        success = await send_message(client, contact.urn_id, message_body)
+                    except Exception as exc:
+                        last_error = str(exc)[:500]
+                        success = False
+
+                    if success:
+                        send_ok = True
+                        break
+                    else:
+                        last_error = last_error or "LinkedIn returned error"
+                        if attempt < 3:
+                            delay = random.randint(60, 180)
+                            print(f"[DM JOB] Campaign {campaign_id}: followup attempt {attempt}/3 failed for contact {contact.id}, retry in {delay}s", flush=True)
+                            await asyncio.sleep(delay)
+
+                if send_ok:
                     cc.last_sequence_sent = next_seq
                     cc.last_sent_at = datetime.utcnow()
                     cc.status = f"relance_{next_seq}"
@@ -153,7 +178,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "success")
                     logger.info("Campaign %d: followup %d sent to contact %d", campaign_id, next_seq, contact.id)
                 else:
-                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "failed", "LinkedIn returned error")
+                    _log_action(db, campaign_id, contact.id, f"followup_{next_seq}", "failed", f"3 attempts failed: {last_error}")
 
                 db.commit()
                 break  # One send per tick
@@ -261,18 +286,42 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 continue
 
             template = campaign.message_template or ""
-            message_body = await _render_message(campaign, template, contact, client)
 
-            try:
-                success = await send_message(client, contact.urn_id, message_body)
-            except Exception as exc:
-                _log_action(db, campaign_id, contact.id, "dm_send", "failed", str(exc)[:500])
-                campaign.total_processed = (campaign.total_processed or 0) + 1
-                campaign.total_failed = (campaign.total_failed or 0) + 1
-                db.commit()
-                break  # Stop on error — wait for next tick
+            # Retry up to 3 times with 1-3 min intervals
+            send_ok = False
+            last_error = None
+            for attempt in range(1, 4):
+                try:
+                    message_body = await _render_message(campaign, template, contact, client)
+                except Exception as exc:
+                    last_error = f"Render failed: {exc}"
+                    message_body = None
 
-            if success:
+                if not message_body or not message_body.strip():
+                    last_error = last_error or "Empty message (AI generation failed)"
+                    if attempt < 3:
+                        delay = random.randint(60, 180)
+                        print(f"[DM JOB] Campaign {campaign_id}: attempt {attempt}/3 failed for contact {contact.id} (empty message), retry in {delay}s", flush=True)
+                        await asyncio.sleep(delay)
+                    continue
+
+                try:
+                    success = await send_message(client, contact.urn_id, message_body)
+                except Exception as exc:
+                    last_error = str(exc)[:500]
+                    success = False
+
+                if success:
+                    send_ok = True
+                    break
+                else:
+                    last_error = last_error or "LinkedIn returned error"
+                    if attempt < 3:
+                        delay = random.randint(60, 180)
+                        print(f"[DM JOB] Campaign {campaign_id}: attempt {attempt}/3 failed for contact {contact.id} ({last_error[:80]}), retry in {delay}s", flush=True)
+                        await asyncio.sleep(delay)
+
+            if send_ok:
                 cc = CampaignContact(
                     campaign_id=campaign_id,
                     contact_id=contact.id,
@@ -287,9 +336,20 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "dm_send", "success")
                 logger.info("Campaign %d: main DM sent to contact %d", campaign_id, contact.id)
             else:
-                _log_action(db, campaign_id, contact.id, "dm_send", "failed", "LinkedIn returned error")
+                print(f"[DM JOB] Campaign {campaign_id}: all 3 attempts failed for contact {contact.id}, marking perdu", flush=True)
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", f"3 attempts failed: {last_error}")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.add(CampaignContact(
+                    campaign_id=campaign_id, contact_id=contact.id,
+                    status="perdu", last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                ))
+                db.commit()
+                # Wait 4 minutes before trying next contact
+                print(f"[DM JOB] Campaign {campaign_id}: cooling down 4 min before next contact", flush=True)
+                await asyncio.sleep(240)
+                continue
 
             db.commit()
             break  # Sent one real message — wait for next tick
