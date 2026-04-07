@@ -1698,7 +1698,7 @@ class Linkedin(object):
 
         encoded_urn = quote(mailbox_urn, safe="")
         query_id = "messengerConversations.0d5e6781bbee71c3e51c8843c6519f48"
-        variables = f"(mailboxUrn:{encoded_urn})"
+        variables = f"(mailboxUrn:{encoded_urn},count:40)"
 
         res = self._fetch(
             f"/voyagerMessagingGraphQL/graphql?queryId={query_id}&variables={variables}",

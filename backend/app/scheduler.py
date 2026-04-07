@@ -23,6 +23,10 @@ _shutdown = False
 _last_sync_connections: Optional[datetime] = None
 SYNC_CONNECTIONS_INTERVAL = 6 * 3600  # 6 hours
 
+# Reply checker tracking (runs every 5 minutes)
+_last_reply_check: Optional[datetime] = None
+REPLY_CHECK_INTERVAL = 300  # 5 minutes
+
 
 # ---------------------------------------------------------------------------
 # Campaign job runner
@@ -58,13 +62,24 @@ async def _run_sync_connections():
         logger.exception("Error in sync_connections")
 
 
+async def _run_reply_checks():
+    """Run reply detection for all running DM campaigns."""
+    global _last_reply_check
+    try:
+        from app.jobs.reply_checker import run_reply_checks
+        await run_reply_checks()
+        _last_reply_check = datetime.utcnow()
+    except Exception:
+        logger.exception("Error in reply checker")
+
+
 # ---------------------------------------------------------------------------
 # Main background loop
 # ---------------------------------------------------------------------------
 
 async def _main_loop():
     """Background loop that checks and runs campaign jobs."""
-    global _shutdown, _last_sync_connections
+    global _shutdown, _last_sync_connections, _last_reply_check
     print("[SCHEDULER] Main loop started", flush=True)
 
     # Run sync_connections once at startup (after 30s delay)
@@ -79,6 +94,11 @@ async def _main_loop():
             if (_last_sync_connections is None or
                     (now - _last_sync_connections).total_seconds() >= SYNC_CONNECTIONS_INTERVAL):
                 await _run_sync_connections()
+
+            # Check replies (every 5 minutes)
+            if (_last_reply_check is None or
+                    (now - _last_reply_check).total_seconds() >= REPLY_CHECK_INTERVAL):
+                await _run_reply_checks()
 
             # Check each registered campaign
             for cid, info in list(_campaigns.items()):

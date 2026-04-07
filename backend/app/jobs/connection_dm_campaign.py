@@ -205,43 +205,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     _log_action(db, campaign_id, contact.id, "dm_send", "failed", "LinkedIn returned error")
                 db.commit()
 
-        # =====================================================================
-        # PHASE 3: Check replies for contacts in DM cycle
-        # =====================================================================
-        active_contacts = (
-            db.query(CampaignContact)
-            .filter(
-                CampaignContact.campaign_id == campaign_id,
-                CampaignContact.status.in_(ACTIVE_STATUSES),
-                CampaignContact.last_sequence_sent >= 0,
-            )
-            .order_by(CampaignContact.last_checked_at.asc().nullsfirst())
-            .limit(5)
-            .all()
-        )
-
-        for cc in active_contacts:
-            contact = db.query(Contact).filter(Contact.id == cc.contact_id).first()
-            if not contact:
-                continue
-            try:
-                replied = await check_contact_replied(client, contact.urn_id)
-            except Exception:
-                replied = False
-
-            cc.last_checked_at = datetime.utcnow()
-            if replied:
-                cc.status = "reussi"
-                cc.replied_at = datetime.utcnow()
-                campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
-                contact.last_interaction_at = datetime.utcnow()
-                _log_action(db, campaign_id, contact.id, "reply_detected", "success")
-                create_notification(db, campaign.user_id, "reply_received",
-                    f"{contact.first_name} {contact.last_name} a repondu",
-                    f"Campagne \"{campaign.name}\"")
-                logger.info("Campaign %d: reply detected from contact %d", campaign_id, contact.id)
-
-        db.commit()
+        # NOTE: Reply checking moved to reply_checker.py (runs every 5 min)
 
         # =====================================================================
         # PHASE 4: Send follow-ups where delay has been reached
