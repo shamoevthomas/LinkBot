@@ -399,15 +399,15 @@ export default function ConfigPage() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-900">Plage horaire</h3>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={settings.schedule_enabled === 'true' || settings.schedule_enabled === true}
+                  <input type="checkbox" checked={String(settings.schedule_enabled).toLowerCase() === 'true'}
                     onChange={(e) => setSettings({ ...settings, schedule_enabled: e.target.checked ? 'true' : 'false' })}
                     className="sr-only peer" />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
-                    style={{ backgroundColor: (settings.schedule_enabled === 'true' || settings.schedule_enabled === true) ? 'var(--blue)' : undefined }}></div>
+                    style={{ backgroundColor: (String(settings.schedule_enabled).toLowerCase() === 'true') ? 'var(--blue)' : undefined }}></div>
                 </label>
               </div>
 
-              {(settings.schedule_enabled === 'true' || settings.schedule_enabled === true) ? (
+              {(String(settings.schedule_enabled).toLowerCase() === 'true') ? (
                 <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <p className="text-xs text-gray-500">Les campagnes ne s'exécutent que pendant cette plage. Les actions sont espacées automatiquement et aléatoirement pour simuler un comportement humain.</p>
                   <div className="mb-3">
@@ -480,15 +480,15 @@ export default function ConfigPage() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-900">Warm-up progressif</h3>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={settings.warmup_enabled === 'true' || settings.warmup_enabled === true}
+                  <input type="checkbox" checked={String(settings.warmup_enabled).toLowerCase() === 'true'}
                     onChange={(e) => setSettings({ ...settings, warmup_enabled: e.target.checked ? 'true' : 'false' })}
                     className="sr-only peer" />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
-                    style={{ backgroundColor: (settings.warmup_enabled === 'true' || settings.warmup_enabled === true) ? 'var(--blue)' : undefined }}></div>
+                    style={{ backgroundColor: (String(settings.warmup_enabled).toLowerCase() === 'true') ? 'var(--blue)' : undefined }}></div>
                 </label>
               </div>
               <p className="text-xs text-gray-500 mb-3">Augmente progressivement le nombre d'actions par jour pour eviter la detection. La limite quotidienne monte lineairement de la limite de depart vers la limite cible sur la duree configuree.</p>
-              {(settings.warmup_enabled === 'true' || settings.warmup_enabled === true) && (
+              {(String(settings.warmup_enabled).toLowerCase() === 'true') && (
                 <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Limite de depart (actions/jour)</label>
