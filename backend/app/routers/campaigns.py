@@ -49,6 +49,7 @@ def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
         func.count(case((CampaignContact.status.like("relance_%"), 1))).label("relance"),
         func.count(case((CampaignContact.status.notin_(["pending", "en_attente"]), 1))).label("messaged"),
         func.count(case((CampaignContact.status != "pending", 1))).label("not_pending"),
+        func.count(case((CampaignContact.status == "demande_envoyee", 1))).label("demande_envoyee"),
     ).filter(
         CampaignContact.campaign_id.in_(campaign_ids)
     ).group_by(CampaignContact.campaign_id).all()
@@ -57,9 +58,10 @@ def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
         "total": r.total, "reussi": r.reussi, "perdu": r.perdu,
         "sent": r.sent, "relance": r.relance,
         "messaged": r.messaged, "not_pending": r.not_pending,
+        "demande_envoyee": r.demande_envoyee,
     } for r in rows}
 
-_EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0}
+_EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0, "demande_envoyee": 0}
 
 
 def _compute_limit_info(db: Session) -> dict:
@@ -98,16 +100,17 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
     if db and c.type in ("dm", "connection_dm"):
         messaged = stats["messaged"]
         replied = stats["reussi"]
-        reply_rate = round(replied / messaged * 100, 1) if messaged > 0 else 0.0
+        reply_rate = round(replied / messaged * 100, 1) if messaged > 0 else None
 
     if db and c.type in ("connection", "connection_dm"):
         if c.type == "connection_dm":
             total_requests = stats["not_pending"]
             accepted = stats["messaged"]
-            connection_rate = round(accepted / total_requests * 100, 1) if total_requests > 0 else 0.0
+            connection_rate = round(accepted / total_requests * 100, 1) if total_requests > 0 else None
         else:
-            total = (c.total_succeeded or 0) + (c.total_failed or 0)
-            connection_rate = round((c.total_succeeded or 0) / total * 100, 1) if total > 0 else 0.0
+            sent = stats["demande_envoyee"] + stats["reussi"]
+            accepted = stats["reussi"]
+            connection_rate = round(accepted / sent * 100, 1) if sent > 0 else None
 
     # Schedule / limit info
     next_action_at = None
@@ -133,6 +136,10 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
             elif c.type in ("connection", "connection_dm") and limit_info["conn_used"] >= limit_info["conn_limit"]:
                 paused_reason = f"Limite quotidienne atteinte ({limit_info['conn_used']}/{limit_info['conn_limit']} connexions)"
 
+    # Search campaigns use Campaign model counters (no CampaignContact rows)
+    # DM/connection_dm/connection campaigns use CampaignContact-based stats
+    uses_campaign_contacts = c.type in ("dm", "connection_dm", "connection")
+
     return CampaignResponse(
         id=c.id,
         name=c.name,
@@ -146,12 +153,12 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
         context_text=c.context_text,
         ai_prompt=c.ai_prompt,
         total_target=c.total_target,
-        total_processed=stats["total"],
-        total_succeeded=stats["reussi"],
-        total_failed=stats["perdu"],
+        total_processed=stats["total"] if uses_campaign_contacts else (c.total_processed or 0),
+        total_succeeded=(stats["demande_envoyee"] + stats["reussi"]) if c.type == "connection" else (stats["reussi"] if uses_campaign_contacts else (c.total_succeeded or 0)),
+        total_failed=stats["perdu"] if uses_campaign_contacts else (c.total_failed or 0),
         total_skipped=c.total_skipped or 0,
-        total_sent=stats["sent"],
-        total_relance=stats["relance"],
+        total_sent=stats["reussi"] if c.type == "connection" else (stats["sent"] if uses_campaign_contacts else 0),
+        total_relance=stats["relance"] if uses_campaign_contacts else 0,
         max_per_day=c.max_per_day,
         spread_over_days=c.spread_over_days,
         started_at=c.started_at,

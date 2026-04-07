@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 
 from app.database import SessionLocal
-from app.models import Campaign, CampaignAction, Contact, AppSettings, User, Blacklist
+from app.models import Campaign, CampaignAction, CampaignContact, Contact, AppSettings, User, Blacklist
 from app.linkedin_service import get_linkedin_client, send_connection_request, resolve_contact_urn
 from app.utils.template_engine import render_template
 from app.utils.ai_message import generate_personalized_message
@@ -172,6 +172,12 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign.id, contact.id, "connection_request", "failed", str(exc)[:500])
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
+                # Track in CampaignContact
+                db.add(CampaignContact(
+                    campaign_id=campaign.id, contact_id=contact.id,
+                    status="perdu", last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(),
+                ))
                 db.commit()
                 # Stop on error — wait for next tick
                 break
@@ -189,6 +195,13 @@ async def run_connection_campaign(campaign_id: int) -> None:
             _log_action(db, campaign.id, contact.id, "connection_request", "success")
             campaign.total_processed = (campaign.total_processed or 0) + 1
             campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
+
+            # Track in CampaignContact for status display
+            db.add(CampaignContact(
+                campaign_id=campaign.id, contact_id=contact.id,
+                status="demande_envoyee", last_sequence_sent=0,
+                main_sent_at=datetime.utcnow(),
+            ))
 
             # Check completion
             if campaign.total_target and campaign.total_processed >= campaign.total_target:

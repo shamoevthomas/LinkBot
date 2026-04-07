@@ -161,10 +161,15 @@ export default function CampaignsPage() {
                     <span className="text-emerald-600 font-medium">Repondu: {c.total_succeeded}</span>
                     <span>Perdu: {c.total_failed}</span>
                   </>
+                ) : c.type === 'connection' ? (
+                  <>
+                    <span className="text-sky-600 font-medium">Envoyees: {c.total_succeeded}</span>
+                    <span className="text-emerald-600 font-medium">Acceptees: {c.total_sent}</span>
+                    <span>Echouees: {c.total_failed}</span>
+                  </>
                 ) : (
                   <>
-                    <span>Reussis: {c.total_succeeded}</span>
-                    <span>Echoues: {c.total_failed}</span>
+                    <span>Trouves: {c.total_succeeded}</span>
                     <span>Ignores: {c.total_skipped}</span>
                   </>
                 )}

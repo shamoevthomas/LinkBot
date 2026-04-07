@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 const STATUS_CONFIG = {
   pending: { label: 'En attente', color: 'bg-gray-100 text-gray-600' },
   en_attente: { label: 'Connexion en attente', color: 'bg-yellow-100 text-yellow-700' },
+  demande_envoyee: { label: 'Demande envoyee', color: 'bg-sky-100 text-sky-700' },
   envoye: { label: 'Envoye', color: 'bg-blue-100 text-blue-700' },
   relance_1: { label: 'Relance 1', color: 'bg-amber-100 text-amber-700' },
   relance_2: { label: 'Relance 2', color: 'bg-amber-100 text-amber-700' },
@@ -83,7 +84,7 @@ export default function CampaignDetailPage() {
       if (controller.signal.aborted) return;
       setCampaign(c);
       setActions(a.actions || a || []);
-      const statusOrder = { reussi: 0, envoye: 1, perdu: 2, en_attente: 3, pending: 4 };
+      const statusOrder = { reussi: 0, envoye: 1, demande_envoyee: 1, perdu: 2, en_attente: 3, pending: 4 };
       const sorted = (cc || []).sort((a, b) => {
         const oa = a.status?.startsWith('relance_') ? 1 : (statusOrder[a.status] ?? 2);
         const ob = b.status?.startsWith('relance_') ? 1 : (statusOrder[b.status] ?? 2);
@@ -144,6 +145,7 @@ export default function CampaignDetailPage() {
 
   // Stats from contacts
   const isSearch = campaign?.type === 'search';
+  const isConnection = campaign?.type === 'connection';
   const isConnectionDM = campaign?.type === 'connection_dm';
   const statsFromContacts = {
     en_attente: contacts.filter(c => c.status === 'en_attente').length,
@@ -254,24 +256,24 @@ export default function CampaignDetailPage() {
         )}
 
 
-        {/* Rates */}
-        {(showReplyRate || showConnectionRate) && (
+        {/* Rates — only show when there's actual data */}
+        {((showConnectionRate && campaign.connection_rate != null) || (showReplyRate && campaign.reply_rate != null)) && (
           <div className="flex gap-4 mb-6">
-            {showConnectionRate && (
+            {showConnectionRate && campaign.connection_rate != null && (
               <div className="flex items-center gap-2 bg-sky-50 border border-sky-200 rounded-lg px-4 py-2.5">
                 <UserCheck size={18} className="text-sky-600" />
                 <div>
                   <p className="text-xs text-sky-600 font-medium">Taux de connexion</p>
-                  <p className="text-xl font-bold text-sky-700">{campaign.connection_rate ?? 0}%</p>
+                  <p className="text-xl font-bold text-sky-700">{campaign.connection_rate}%</p>
                 </div>
               </div>
             )}
-            {showReplyRate && (
+            {showReplyRate && campaign.reply_rate != null && (
               <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
                 <MessageSquare size={18} className="text-emerald-600" />
                 <div>
                   <p className="text-xs text-emerald-600 font-medium">Taux de reponse</p>
-                  <p className="text-xl font-bold text-emerald-700">{campaign.reply_rate ?? 0}%</p>
+                  <p className="text-xl font-bold text-emerald-700">{campaign.reply_rate}%</p>
                 </div>
               </div>
             )}
@@ -294,6 +296,29 @@ export default function CampaignDetailPage() {
               <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2"><Zap size={20} /></div>
               <div className="text-2xl font-bold text-gray-900">{campaign.total_target || '-'}</div>
               <div className="text-xs text-gray-500">Objectif</div>
+            </div>
+          </div>
+        ) : isConnection ? (
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-white rounded-lg border border-gray-100 p-4">
+              <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center mb-2"><UserCheck size={20} /></div>
+              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'demande_envoyee').length}</div>
+              <div className="text-xs text-gray-500">Demandes envoyees</div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-100 p-4">
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2"><CheckCircle size={20} /></div>
+              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'reussi').length}</div>
+              <div className="text-xs text-gray-500">Acceptees</div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-100 p-4">
+              <div className="w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center mb-2"><AlertCircle size={20} /></div>
+              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'perdu').length}</div>
+              <div className="text-xs text-gray-500">Echouees</div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-100 p-4">
+              <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center mb-2"><Clock size={20} /></div>
+              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'pending').length}</div>
+              <div className="text-xs text-gray-500">En attente</div>
             </div>
           </div>
         ) : contacts.length > 0 ? (
@@ -355,7 +380,7 @@ export default function CampaignDetailPage() {
       </div>
 
       {/* Tabs */}
-      {(contacts.length > 0 || isSearch) && (
+      {(contacts.length > 0 || isSearch || isConnection) && (
         <div className="flex items-center justify-between mb-4">
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
             <button onClick={() => setTab('contacts')}
@@ -367,7 +392,7 @@ export default function CampaignDetailPage() {
               Journal
             </button>
           </div>
-          {tab === 'contacts' && !isSearch && (
+          {tab === 'contacts' && !isSearch && !isConnection && (
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               <button onClick={() => setViewMode('table')}
                 className={`p-1.5 rounded-md ${viewMode === 'table' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}>
@@ -441,6 +466,12 @@ export default function CampaignDetailPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Titre</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">LinkedIn</th>
                   </>
+                ) : isConnection ? (
+                  <>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Demande envoyee le</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">LinkedIn</th>
+                  </>
                 ) : (
                   <>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
@@ -485,6 +516,23 @@ export default function CampaignDetailPage() {
                         ) : '-'}
                       </td>
                     </>
+                  ) : isConnection ? (
+                    <>
+                      <td className="px-4 py-3"><ContactStatusBadge status={cc.status} /></td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(cc.main_sent_at)}</td>
+                      <td className="px-4 py-3">
+                        {cc.contact_linkedin_url ? (
+                          <a href={cc.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                            style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}
+                            onMouseOver={e => e.currentTarget.style.background = 'rgba(0,132,255,0.15)'}
+                            onMouseOut={e => e.currentTarget.style.background = 'rgba(0,132,255,0.08)'}>
+                            <ExternalLink size={13} /> Profil
+                          </a>
+                        ) : '-'}
+                      </td>
+                    </>
                   ) : (
                     <>
                       <td className="px-4 py-3"><ContactStatusBadge status={cc.status} /></td>
@@ -505,7 +553,7 @@ export default function CampaignDetailPage() {
       )}
 
       {/* Actions tab (or default for non-DM campaigns) */}
-      {(tab === 'actions' || (!isSearch && contacts.length === 0)) && (
+      {(tab === 'actions' || (!isSearch && !isConnection && contacts.length === 0)) && (
         <div className="g-card overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200">
             <h3 className="font-semibold text-gray-900">Journal d'actions</h3>
@@ -590,7 +638,7 @@ export default function CampaignDetailPage() {
                     </a>
                   )}
                 </div>
-                {selectedContact.status !== 'pending' && (
+                {selectedContact.status !== 'pending' && !isSearch && !isConnection && (
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <select
                       value={selectedContact.status}
@@ -617,32 +665,49 @@ export default function CampaignDetailPage() {
               </div>
 
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <span className="text-gray-400">Message envoye</span>
-                    <p className="font-medium text-gray-700 mt-0.5">
-                      {fmtDate(selectedContact.main_sent_at)}
-                    </p>
+                {isConnection ? (
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <span className="text-gray-400">Demande envoyee le</span>
+                      <p className="font-medium text-gray-700 mt-0.5">
+                        {fmtDate(selectedContact.main_sent_at)}
+                      </p>
+                    </div>
+                    <div className={`rounded-lg p-3 ${selectedContact.status === 'reussi' ? 'bg-emerald-50' : 'bg-gray-50'}`}>
+                      <span className={selectedContact.status === 'reussi' ? 'text-emerald-500' : 'text-gray-400'}>Acceptee</span>
+                      <p className={`font-medium mt-0.5 ${selectedContact.status === 'reussi' ? 'text-emerald-700' : 'text-gray-700'}`}>
+                        {selectedContact.status === 'reussi' ? 'Oui' : 'Pas encore'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <span className="text-gray-400">Dernier envoi</span>
-                    <p className="font-medium text-gray-700 mt-0.5">
-                      {fmtDate(selectedContact.last_sent_at)}
-                    </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <span className="text-gray-400">Message envoye</span>
+                      <p className="font-medium text-gray-700 mt-0.5">
+                        {fmtDate(selectedContact.main_sent_at)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <span className="text-gray-400">Dernier envoi</span>
+                      <p className="font-medium text-gray-700 mt-0.5">
+                        {fmtDate(selectedContact.last_sent_at)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <span className="text-gray-400">Relances envoyees</span>
+                      <p className="font-medium text-gray-700 mt-0.5">
+                        {selectedContact.last_sequence_sent > 0 ? selectedContact.last_sequence_sent : '0'}
+                      </p>
+                    </div>
+                    <div className={`rounded-lg p-3 ${selectedContact.replied_at ? 'bg-emerald-50' : 'bg-gray-50'}`}>
+                      <span className={selectedContact.replied_at ? 'text-emerald-500' : 'text-gray-400'}>Repondu le</span>
+                      <p className={`font-medium mt-0.5 ${selectedContact.replied_at ? 'text-emerald-700' : 'text-gray-700'}`}>
+                        {selectedContact.replied_at ? fmtDate(selectedContact.replied_at) : 'Pas encore'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <span className="text-gray-400">Relances envoyees</span>
-                    <p className="font-medium text-gray-700 mt-0.5">
-                      {selectedContact.last_sequence_sent > 0 ? selectedContact.last_sequence_sent : '0'}
-                    </p>
-                  </div>
-                  <div className={`rounded-lg p-3 ${selectedContact.replied_at ? 'bg-emerald-50' : 'bg-gray-50'}`}>
-                    <span className={selectedContact.replied_at ? 'text-emerald-500' : 'text-gray-400'}>Repondu le</span>
-                    <p className={`font-medium mt-0.5 ${selectedContact.replied_at ? 'text-emerald-700' : 'text-gray-700'}`}>
-                      {selectedContact.replied_at ? fmtDate(selectedContact.replied_at) : 'Pas encore'}
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>

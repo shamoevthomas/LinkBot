@@ -9,13 +9,47 @@ import asyncio
 import logging
 
 from app.database import SessionLocal
-from app.models import CRM, Campaign, Contact, User
+from datetime import datetime
+from app.models import CRM, Campaign, CampaignContact, Contact, User
 from app.linkedin_service import get_linkedin_client, validate_cookies
 from app.routers.notifications import create_notification
 from app.scheduler import pause_campaign_job
 from app.utils.sync_lock import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
+
+
+def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> int:
+    """Update CampaignContact records from 'demande_envoyee' to 'reussi' for accepted connections."""
+    if not connected_urns:
+        return 0
+
+    # Find contacts with these URNs in the user's CRMs
+    user_crm_ids = [r[0] for r in db.query(CRM.id).filter(CRM.user_id == user_id).all()]
+    if not user_crm_ids:
+        return 0
+
+    contact_ids = set(
+        r[0] for r in
+        db.query(Contact.id)
+        .filter(Contact.crm_id.in_(user_crm_ids), Contact.urn_id.in_(connected_urns))
+        .all()
+    )
+    if not contact_ids:
+        return 0
+
+    # Find pending connection CampaignContact records
+    pending_ccs = db.query(CampaignContact).filter(
+        CampaignContact.contact_id.in_(contact_ids),
+        CampaignContact.status == "demande_envoyee",
+    ).all()
+
+    now = datetime.utcnow()
+    for cc in pending_ccs:
+        cc.status = "reussi"
+        cc.connection_accepted_at = now
+
+    return len(pending_ccs)
 
 
 async def sync_new_connections() -> None:
@@ -94,12 +128,16 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
             existing_urns.add(person_urn)
             total_new += 1
 
+        # Mark accepted connections in campaign tracking
+        all_urns = set(p.get("urn_id") for p in all_connections if p.get("urn_id"))
+        accepted = _mark_accepted_campaign_contacts(db, all_urns, user_id)
+
         try:
             db.commit()
         except Exception:
             db.rollback()
 
-        print(f"[SYNC] User {user_id}: added {total_new} new connections", flush=True)
+        print(f"[SYNC] User {user_id}: added {total_new} new connections, {accepted} campaign invitations accepted", flush=True)
 
     except Exception:
         logger.exception("sync_connections: unexpected error for user %d", user_id)
@@ -185,9 +223,12 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
             for contact in contacts_to_update:
                 contact.connection_status = "connected"
                 updated += 1
+
+            # Mark accepted connections in campaign tracking
+            accepted = _mark_accepted_campaign_contacts(db, all_connection_urns, user_id) if user_id else 0
             db.commit()
 
-        print(f"[SYNC] Manual sync done for user {user_id}: {total_new} new in Mon Réseau, {updated} statuses updated", flush=True)
+        print(f"[SYNC] Manual sync done for user {user_id}: {total_new} new, {updated} statuses updated, {accepted} campaign invitations accepted", flush=True)
 
     except Exception:
         logger.exception("sync_and_update: unexpected error")

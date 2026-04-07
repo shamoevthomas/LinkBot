@@ -531,6 +531,23 @@ class Linkedin(object):
                 == "OUT_OF_NETWORK"
             ):
                 continue
+            # Extract profile picture URL from search result image data
+            picture_url = None
+            image = item.get("image") or {}
+            for attr in (image.get("attributes") or []):
+                detail = attr.get("detailData") or attr.get("detail") or {}
+                pic = detail.get("nonEntityProfilePicture") or detail.get("profilePicture") or {}
+                vec = pic.get("vectorImage") or {}
+                root = vec.get("rootUrl", "")
+                artifacts = vec.get("artifacts") or []
+                if root and artifacts:
+                    # Pick the largest available artifact
+                    best = max(artifacts, key=lambda a: a.get("width", 0))
+                    seg = best.get("fileIdentifyingUrlPathSegment", "")
+                    if seg:
+                        picture_url = f"{root}{seg}"
+                        break
+
             results.append(
                 {
                     "urn_id": get_id_from_urn(
@@ -543,6 +560,7 @@ class Linkedin(object):
                     "location": (item.get("secondarySubtitle") or {}).get("text", None),
                     "name": (item.get("title") or {}).get("text", None),
                     "navigation_url": item.get("navigationUrl", None),
+                    "picture_url": picture_url,
                 }
             )
 
