@@ -39,22 +39,25 @@ def _wait_for_rate_limit():
 
 
 def _gemini_post(json_body: dict, timeout: int = 30) -> requests.Response:
-    """POST to Gemini with rate limiting and 429 retry (1 retry after 10s)."""
-    _wait_for_rate_limit()
-    resp = requests.post(
-        f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-        json=json_body,
-        timeout=timeout,
-    )
-    if resp.status_code == 429:
-        logger.info("[GEMINI] 429 received, retrying in 10s")
-        time.sleep(10)
+    """POST to Gemini with rate limiting and retry on 429/503 (up to 3 attempts)."""
+    for attempt in range(3):
         _wait_for_rate_limit()
         resp = requests.post(
             f"{GEMINI_URL}?key={GEMINI_API_KEY}",
             json=json_body,
             timeout=timeout,
         )
+        if resp.status_code == 429:
+            wait = 10 if attempt == 0 else 20
+            logger.info(f"[GEMINI] 429 received, retrying in {wait}s (attempt {attempt + 1}/3)")
+            time.sleep(wait)
+            continue
+        if resp.status_code == 503:
+            wait = 5 * (attempt + 1)  # 5s, 10s, 15s
+            logger.info(f"[GEMINI] 503 received, retrying in {wait}s (attempt {attempt + 1}/3)")
+            time.sleep(wait)
+            continue
+        return resp
     return resp
 
 
