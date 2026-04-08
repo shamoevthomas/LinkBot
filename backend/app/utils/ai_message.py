@@ -3,6 +3,9 @@ Generate personalized messages using Google Gemini 2.5 Flash (free tier).
 """
 
 import logging
+import time
+import threading
+from collections import deque
 import requests
 from typing import Dict, Any, List, Optional
 
@@ -11,6 +14,28 @@ from app.config import GEMINI_API_KEY
 logger = logging.getLogger(__name__)
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+# ---------------------------------------------------------------------------
+# Rate limiter — 14 RPM max to stay safely under Google free tier (15 RPM)
+# ---------------------------------------------------------------------------
+_rate_lock = threading.Lock()
+_request_timestamps: deque = deque()
+_MAX_RPM = 14  # stay 1 under the 15 RPM limit
+
+
+def _wait_for_rate_limit():
+    """Block until we can make a request without exceeding 14 RPM."""
+    with _rate_lock:
+        now = time.monotonic()
+        # Remove timestamps older than 60s
+        while _request_timestamps and _request_timestamps[0] < now - 60:
+            _request_timestamps.popleft()
+        if len(_request_timestamps) >= _MAX_RPM:
+            wait = 60 - (now - _request_timestamps[0]) + 0.5
+            if wait > 0:
+                logger.info(f"[RATE LIMIT] Waiting {wait:.1f}s to stay under {_MAX_RPM} RPM")
+                time.sleep(wait)
+        _request_timestamps.append(time.monotonic())
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +229,7 @@ EXEMPLES DE BON RESULTAT:
 """
 
     try:
+        _wait_for_rate_limit()
         resp = requests.post(
             f"{GEMINI_URL}?key={GEMINI_API_KEY}",
             json={
@@ -267,6 +293,7 @@ REGLES:
 - Max {max_length} caracteres"""
 
     try:
+        _wait_for_rate_limit()
         resp = requests.post(
             f"{GEMINI_URL}?key={GEMINI_API_KEY}",
             json={
@@ -363,6 +390,7 @@ CONTENT:
 (etc.)"""
 
     try:
+        _wait_for_rate_limit()
         resp = requests.post(
             f"{GEMINI_URL}?key={GEMINI_API_KEY}",
             json={
@@ -472,6 +500,7 @@ CONTENT:
 Write ONLY the formatted messages, nothing else."""
 
     try:
+        _wait_for_rate_limit()
         resp = requests.post(
             f"{GEMINI_URL}?key={GEMINI_API_KEY}",
             json={
@@ -538,6 +567,7 @@ Write ONLY the formatted messages, nothing else."""
 def is_ollama_available() -> bool:
     """Check if Gemini API is available."""
     try:
+        _wait_for_rate_limit()
         resp = requests.post(
             f"{GEMINI_URL}?key={GEMINI_API_KEY}",
             json={"contents": [{"parts": [{"text": "ok"}]}]},
