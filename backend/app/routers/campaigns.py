@@ -563,6 +563,8 @@ def update_campaign(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     if "name" in body:
         campaign.name = body["name"]
+    if "error_message" in body:
+        campaign.error_message = body["error_message"]
     db.commit()
     db.refresh(campaign)
     return _campaign_to_response(campaign, db)

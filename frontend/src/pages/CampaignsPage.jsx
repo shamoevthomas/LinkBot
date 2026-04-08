@@ -125,9 +125,17 @@ export default function CampaignsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {campaigns.map((c) => (
+          {[...campaigns].sort((a, b) => {
+            const finished = ['completed', 'cancelled', 'failed'];
+            const aFinished = finished.includes(a.status) ? 1 : 0;
+            const bFinished = finished.includes(b.status) ? 1 : 0;
+            return aFinished - bFinished;
+          }).map((c) => {
+            const isFinished = ['completed', 'cancelled', 'failed'].includes(c.status);
+            return (
             <div key={c.id} onClick={() => navigate(`/dashboard/campaigns/${c.id}`)}
-              className="g-card cursor-pointer p-5">
+              className="g-card cursor-pointer p-5"
+              style={isFinished ? { opacity: 0.5, filter: 'grayscale(0.6)' } : undefined}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <h3 className="font-semibold text-gray-900">{c.name}</h3>
@@ -177,7 +185,8 @@ export default function CampaignsPage() {
                 {c.reply_rate != null && <span className="text-emerald-600 font-medium">Reponse: {c.reply_rate}%</span>}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

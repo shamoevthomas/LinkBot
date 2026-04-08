@@ -251,7 +251,19 @@ export default function CampaignDetailPage() {
         {campaign.error_message && (
           <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
             <AlertCircle size={16} className="text-red-500 shrink-0" />
-            <span className="text-sm text-red-700 font-mono">{campaign.error_message}</span>
+            <span className="text-sm text-red-700 font-mono flex-1">{campaign.error_message}</span>
+            <button
+              onClick={async () => {
+                try {
+                  await updateCampaign(id, { error_message: null });
+                  load();
+                } catch { toast.error('Erreur'); }
+              }}
+              className="p-1 hover:bg-red-100 rounded-full transition-colors shrink-0"
+              title="Retirer l'erreur"
+            >
+              <X size={16} className="text-red-400 hover:text-red-600" />
+            </button>
           </div>
         )}
 

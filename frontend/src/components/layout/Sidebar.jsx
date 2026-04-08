@@ -36,7 +36,11 @@ export default function Sidebar() {
 
   useEffect(() => {
     if (showNotifs) {
-      getNotificationsList().then((data) => setNotifList(data.notifications || [])).catch(() => {});
+      getNotificationsList().then((data) => setNotifList((data.notifications || []).map(n => ({ ...n, read: true })))).catch(() => {});
+      // Auto-mark all as read when opening the bell
+      markAllNotificationsRead().then(() => {
+        setNotifs((prev) => ({ ...prev, unread_notifications: 0 }));
+      }).catch(() => {});
     }
   }, [showNotifs]);
 
