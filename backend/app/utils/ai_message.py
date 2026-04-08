@@ -38,6 +38,26 @@ def _wait_for_rate_limit():
         _request_timestamps.append(time.monotonic())
 
 
+def _gemini_post(json_body: dict, timeout: int = 30) -> requests.Response:
+    """POST to Gemini with rate limiting and 429 retry (1 retry after 10s)."""
+    _wait_for_rate_limit()
+    resp = requests.post(
+        f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+        json=json_body,
+        timeout=timeout,
+    )
+    if resp.status_code == 429:
+        logger.info("[GEMINI] 429 received, retrying in 10s")
+        time.sleep(10)
+        _wait_for_rate_limit()
+        resp = requests.post(
+            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+            json=json_body,
+            timeout=timeout,
+        )
+    return resp
+
+
 # ---------------------------------------------------------------------------
 # Profile data helpers
 # ---------------------------------------------------------------------------
@@ -229,10 +249,7 @@ EXEMPLES DE BON RESULTAT:
 """
 
     try:
-        _wait_for_rate_limit()
-        resp = requests.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-            json={
+        resp = _gemini_post({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "systemInstruction": {
                     "parts": [{"text": (
@@ -242,9 +259,7 @@ EXEMPLES DE BON RESULTAT:
                         "Tu ecris comme un humain. Tu reponds avec une seule phrase d'accroche."
                     )}]
                 },
-            },
-            timeout=30,
-        )
+            }, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         compliment = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -293,10 +308,7 @@ REGLES:
 - Max {max_length} caracteres"""
 
     try:
-        _wait_for_rate_limit()
-        resp = requests.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-            json={
+        resp = _gemini_post({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "systemInstruction": {
                     "parts": [{"text": (
@@ -306,9 +318,7 @@ REGLES:
                         "Tu reponds uniquement avec le message final."
                     )}]
                 },
-            },
-            timeout=30,
-        )
+            }, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         message = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -390,10 +400,7 @@ CONTENT:
 (etc.)"""
 
     try:
-        _wait_for_rate_limit()
-        resp = requests.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-            json={
+        resp = _gemini_post({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "systemInstruction": {
                     "parts": [{"text": (
@@ -403,9 +410,7 @@ CONTENT:
                         "Tu suis les instructions de l'utilisateur. Tu reponds uniquement avec les messages formates."
                     )}]
                 },
-            },
-            timeout=45,
-        )
+            }, timeout=45)
         resp.raise_for_status()
         data = resp.json()
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -500,17 +505,12 @@ CONTENT:
 Write ONLY the formatted messages, nothing else."""
 
     try:
-        _wait_for_rate_limit()
-        resp = requests.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-            json={
+        resp = _gemini_post({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "systemInstruction": {
                     "parts": [{"text": "You write LinkedIn DM templates. The user gives you instructions and context. You follow their instructions precisely. You respond only with the formatted messages, no explanations or commentary."}]
                 },
-            },
-            timeout=60,
-        )
+            }, timeout=60)
         resp.raise_for_status()
         data = resp.json()
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -567,10 +567,8 @@ Write ONLY the formatted messages, nothing else."""
 def is_ollama_available() -> bool:
     """Check if Gemini API is available."""
     try:
-        _wait_for_rate_limit()
-        resp = requests.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-            json={"contents": [{"parts": [{"text": "ok"}]}]},
+        resp = _gemini_post(
+            {"contents": [{"parts": [{"text": "ok"}]}]},
             timeout=10,
         )
         return resp.ok

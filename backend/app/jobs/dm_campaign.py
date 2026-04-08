@@ -27,6 +27,7 @@ from app.utils.template_engine import render_template
 from app.utils.ai_message import (
     generate_compliment, generate_full_personalized_messages, extract_post_texts,
 )
+from sqlalchemy.exc import IntegrityError
 from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
 from app.routers.notifications import create_notification
 
@@ -187,6 +188,23 @@ async def run_dm_campaign(campaign_id: int) -> None:
             resolved_urn = await resolve_contact_urn(client, contact)
             if not resolved_urn:
                 _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Could not resolve LinkedIn URN")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.add(CampaignContact(
+                    campaign_id=campaign_id, contact_id=contact.id,
+                    status="perdu", last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                ))
+                db.commit()
+                continue
+
+            # Flush URN update to catch duplicate URN in CRM
+            try:
+                db.flush()
+            except IntegrityError:
+                db.rollback()
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Contact duplique dans le CRM (meme URN)")
+                campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
                 db.add(CampaignContact(
