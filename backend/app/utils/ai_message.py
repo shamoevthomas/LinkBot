@@ -13,7 +13,7 @@ from app.config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 # ---------------------------------------------------------------------------
 # Rate limiter — 14 RPM max to stay safely under Google free tier (15 RPM)
