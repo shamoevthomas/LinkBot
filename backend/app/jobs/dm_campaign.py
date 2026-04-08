@@ -189,6 +189,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
             # Retry up to 3 times with 1-3 min intervals
             send_ok = False
             last_error = None
+            _skip_no_perdu = False  # True = AI temporarily down, skip without marking perdu
             for attempt in range(1, 4):
                 try:
                     message_body = await _render_message(campaign, template, contact, client)
@@ -198,6 +199,11 @@ async def run_dm_campaign(campaign_id: int) -> None:
 
                 if not message_body or not message_body.strip():
                     last_error = last_error or "Empty message (AI generation failed)"
+                    # For full_personalize with no template fallback, AI is likely down — skip, don't burn retries
+                    if campaign.full_personalize and campaign.use_ai:
+                        print(f"[DM JOB] Campaign {campaign_id}: AI unavailable for contact {contact.id}, skipping (will retry next tick)", flush=True)
+                        _skip_no_perdu = True
+                        break
                     if attempt < 3:
                         delay = random.randint(60, 180)
                         print(f"[DM JOB] Campaign {campaign_id}: attempt {attempt}/3 failed for contact {contact.id} (empty message), retry in {delay}s", flush=True)
@@ -209,16 +215,29 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 except Exception as exc:
                     last_error = str(exc)[:500]
                     success = False
+                    # Non-connection = permanent error, don't retry
+                    if "RECIPIENT_NOT_FIRST_DEGREE_CONNECTION" in str(exc):
+                        last_error = "Contact is not a 1st degree connection"
+                        break
 
                 if success:
                     send_ok = True
                     break
                 else:
+                    # Check for permanent LinkedIn errors (no point retrying)
+                    if last_error and "RECIPIENT_NOT_FIRST_DEGREE_CONNECTION" in last_error:
+                        break
                     last_error = last_error or "LinkedIn returned error"
                     if attempt < 3:
                         delay = random.randint(60, 180)
                         print(f"[DM JOB] Campaign {campaign_id}: attempt {attempt}/3 failed for contact {contact.id} ({last_error[:80]}), retry in {delay}s", flush=True)
                         await asyncio.sleep(delay)
+
+            if _skip_no_perdu:
+                # AI temporarily unavailable — don't mark perdu, just stop this tick
+                # Contact will be retried on next tick when AI may be back
+                db.commit()
+                break
 
             if send_ok:
                 cc = CampaignContact(
@@ -235,8 +254,8 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "dm_send", "success")
                 logger.info("Campaign %d: main DM sent to contact %d", campaign_id, contact.id)
             else:
-                print(f"[DM JOB] Campaign {campaign_id}: all 3 attempts failed for contact {contact.id}, marking perdu", flush=True)
-                _log_action(db, campaign_id, contact.id, "dm_send", "failed", f"3 attempts failed: {last_error}")
+                print(f"[DM JOB] Campaign {campaign_id}: failed for contact {contact.id}, marking perdu", flush=True)
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", last_error)
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
                 db.add(CampaignContact(
