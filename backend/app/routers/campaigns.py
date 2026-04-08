@@ -1037,3 +1037,54 @@ def update_campaign_contact_status(
         campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
     db.commit()
     return {"ok": True, "old_status": old_status, "new_status": new_status}
+
+
+@router.post("/{campaign_id}/retry-from/{action_id}")
+def retry_from_action(
+    campaign_id: int,
+    action_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Reset failed contacts from a given action onward so the campaign retries them."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    action = db.query(CampaignAction).filter(
+        CampaignAction.id == action_id,
+        CampaignAction.campaign_id == campaign_id,
+    ).first()
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found")
+
+    # Find all failed actions from this one onward (by created_at)
+    failed_actions = db.query(CampaignAction).filter(
+        CampaignAction.campaign_id == campaign_id,
+        CampaignAction.status == "failed",
+        CampaignAction.created_at >= action.created_at,
+    ).all()
+
+    contact_ids = {a.contact_id for a in failed_actions if a.contact_id}
+    if not contact_ids:
+        return {"ok": True, "reset": 0}
+
+    # Delete CampaignContact records marked "perdu" for these contacts
+    deleted = db.query(CampaignContact).filter(
+        CampaignContact.campaign_id == campaign_id,
+        CampaignContact.contact_id.in_(contact_ids),
+        CampaignContact.status == "perdu",
+    ).delete(synchronize_session="fetch")
+
+    # Adjust campaign counters
+    campaign.total_processed = max(0, (campaign.total_processed or 0) - deleted)
+    campaign.total_failed = max(0, (campaign.total_failed or 0) - deleted)
+
+    # Ensure campaign is running
+    if campaign.status in ("completed", "paused"):
+        campaign.status = "running"
+        campaign.completed_at = None
+        schedule_campaign_job(campaign_id=campaign.id, campaign_type=campaign.type)
+
+    db.commit()
+    return {"ok": True, "reset": deleted}

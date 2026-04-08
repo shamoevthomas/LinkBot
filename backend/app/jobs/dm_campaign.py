@@ -210,28 +210,43 @@ async def run_dm_campaign(campaign_id: int) -> None:
                         await asyncio.sleep(delay)
                     continue
 
+                _not_connected = False
                 try:
                     success = await send_message(client, contact.urn_id, message_body)
                 except Exception as exc:
                     last_error = str(exc)[:500]
                     success = False
-                    # Non-connection = permanent error, don't retry
                     if "RECIPIENT_NOT_FIRST_DEGREE_CONNECTION" in str(exc):
-                        last_error = "Contact is not a 1st degree connection"
-                        break
+                        _not_connected = True
+
+                if _not_connected:
+                    # Permanent error — mark perdu immediately, skip to next contact
+                    print(f"[DM JOB] Campaign {campaign_id}: contact {contact.id} not connected, skipping", flush=True)
+                    _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Non connecte — impossible d'envoyer un DM")
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    campaign.total_failed = (campaign.total_failed or 0) + 1
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                    send_ok = None  # signal: already handled
+                    break
 
                 if success:
                     send_ok = True
                     break
                 else:
-                    # Check for permanent LinkedIn errors (no point retrying)
-                    if last_error and "RECIPIENT_NOT_FIRST_DEGREE_CONNECTION" in last_error:
-                        break
                     last_error = last_error or "LinkedIn returned error"
                     if attempt < 3:
                         delay = random.randint(60, 180)
                         print(f"[DM JOB] Campaign {campaign_id}: attempt {attempt}/3 failed for contact {contact.id} ({last_error[:80]}), retry in {delay}s", flush=True)
                         await asyncio.sleep(delay)
+
+            if send_ok is None:
+                # Already handled (e.g. not connected) — move to next contact
+                continue
 
             if _skip_no_perdu:
                 # AI temporarily unavailable — don't mark perdu, just stop this tick

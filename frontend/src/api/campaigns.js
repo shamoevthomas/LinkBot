@@ -30,3 +30,5 @@ export const getCampaignContacts = (id, params) =>
   client.get(`/campaigns/${id}/contacts`, { params }).then((r) => r.data);
 export const updateContactStatus = (campaignId, contactId, status) =>
   client.patch(`/campaigns/${campaignId}/contacts/${contactId}/status`, { status }).then((r) => r.data);
+export const retryFromAction = (campaignId, actionId) =>
+  client.post(`/campaigns/${campaignId}/retry-from/${actionId}`).then((r) => r.data);

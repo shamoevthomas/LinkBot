@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check } from 'lucide-react';
-import { getCampaign, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus } from '../api/campaigns';
+import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check, RotateCcw } from 'lucide-react';
+import { getCampaign, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus, retryFromAction } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -569,6 +569,7 @@ export default function CampaignDetailPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Action</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Details</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -592,6 +593,27 @@ export default function CampaignDetailPage() {
                     <td className="px-4 py-3 text-gray-700">{a.action_type}</td>
                     <td className="px-4 py-3"><Badge status={a.status} /></td>
                     <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">{a.error_message || '-'}</td>
+                    <td className="px-4 py-3">
+                      {a.status === 'failed' && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const res = await retryFromAction(id, a.id);
+                              toast.success(`${res.reset} contact(s) remis en file d'attente`);
+                              load();
+                            } catch { toast.error('Erreur'); }
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+                          style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}
+                          onMouseOver={e => e.currentTarget.style.background = 'rgba(0,132,255,0.15)'}
+                          onMouseOut={e => e.currentTarget.style.background = 'rgba(0,132,255,0.08)'}
+                          title="Reprendre la campagne a partir de ce contact"
+                        >
+                          <RotateCcw size={12} /> Reprendre d'ici
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
