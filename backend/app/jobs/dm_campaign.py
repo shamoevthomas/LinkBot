@@ -123,6 +123,8 @@ async def run_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 4: Send main message to next unprocessed contact
         # =====================================================================
+        _consecutive_ai_failures = 0
+        _ai_skipped_ids = set()  # contacts skipped due to AI failure (retry next tick)
         while get_global_actions_today(dm_action_types, db) < max_per_day:
             total_sent = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
@@ -136,15 +138,13 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 .filter(CampaignContact.campaign_id == campaign_id)
                 .subquery()
             )
-            contact = (
-                db.query(Contact)
-                .filter(
-                    Contact.crm_id == campaign.crm_id,
-                    ~Contact.id.in_(already_ids),
-                )
-                .order_by(Contact.added_at.asc())
-                .first()
+            q = db.query(Contact).filter(
+                Contact.crm_id == campaign.crm_id,
+                ~Contact.id.in_(already_ids),
             )
+            if _ai_skipped_ids:
+                q = q.filter(~Contact.id.in_(list(_ai_skipped_ids)))
+            contact = q.order_by(Contact.added_at.asc()).first()
 
             if not contact:
                 break
@@ -277,11 +277,20 @@ async def run_dm_campaign(campaign_id: int) -> None:
 
             if send_ok is None:
                 # Already handled (e.g. not connected) — next contact immediately
+                _consecutive_ai_failures = 0
                 continue
 
             if _skip_no_perdu:
-                # AI globally unavailable — stop this tick, retry everything next tick
-                break
+                # AI failed for this contact — skip it (retry next tick), try next contact
+                _ai_skipped_ids.add(contact.id)
+                _consecutive_ai_failures += 1
+                print(f"[DM JOB] Campaign {campaign_id}: AI failed for contact {contact.id}, skipping to next ({_consecutive_ai_failures} consecutive AI failures)", flush=True)
+                if _consecutive_ai_failures >= 3:
+                    print(f"[DM JOB] Campaign {campaign_id}: 3 consecutive AI failures, stopping tick", flush=True)
+                    break
+                continue
+
+            _consecutive_ai_failures = 0  # reset on non-AI outcome
 
             if send_ok:
                 cc = CampaignContact(
