@@ -214,7 +214,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     last_error = last_error or "Empty message (AI generation failed)"
                     # For full_personalize with no template fallback, AI is likely down — skip, don't burn retries
                     if campaign.full_personalize and campaign.use_ai:
-                        print(f"[DM JOB] Campaign {campaign_id}: AI unavailable for contact {contact.id}, skipping (will retry next tick)", flush=True)
+                        print(f"[DM JOB] Campaign {campaign_id}: AI unavailable (Gemini down), stopping tick — will retry next tick", flush=True)
                         _skip_no_perdu = True
                         break
                     if attempt < 3:
@@ -262,8 +262,8 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 continue
 
             if _skip_no_perdu:
-                # AI temporarily unavailable — skip this contact, try next one
-                continue
+                # AI globally unavailable — stop this tick, retry everything next tick
+                break
 
             if send_ok:
                 cc = CampaignContact(
