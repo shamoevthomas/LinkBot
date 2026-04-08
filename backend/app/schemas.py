@@ -121,6 +121,7 @@ class DMCampaignCreate(BaseModel):
     is_connection_dm: bool = False  # connection + DM combo campaign
     keywords: Optional[str] = None  # search keywords (for connection_dm)
     dm_delay_hours: int = 0  # hours to wait after connection accepted before sending DM
+    fallback_message: Optional[str] = None  # sent when AI fails after all retries
 
 class GenerateCampaignMessagesRequest(BaseModel):
     ai_prompt: str
@@ -160,6 +161,7 @@ class CampaignResponse(BaseModel):
     completed_at: Optional[datetime] = None
     created_at: datetime
     error_message: Optional[str] = None
+    fallback_message: Optional[str] = None
     reply_rate: Optional[float] = None
     connection_rate: Optional[float] = None
     next_action_at: Optional[datetime] = None

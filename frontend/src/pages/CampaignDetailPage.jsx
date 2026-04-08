@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check, RotateCcw, Settings } from 'lucide-react';
 import { getCampaign, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus, retryFromAction } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
@@ -135,6 +135,16 @@ export default function CampaignDetailPage() {
       navigate(`/dashboard/campaigns/${dup.id}`);
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
   };
+  const handleReconfigure = async () => {
+    try {
+      if (campaign.status === 'running') {
+        await pauseCampaign(id);
+      }
+      navigate(`/dashboard/campaigns/new-dm`, {
+        state: { reconfigure: { id: campaign.id, name: campaign.name, crm_id: campaign.crm_id, ai_prompt: campaign.ai_prompt, context_text: campaign.context_text, fallback_message: campaign.fallback_message, message_template: campaign.message_template } },
+      });
+    } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
+  };
 
   // Countdown extracted to <CountdownTimer /> component
 
@@ -198,6 +208,11 @@ export default function CampaignDetailPage() {
           {campaign.status === 'paused' && (
             <button onClick={handleResume} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-medium rounded-lg text-sm hover:bg-emerald-200 flex items-center gap-2">
               <Play size={16} /> Reprendre
+            </button>
+          )}
+          {['running', 'paused'].includes(campaign.status) && (campaign.type === 'dm' || campaign.type === 'connection_dm') && (
+            <button onClick={handleReconfigure} className="px-4 py-2 bg-purple-100 text-purple-700 font-medium rounded-lg text-sm hover:bg-purple-200 flex items-center gap-2">
+              <Settings size={16} /> Reconfigurer
             </button>
           )}
           {['running', 'paused'].includes(campaign.status) && (

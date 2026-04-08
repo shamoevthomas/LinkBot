@@ -165,6 +165,7 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
         completed_at=c.completed_at,
         created_at=c.created_at,
         error_message=c.error_message,
+        fallback_message=c.fallback_message,
         reply_rate=reply_rate,
         connection_rate=connection_rate,
         next_action_at=next_action_at,
@@ -377,6 +378,7 @@ def create_dm_campaign(
         ai_prompt=body.ai_prompt,
         total_target=total_target,
         dm_delay_hours=body.dm_delay_hours if body.is_connection_dm else 0,
+        fallback_message=body.fallback_message,
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -565,6 +567,14 @@ def update_campaign(
         campaign.name = body["name"]
     if "error_message" in body:
         campaign.error_message = body["error_message"]
+    if "fallback_message" in body:
+        campaign.fallback_message = body["fallback_message"]
+    if "ai_prompt" in body:
+        campaign.ai_prompt = body["ai_prompt"]
+    if "context_text" in body:
+        campaign.context_text = body["context_text"]
+    if "message_template" in body:
+        campaign.message_template = body["message_template"]
     db.commit()
     db.refresh(campaign)
     return _campaign_to_response(campaign, db)

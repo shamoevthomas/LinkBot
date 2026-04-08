@@ -103,6 +103,7 @@ class Campaign(Base):
     context_pdf_path = Column(String)
     full_personalize = Column(Boolean, default=False)
     dm_delay_hours = Column(Integer, default=0)
+    fallback_message = Column(Text)
 
     user = relationship("User", backref="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign", cascade="all, delete-orphan")

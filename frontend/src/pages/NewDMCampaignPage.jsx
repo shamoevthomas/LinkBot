@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Plus, Trash2, Loader2, FileText, Upload, Clock, Send, Rocket, RefreshCw, Eye, User, PenTool, Wand2 } from 'lucide-react';
+import { ArrowLeft, Sparkles, Plus, Trash2, Loader2, FileText, Upload, Clock, Send, Rocket, RefreshCw, Eye, User, PenTool, Wand2, Save, AlertCircle } from 'lucide-react';
 import { getCRMs } from '../api/crm';
+import { updateCampaign, resumeCampaign } from '../api/campaigns';
 import client from '../api/client';
 import PageWrapper from '../components/layout/PageWrapper';
 import toast from 'react-hot-toast';
@@ -10,22 +11,24 @@ export default function NewDMCampaignPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const connectionConfig = location.state?.connectionConfig || null;
+  const reconfigure = location.state?.reconfigure || null;
   const [crms, setCrms] = useState([]);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Config
-  const [name, setName] = useState(connectionConfig?.name || '');
-  const [crmId, setCrmId] = useState(connectionConfig?.crm_id?.toString() || '');
-  const [contextText, setContextText] = useState('');
+  const [name, setName] = useState(reconfigure?.name || connectionConfig?.name || '');
+  const [crmId, setCrmId] = useState(reconfigure?.crm_id?.toString() || connectionConfig?.crm_id?.toString() || '');
+  const [contextText, setContextText] = useState(reconfigure?.context_text || '');
   const [pdfName, setPdfName] = useState('');
   const [extracting, setExtracting] = useState(false);
-  const [useAi, setUseAi] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
+  const [useAi, setUseAi] = useState(reconfigure ? true : false);
+  const [aiPrompt, setAiPrompt] = useState(reconfigure?.ai_prompt || '');
   const [dmDelayHours, setDmDelayHours] = useState(connectionConfig ? 2 : 0);
+  const [fallbackMessage, setFallbackMessage] = useState(reconfigure?.fallback_message || '');
 
   // Messages
-  const [mode, setMode] = useState('template');
+  const [mode, setMode] = useState(reconfigure ? 'full' : 'template');
   const [messages, setMessages] = useState([
     { sequence: 0, message_template: '', delay_days: 0 },
   ]);
@@ -160,7 +163,7 @@ export default function NewDMCampaignPage() {
     } finally { setPreviewLoading(false); }
   };
 
-  // Launch
+  // Launch (or save for reconfigure)
   const handleLaunch = async () => {
     if (!name.trim()) return toast.error('Donne un nom');
     if (!crmId) return toast.error('Selectionne un CRM');
@@ -168,6 +171,19 @@ export default function NewDMCampaignPage() {
     if (mode === 'full' && !aiPrompt.trim()) return toast.error('Donne des instructions a l\'IA');
     setLaunching(true);
     try {
+      // Reconfigure mode: update existing campaign and resume
+      if (reconfigure) {
+        await updateCampaign(reconfigure.id, {
+          ai_prompt: [aiPrompt, extraInstructions].filter(Boolean).join('\n\nConsignes supplementaires:\n') || null,
+          context_text: contextText || null,
+          fallback_message: fallbackMessage.trim() || null,
+        });
+        await resumeCampaign(reconfigure.id);
+        toast.success('Campagne reconfiguree et relancee');
+        navigate(`/dashboard/campaigns/${reconfigure.id}`);
+        return;
+      }
+
       const totalContacts = crms.find((c) => c.id === parseInt(crmId))?.contact_count || 50;
       let msgPayload;
       if (mode === 'full') {
@@ -187,6 +203,7 @@ export default function NewDMCampaignPage() {
         full_personalize: mode === 'full',
         messages: msgPayload,
         total_target: totalContacts,
+        fallback_message: fallbackMessage.trim() || null,
       };
       if (connectionConfig) {
         payload.keywords = connectionConfig.keywords || '';
@@ -212,21 +229,21 @@ export default function NewDMCampaignPage() {
     <PageWrapper>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/dashboard/campaigns')} className="p-2 hover:bg-gray-200 rounded-lg">
+        <button onClick={() => navigate(reconfigure ? `/dashboard/campaigns/${reconfigure.id}` : '/dashboard/campaigns')} className="p-2 hover:bg-gray-200 rounded-lg">
           <ArrowLeft size={20} className="text-gray-600" />
         </button>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900 f">
-            {connectionConfig ? 'Campagne Connexion + DM' : 'Campagne Message'}
+            {reconfigure ? 'Reconfigurer la campagne' : connectionConfig ? 'Campagne Connexion + DM' : 'Campagne Message'}
           </h1>
           <p className="text-xs text-gray-500">
-            {connectionConfig ? 'Messages apres acceptation de la connexion' : 'Configurez et visualisez votre sequence de messages'}
+            {reconfigure ? 'Modifiez les messages et ajoutez un message de secours' : connectionConfig ? 'Messages apres acceptation de la connexion' : 'Configurez et visualisez votre sequence de messages'}
           </p>
         </div>
         <button onClick={handleLaunch} disabled={launching || !canLaunch}
           className="cta-btn flex items-center gap-2 disabled:opacity-40"
           style={{ padding: '10px 24px', fontSize: 14 }}>
-          {launching ? <><Loader2 size={16} className="animate-spin" /> Lancement...</> : <><Rocket size={16} /> Lancer</>}
+          {launching ? <><Loader2 size={16} className="animate-spin" /> {reconfigure ? 'Sauvegarde...' : 'Lancement...'}</> : reconfigure ? <><Save size={16} /> Sauvegarder et reprendre</> : <><Rocket size={16} /> Lancer</>}
         </button>
       </div>
 
@@ -243,12 +260,12 @@ export default function NewDMCampaignPage() {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Nom</label>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Prospection Q2"
-                className="input-glass w-full" style={{ fontSize: 13 }} />
+                className="input-glass w-full" style={{ fontSize: 13 }} disabled={!!reconfigure} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">CRM cible</label>
               <select value={crmId} onChange={(e) => setCrmId(e.target.value)}
-                className="input-glass w-full" style={{ fontSize: 13 }}>
+                className="input-glass w-full" style={{ fontSize: 13 }} disabled={!!reconfigure}>
                 <option value="">Selectionner...</option>
                 {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count})</option>)}
               </select>
@@ -298,6 +315,29 @@ export default function NewDMCampaignPage() {
                 className="w-full px-3 py-2 border border-purple-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-white" />
             )}
           </div>
+
+          {/* Fallback message */}
+          {useAi && (
+            <div className="g-card !p-4 space-y-3" style={{ borderColor: 'rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.02)' }}>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <AlertCircle size={14} className="text-amber-500" /> Message de secours
+              </h3>
+              <p className="text-[11px] text-gray-500">
+                Si l'IA echoue apres 3 tentatives, ce message sera envoye a la place.
+              </p>
+              <textarea value={fallbackMessage} onChange={(e) => setFallbackMessage(e.target.value)}
+                rows={3} placeholder={`Bonjour {first_name},\n\nJ'aimerais echanger avec vous sur...`}
+                className="w-full px-3 py-2 border border-amber-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none bg-white" />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {['{first_name}', '{last_name}', '{headline}'].map((v) => (
+                  <span key={v} style={{
+                    fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                    background: '#fef3c7', color: '#92400e', fontFamily: 'monospace',
+                  }}>{v}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ======== RIGHT: Workflow ======== */}
