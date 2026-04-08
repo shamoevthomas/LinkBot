@@ -156,6 +156,19 @@ async def run_dm_campaign(campaign_id: int) -> None:
             if already:
                 continue
 
+            # Connection check — can only DM 1st degree connections
+            if contact.connection_status not in ("connected", "DISTANCE_1"):
+                _log_action(db, campaign_id, contact.id, "dm_send", "skipped", "Non connecte")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_skipped = (campaign.total_skipped or 0) + 1
+                db.add(CampaignContact(
+                    campaign_id=campaign_id, contact_id=contact.id,
+                    status="perdu", last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                ))
+                db.commit()
+                continue
+
             # Blacklist check — skip and continue immediately
             if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id, Blacklist.user_id == campaign.user_id).first():
                 _log_action(db, campaign_id, contact.id, "dm_send", "skipped", "Blacklisted")
@@ -245,14 +258,12 @@ async def run_dm_campaign(campaign_id: int) -> None:
                         await asyncio.sleep(delay)
 
             if send_ok is None:
-                # Already handled (e.g. not connected) — move to next contact
+                # Already handled (e.g. not connected) — next contact immediately
                 continue
 
             if _skip_no_perdu:
-                # AI temporarily unavailable — don't mark perdu, just stop this tick
-                # Contact will be retried on next tick when AI may be back
-                db.commit()
-                break
+                # AI temporarily unavailable — skip this contact, try next one
+                continue
 
             if send_ok:
                 cc = CampaignContact(
@@ -268,7 +279,10 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 contact.last_interaction_at = datetime.utcnow()
                 _log_action(db, campaign_id, contact.id, "dm_send", "success")
                 logger.info("Campaign %d: main DM sent to contact %d", campaign_id, contact.id)
+                db.commit()
+                break  # Sent one real message — wait for next tick
             else:
+                # Failed after all retries — mark perdu and move to next contact immediately
                 print(f"[DM JOB] Campaign {campaign_id}: failed for contact {contact.id}, marking perdu", flush=True)
                 _log_action(db, campaign_id, contact.id, "dm_send", "failed", last_error)
                 campaign.total_processed = (campaign.total_processed or 0) + 1
@@ -279,13 +293,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
                 ))
                 db.commit()
-                # Wait 4 minutes before trying next contact
-                print(f"[DM JOB] Campaign {campaign_id}: cooling down 4 min before next contact", flush=True)
-                await asyncio.sleep(240)
-                continue
-
-            db.commit()
-            break  # Sent one real message — wait for next tick
+                continue  # Next contact immediately, no cooldown
 
         # =====================================================================
         # PHASE 5: Check campaign completion
