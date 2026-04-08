@@ -54,25 +54,30 @@ def _run_migrations():
             "DELETE FROM contact WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '5 minutes'"
         )) if is_pg else None
 
-        # Performance indexes (idempotent)
-        for idx_sql in [
-            'CREATE INDEX IF NOT EXISTS ix_cc_campaign_status ON campaign_contact(campaign_id, status)',
-            'CREATE INDEX IF NOT EXISTS ix_campaign_user_status ON campaign(user_id, status)',
-            'CREATE INDEX IF NOT EXISTS ix_action_campaign_created ON campaign_action(campaign_id, created_at)',
-        ]:
-            conn.execute(text(idx_sql))
+    # Performance indexes — run in separate connections to avoid deadlock on concurrent startup
+    for idx_sql in [
+        'CREATE INDEX IF NOT EXISTS ix_cc_campaign_status ON campaign_contact(campaign_id, status)',
+        'CREATE INDEX IF NOT EXISTS ix_campaign_user_status ON campaign(user_id, status)',
+        'CREATE INDEX IF NOT EXISTS ix_action_campaign_created ON campaign_action(campaign_id, created_at)',
+    ]:
+        try:
+            with engine.begin() as conn2:
+                conn2.execute(text(idx_sql))
+        except Exception:
+            pass  # Index likely already exists or concurrent process is creating it
 
-        # Drop old unique constraints that should now be per-user
-        if is_pg:
-            # These constraint names are PostgreSQL auto-generated defaults
-            for constraint in [
-                ("crm", "crm_name_key"),
-                ("tag", "tag_name_key"),
-                ("blacklist", "blacklist_urn_id_key"),
-            ]:
-                table, name = constraint
-                try:
-                    conn.execute(text(f'ALTER TABLE "{table}" DROP CONSTRAINT IF EXISTS "{name}"'))
-                    print(f"[MIGRATION] Dropped constraint {name} from {table}", flush=True)
-                except Exception:
-                    pass
+    # Drop old unique constraints that should now be per-user
+    if is_pg:
+        try:
+            with engine.begin() as conn3:
+                for table, name in [
+                    ("crm", "crm_name_key"),
+                    ("tag", "tag_name_key"),
+                    ("blacklist", "blacklist_urn_id_key"),
+                ]:
+                    try:
+                        conn3.execute(text(f'ALTER TABLE "{table}" DROP CONSTRAINT IF EXISTS "{name}"'))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
