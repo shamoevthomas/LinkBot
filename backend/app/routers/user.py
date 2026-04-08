@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user
-from app.models import User
+from app.models import User, Campaign
 from app.schemas import UserResponse, CookiesUpdate, CookiesStatus
+from app.scheduler import pause_campaign_job
 from app.linkedin_service import validate_cookies
 from app.auth import hash_password, verify_password
 from app.storage import upload_file
@@ -28,6 +29,7 @@ def get_me(user: User = Depends(get_current_user)):
         reason_for_using=user.reason_for_using,
         linkedin_profile_url=user.linkedin_profile_url,
         cookies_valid=user.cookies_valid or False,
+        has_gemini_key=bool(user.gemini_api_key),
         onboarding_completed=user.onboarding_completed or False,
     )
 
@@ -82,6 +84,7 @@ async def update_profile(
         reason_for_using=user.reason_for_using,
         linkedin_profile_url=user.linkedin_profile_url,
         cookies_valid=user.cookies_valid or False,
+        has_gemini_key=bool(user.gemini_api_key),
         onboarding_completed=user.onboarding_completed or False,
     )
 
@@ -108,6 +111,40 @@ async def update_cookies(
         )
 
     return CookiesStatus(valid=valid)
+
+
+@router.put("/gemini-key")
+def update_gemini_key(
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Update the user's Gemini API key. Auto-pauses all running AI campaigns."""
+    new_key = (body.get("gemini_api_key") or "").strip()
+
+    # Auto-pause running campaigns that use AI
+    if user.gemini_api_key and new_key != user.gemini_api_key:
+        running_ai = (
+            db.query(Campaign)
+            .filter(
+                Campaign.user_id == user.id,
+                Campaign.status == "running",
+                Campaign.use_ai == True,
+            )
+            .all()
+        )
+        paused_count = 0
+        for c in running_ai:
+            c.status = "paused"
+            pause_campaign_job(c.id)
+            paused_count += 1
+        if paused_count:
+            db.commit()
+
+    user.gemini_api_key = new_key if new_key else None
+    db.commit()
+
+    return {"ok": True, "has_gemini_key": bool(user.gemini_api_key)}
 
 
 @router.get("/cookies/status", response_model=CookiesStatus)

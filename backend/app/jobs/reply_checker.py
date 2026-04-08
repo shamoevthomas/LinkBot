@@ -41,7 +41,7 @@ def _log_action(db, campaign_id, contact_id, action_type, status, error_message=
     ))
 
 
-async def _render_message(campaign, template, contact, client):
+async def _render_message(campaign, template, contact, client, api_key=""):
     """Render a message for a contact, using AI if needed."""
     contact_data = {
         "first_name": contact.first_name,
@@ -50,7 +50,7 @@ async def _render_message(campaign, template, contact, client):
         "location": contact.location,
     }
 
-    if campaign.full_personalize and campaign.use_ai:
+    if campaign.full_personalize and campaign.use_ai and api_key:
         profile_data = None
         recent_posts = None
         try:
@@ -68,7 +68,7 @@ async def _render_message(campaign, template, contact, client):
                 generate_full_personalized_messages,
                 contact_data, profile_data, recent_posts,
                 campaign.context_text or "", campaign.ai_prompt or "",
-                0, [],
+                0, [], api_key,
             )
             if msgs and msgs[0].get("rendered"):
                 return msgs[0]["rendered"]
@@ -76,7 +76,7 @@ async def _render_message(campaign, template, contact, client):
             logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
         return render_template(template, contact_data)
 
-    elif campaign.use_ai and "{compliment}" in template:
+    elif campaign.use_ai and api_key and "{compliment}" in template:
         profile_data = None
         recent_posts = None
         try:
@@ -93,6 +93,7 @@ async def _render_message(campaign, template, contact, client):
             compliment = await asyncio.to_thread(
                 generate_compliment, contact_data, profile_data, recent_posts,
                 campaign.context_text or "", campaign.ai_prompt or "",
+                api_key,
             )
         except Exception as exc:
             logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)
@@ -104,7 +105,7 @@ async def _render_message(campaign, template, contact, client):
         return render_template(template, contact_data)
 
 
-async def _send_followup_with_retry(campaign, followup_msg, contact, client, cc, db):
+async def _send_followup_with_retry(campaign, followup_msg, contact, client, cc, db, api_key=""):
     """Send a follow-up with 3 retries, 1-3 min between attempts.
     Returns True if sent successfully.
     """
@@ -115,7 +116,7 @@ async def _send_followup_with_retry(campaign, followup_msg, contact, client, cc,
     for attempt in range(1, 4):
         try:
             message_body = await _render_message(
-                campaign, followup_msg.message_template, contact, client
+                campaign, followup_msg.message_template, contact, client, api_key=api_key
             )
         except Exception as exc:
             last_error = f"Render failed: {exc}"
@@ -301,7 +302,7 @@ async def run_reply_checks() -> None:
                         await asyncio.sleep(spacing)
 
                     # Send with retry
-                    ok = await _send_followup_with_retry(campaign, followup_msg, contact, client, cc, db)
+                    ok = await _send_followup_with_retry(campaign, followup_msg, contact, client, cc, db, api_key=user.gemini_api_key or "")
                     if ok:
                         total_followups_sent += 1
 

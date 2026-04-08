@@ -9,7 +9,7 @@ from collections import deque
 import requests
 from typing import Dict, Any, List, Optional
 
-from app.config import GEMINI_API_KEY
+from app.config import GEMINI_API_KEY as _GLOBAL_GEMINI_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +38,13 @@ def _wait_for_rate_limit():
         _request_timestamps.append(time.monotonic())
 
 
-def _gemini_post(json_body: dict, timeout: int = 30) -> requests.Response:
+def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> requests.Response:
     """POST to Gemini with rate limiting and retry on 429/503 (up to 3 attempts)."""
+    key = api_key or _GLOBAL_GEMINI_KEY
     for attempt in range(3):
         _wait_for_rate_limit()
         resp = requests.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+            f"{GEMINI_URL}?key={key}",
             json=json_body,
             timeout=timeout,
         )
@@ -214,6 +215,7 @@ def generate_compliment(
     recent_posts: Optional[List[str]] = None,
     context_text: str = "",
     ai_prompt: str = "",
+    api_key: str = "",
 ) -> str:
     """Generate a personalized compliment/icebreaker for a contact.
 
@@ -262,7 +264,7 @@ EXEMPLES DE BON RESULTAT:
                         "Tu ecris comme un humain. Tu reponds avec une seule phrase d'accroche."
                     )}]
                 },
-            }, timeout=30)
+            }, timeout=30, api_key=api_key)
         resp.raise_for_status()
         data = resp.json()
         compliment = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -292,6 +294,7 @@ def generate_personalized_message(
     max_length: int = 2000,
     profile_data: Optional[Dict[str, Any]] = None,
     recent_posts: Optional[List[str]] = None,
+    api_key: str = "",
 ) -> str:
     """Generate a full personalized message (used from CRM contact card)."""
     profile_context = _build_profile_context(contact, profile_data, recent_posts)
@@ -321,7 +324,7 @@ REGLES:
                         "Tu reponds uniquement avec le message final."
                     )}]
                 },
-            }, timeout=30)
+            }, timeout=30, api_key=api_key)
         resp.raise_for_status()
         data = resp.json()
         message = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -352,6 +355,7 @@ def generate_full_personalized_messages(
     ai_prompt: str = "",
     followup_count: int = 0,
     followup_delays: Optional[List[int]] = None,
+    api_key: str = "",
 ) -> List[Dict[str, Any]]:
     """Generate complete message(s) from scratch for one contact.
 
@@ -413,7 +417,7 @@ CONTENT:
                         "Tu suis les instructions de l'utilisateur. Tu reponds uniquement avec les messages formates."
                     )}]
                 },
-            }, timeout=45)
+            }, timeout=45, api_key=api_key)
         resp.raise_for_status()
         data = resp.json()
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -462,6 +466,7 @@ def generate_campaign_messages(
     context_text: str = "",
     followup_count: int = 0,
     followup_delays: list = [],
+    api_key: str = "",
 ) -> list:
     """Generate main + follow-up message templates using Gemini."""
 
@@ -513,7 +518,7 @@ Write ONLY the formatted messages, nothing else."""
                 "systemInstruction": {
                     "parts": [{"text": "You write LinkedIn DM templates. The user gives you instructions and context. You follow their instructions precisely. You respond only with the formatted messages, no explanations or commentary."}]
                 },
-            }, timeout=60)
+            }, timeout=60, api_key=api_key)
         resp.raise_for_status()
         data = resp.json()
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -567,12 +572,13 @@ Write ONLY the formatted messages, nothing else."""
         return []
 
 
-def is_ollama_available() -> bool:
+def is_ollama_available(api_key: str = "") -> bool:
     """Check if Gemini API is available."""
     try:
         resp = _gemini_post(
             {"contents": [{"parts": [{"text": "ok"}]}]},
             timeout=10,
+            api_key=api_key,
         )
         return resp.ok
     except Exception:

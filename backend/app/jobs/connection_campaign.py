@@ -9,6 +9,8 @@ request (optionally with a personalised note).
 import asyncio
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
+from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.models import Campaign, CampaignAction, CampaignContact, Contact, AppSettings, User, Blacklist
@@ -150,9 +152,10 @@ async def run_connection_campaign(campaign_id: int) -> None:
                     "headline": contact.headline,
                     "location": contact.location,
                 }
-                if campaign.use_ai:
+                if campaign.use_ai and user.gemini_api_key:
                     ai_msg = await asyncio.to_thread(
-                        generate_personalized_message, campaign.message_template, contact_data, 300
+                        generate_personalized_message, campaign.message_template, contact_data, 300,
+                        None, None, user.gemini_api_key,
                     )
                     message = ai_msg if ai_msg else render_template(campaign.message_template, contact_data)
                 else:
@@ -173,14 +176,17 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
                 # Track in CampaignContact
-                db.add(CampaignContact(
-                    campaign_id=campaign.id, contact_id=contact.id,
-                    status="perdu", last_sequence_sent=0,
-                    main_sent_at=datetime.utcnow(),
-                ))
-                db.commit()
-                # Stop on error — wait for next tick
-                break
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign.id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
+                # Try next contact immediately
+                continue
 
             # Update contact status
             invitation_id = None
@@ -197,11 +203,15 @@ async def run_connection_campaign(campaign_id: int) -> None:
             campaign.total_succeeded = (campaign.total_succeeded or 0) + 1
 
             # Track in CampaignContact for status display
-            db.add(CampaignContact(
-                campaign_id=campaign.id, contact_id=contact.id,
-                status="demande_envoyee", last_sequence_sent=0,
-                main_sent_at=datetime.utcnow(),
-            ))
+            try:
+                db.add(CampaignContact(
+                    campaign_id=campaign.id, contact_id=contact.id,
+                    status="demande_envoyee", last_sequence_sent=0,
+                    main_sent_at=datetime.utcnow(),
+                ))
+                db.flush()
+            except IntegrityError:
+                db.rollback()
 
             # Check completion
             if campaign.total_target and campaign.total_processed >= campaign.total_target:
@@ -226,7 +236,7 @@ async def run_connection_campaign(campaign_id: int) -> None:
             c = db.query(_C).filter(_C.id == campaign_id).first()
             if c:
                 from datetime import datetime as _dt
-                c.error_message = f"[{_dt.utcnow().strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
+                c.error_message = f"[{_dt.now(ZoneInfo('Europe/Paris')).strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
                 db.commit()
         except Exception:
             pass

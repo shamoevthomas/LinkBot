@@ -24,6 +24,7 @@ async def complete_onboarding(
     linkedin_profile_url: str = Form(""),
     li_at: str = Form(""),
     jsessionid: str = Form(""),
+    gemini_api_key: str = Form(""),
     profile_picture: UploadFile = File(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -55,6 +56,8 @@ async def complete_onboarding(
     user.reason_for_using = reason_for_using or user.reason_for_using
     user.linkedin_profile_url = linkedin_profile_url or user.linkedin_profile_url
     user.profile_picture_path = picture_path
+    if gemini_api_key.strip():
+        user.gemini_api_key = gemini_api_key.strip()
     user.onboarding_completed = True
 
     # Always import network when cookies are valid
@@ -93,5 +96,6 @@ async def complete_onboarding(
         reason_for_using=user.reason_for_using,
         linkedin_profile_url=user.linkedin_profile_url,
         cookies_valid=user.cookies_valid or False,
+        has_gemini_key=bool(user.gemini_api_key),
         onboarding_completed=user.onboarding_completed or False,
     )

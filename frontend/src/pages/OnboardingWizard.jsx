@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Users, Check, Link, Shield, Sparkles } from 'lucide-react';
+import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Users, Check, Link, Shield, Sparkles, Key, ExternalLink } from 'lucide-react';
 import { submitOnboarding } from '../api/user';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -12,9 +12,10 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [wantAI, setWantAI] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', job_role: '', reason_for_using: '',
-    linkedin_profile_url: '', li_at: '', jsessionid: '', profile_picture: null,
+    linkedin_profile_url: '', li_at: '', jsessionid: '', gemini_api_key: '', profile_picture: null,
   });
   const [preview, setPreview] = useState(null);
 
@@ -30,6 +31,7 @@ export default function OnboardingWizard() {
 
   const canStep2 = form.first_name && form.last_name && form.job_role && form.reason_for_using;
   const canStep3 = form.li_at && form.jsessionid;
+  const canStep4 = !wantAI || form.gemini_api_key;
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -46,7 +48,7 @@ export default function OnboardingWizard() {
     }
   };
 
-  const stepLabels = ['Profil', 'LinkedIn', 'Import'];
+  const stepLabels = ['Profil', 'LinkedIn', 'IA', 'Import'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -78,14 +80,14 @@ export default function OnboardingWizard() {
             </div>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Bienvenue sur LinkBot</h2>
-              <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Configurez votre compte en 3 étapes</p>
+              <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Configurez votre compte en 4 étapes</p>
             </div>
           </div>
 
           {/* Step indicators */}
           <div className="flex items-center gap-3" style={{ position: 'relative' }}>
-            {[1, 2, 3].map((s) => (
-              <div key={s} className="flex items-center gap-3" style={{ flex: s < 3 ? 1 : 'none' }}>
+            {[1, 2, 3, 4].map((s) => (
+              <div key={s} className="flex items-center gap-3" style={{ flex: s < 4 ? 1 : 'none' }}>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center justify-center text-xs font-bold" style={{
                     width: '28px', height: '28px', borderRadius: '50%',
@@ -99,7 +101,7 @@ export default function OnboardingWizard() {
                     color: step >= s ? '#fff' : 'rgba(255,255,255,0.5)',
                   }}>{stepLabels[s - 1]}</span>
                 </div>
-                {s < 3 && (
+                {s < 4 && (
                   <div style={{
                     flex: 1, height: '2px', borderRadius: '1px',
                     background: step > s ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.15)',
@@ -241,6 +243,81 @@ export default function OnboardingWizard() {
             <div className="space-y-5">
               <div className="text-center py-2">
                 <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{
+                  background: 'linear-gradient(135deg, rgba(168,85,247,0.1) 0%, rgba(168,85,247,0.05) 100%)',
+                  border: '2px solid rgba(168,85,247,0.15)',
+                }}>
+                  <Key size={32} style={{ color: '#a855f7' }} />
+                </div>
+                <h3 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Messages 100% personnalisés par IA</h3>
+                <p className="text-sm mt-2 mx-4" style={{ color: 'var(--text3)', lineHeight: 1.6 }}>
+                  Chaque message sera unique, généré par l'IA en fonction du profil LinkedIn de chaque contact.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 p-3.5 rounded-xl cursor-pointer" onClick={() => { setWantAI(!wantAI); if (wantAI) set('gemini_api_key', ''); }}
+                style={{ background: wantAI ? 'rgba(168,85,247,0.06)' : '#f9fafb', border: wantAI ? '2px solid rgba(168,85,247,0.3)' : '2px solid #e5e7eb', transition: 'all 0.2s ease' }}>
+                <div className="flex items-center justify-center w-5 h-5 rounded-md shrink-0" style={{
+                  background: wantAI ? '#a855f7' : '#fff', border: wantAI ? 'none' : '2px solid #d1d5db', transition: 'all 0.2s ease',
+                }}>
+                  {wantAI && <Check size={14} className="text-white" strokeWidth={3} />}
+                </div>
+                <div>
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Oui, je veux des messages IA personnalisés</span>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>Nécessite une clé API Google Gemini (gratuite)</p>
+                </div>
+              </div>
+
+              {wantAI && (
+                <div className="space-y-4">
+                  <div className="rounded-xl p-4 text-xs space-y-2" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <p className="font-semibold" style={{ color: 'var(--text)', fontSize: '0.8rem' }}>Comment obtenir votre clé API Gemini :</p>
+                    <div className="space-y-1.5" style={{ color: 'var(--text2)' }}>
+                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">1</span>Allez sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline font-medium">aistudio.google.com/apikey</a></p>
+                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">2</span>Connectez-vous avec votre compte Google</p>
+                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">3</span>Cliquez sur <strong>"Create API Key"</strong></p>
+                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">4</span>Copiez la clé et collez-la ci-dessous</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Clé API Gemini</label>
+                    <input value={form.gemini_api_key} onChange={(e) => set('gemini_api_key', e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="input-glass" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
+                  </div>
+
+                  <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(168,85,247,0.04)', border: '1px solid rgba(168,85,247,0.1)' }}>
+                    <HelpCircle size={14} style={{ color: '#a855f7', flexShrink: 0 }} />
+                    <p className="text-xs" style={{ color: 'var(--text3)' }}>
+                      Besoin d'aide ? Contactez{' '}
+                      <a href="https://www.linkedin.com/in/thomas-shamoev/" target="_blank" rel="noopener noreferrer"
+                        className="font-medium underline" style={{ color: '#a855f7' }}>
+                        Thomas Shamoev sur LinkedIn
+                      </a>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setStep(2)}
+                  className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl text-sm transition-all hover:bg-gray-50"
+                  style={{ padding: '12px 16px', border: '1px solid #e2e8f0', color: 'var(--text2)', background: '#fff', borderRadius: '14px' }}>
+                  <ChevronLeft size={18} /> Retour
+                </button>
+                <button onClick={() => setStep(4)} disabled={!canStep4}
+                  className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
+                  style={{ padding: '12px 16px', fontSize: '14px', borderRadius: '14px' }}>
+                  Suivant <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-5">
+              <div className="text-center py-2">
+                <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{
                   background: 'linear-gradient(135deg, rgba(0,132,255,0.1) 0%, rgba(0,132,255,0.05) 100%)',
                   border: '2px solid rgba(0,132,255,0.15)',
                 }}>
@@ -275,7 +352,7 @@ export default function OnboardingWizard() {
               </div>
 
               <div className="flex gap-3 pt-1">
-                <button onClick={() => setStep(2)}
+                <button onClick={() => setStep(3)}
                   className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl text-sm transition-all hover:bg-gray-50"
                   style={{ padding: '12px 16px', border: '1px solid #e2e8f0', color: 'var(--text2)', background: '#fff', borderRadius: '14px' }}>
                   <ChevronLeft size={18} /> Retour

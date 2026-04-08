@@ -106,6 +106,60 @@ $('open-app-btn').addEventListener('click', () => {
   chrome.tabs.create({ url: `${APP_URL}/dashboard` });
 });
 
+// --- Cookie sync ---
+$('sync-cookies-btn').addEventListener('click', async () => {
+  const btn = $('sync-cookies-btn');
+  const textEl = $('sync-cookies-text');
+  const statusEl = $('sync-cookies-status');
+
+  btn.disabled = true;
+  btn.className = 'btn-cookies';
+  textEl.textContent = 'Extraction...';
+  hide(statusEl);
+
+  // 1. Extract cookies from browser
+  const cookies = await send({ action: 'extractCookies' });
+
+  if (!cookies.li_at || !cookies.jsessionid) {
+    btn.disabled = false;
+    btn.className = 'btn-cookies error';
+    textEl.textContent = 'Cookies introuvables';
+    statusEl.textContent = 'Connectez-vous a linkedin.com d\'abord';
+    statusEl.className = 'cookie-status err';
+    show(statusEl);
+    setTimeout(() => {
+      btn.className = 'btn-cookies';
+      textEl.textContent = 'Synchroniser les cookies LinkedIn';
+    }, 3000);
+    return;
+  }
+
+  // 2. Send to backend
+  textEl.textContent = 'Validation...';
+  const res = await send({ action: 'saveCookies', li_at: cookies.li_at, jsessionid: cookies.jsessionid });
+
+  btn.disabled = false;
+  if (res.error) {
+    btn.className = 'btn-cookies error';
+    textEl.textContent = 'Cookies invalides';
+    statusEl.textContent = res.error;
+    statusEl.className = 'cookie-status err';
+    show(statusEl);
+  } else {
+    btn.className = 'btn-cookies success';
+    textEl.textContent = 'Cookies synchronises !';
+    statusEl.textContent = 'li_at et JSESSIONID envoyes avec succes';
+    statusEl.className = 'cookie-status ok';
+    show(statusEl);
+  }
+
+  setTimeout(() => {
+    btn.className = 'btn-cookies';
+    textEl.textContent = 'Synchroniser les cookies LinkedIn';
+    hide(statusEl);
+  }, 4000);
+});
+
 function escapeHtml(str) {
   const d = document.createElement('div');
   d.textContent = str;

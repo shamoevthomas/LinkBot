@@ -17,3 +17,6 @@ export const updateProfile = (formData) =>
   client.put('/user/profile', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then((r) => r.data);
+
+export const updateGeminiKey = (gemini_api_key) =>
+  client.put('/user/gemini-key', { gemini_api_key }).then((r) => r.data);

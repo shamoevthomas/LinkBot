@@ -91,16 +91,25 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-400 text-center py-6">Aucune campagne</p>
           ) : (
             <div className="space-y-3">
-              {stats.recent_campaigns.map((c) => (
+              {[...stats.recent_campaigns].sort((a, b) => {
+                const fin = ['completed', 'cancelled', 'failed'];
+                const aFin = fin.includes(a.status) ? 1 : 0;
+                const bFin = fin.includes(b.status) ? 1 : 0;
+                return aFin - bFin;
+              }).map((c) => {
+                const finished = ['completed', 'cancelled', 'failed'].includes(c.status);
+                return (
                 <div key={c.id} onClick={() => navigate(`/dashboard/campaigns/${c.id}`)}
-                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-100">
+                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-100"
+                  style={finished ? { opacity: 0.5 } : undefined}>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{c.name}</p>
+                    <p className="text-sm font-medium" style={{ color: finished ? '#9ca3af' : 'var(--text)' }}>{c.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{c.type}</p>
                   </div>
                   <Badge status={c.status} />
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

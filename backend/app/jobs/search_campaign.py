@@ -8,6 +8,7 @@ the entire search runs in one go.
 
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.database import SessionLocal
 from app.models import Campaign, CampaignAction, Contact, User, Blacklist
@@ -150,7 +151,7 @@ async def run_search_campaign(campaign_id: int) -> None:
             from app.models import Campaign as _C
             c = db.query(_C).filter(_C.id == campaign_id).first()
             if c:
-                c.error_message = f"[{datetime.utcnow().strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
+                c.error_message = f"[{datetime.now(ZoneInfo('Europe/Paris')).strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
                 c.status = "completed"
                 c.completed_at = datetime.utcnow()
                 db.commit()

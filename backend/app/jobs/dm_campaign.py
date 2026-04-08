@@ -13,6 +13,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from app.database import SessionLocal
 from app.models import (
@@ -162,12 +163,15 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "dm_send", "skipped", "Non connecte")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_skipped = (campaign.total_skipped or 0) + 1
-                db.add(CampaignContact(
-                    campaign_id=campaign_id, contact_id=contact.id,
-                    status="perdu", last_sequence_sent=0,
-                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
-                ))
-                db.commit()
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue
 
             # Blacklist check — skip and continue immediately
@@ -176,12 +180,15 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_skipped = (campaign.total_skipped or 0) + 1
                 # Mark in CampaignContact so it won't be picked again
-                db.add(CampaignContact(
-                    campaign_id=campaign_id, contact_id=contact.id,
-                    status="perdu", last_sequence_sent=0,
-                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
-                ))
-                db.commit()
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue
 
             # Resolve URN if missing or potentially invalid
@@ -190,12 +197,15 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Could not resolve LinkedIn URN")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
-                db.add(CampaignContact(
-                    campaign_id=campaign_id, contact_id=contact.id,
-                    status="perdu", last_sequence_sent=0,
-                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
-                ))
-                db.commit()
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue
 
             # Flush URN update to catch duplicate URN in CRM
@@ -207,12 +217,15 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
-                db.add(CampaignContact(
-                    campaign_id=campaign_id, contact_id=contact.id,
-                    status="perdu", last_sequence_sent=0,
-                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
-                ))
-                db.commit()
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue
 
             template = campaign.message_template or ""
@@ -223,7 +236,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
             _skip_no_perdu = False  # True = AI temporarily down, skip without marking perdu
             for attempt in range(1, 4):
                 try:
-                    message_body = await _render_message(campaign, template, contact, client)
+                    message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                 except Exception as exc:
                     last_error = f"Render failed: {exc}"
                     message_body = None
@@ -267,12 +280,15 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Non connecte — impossible d'envoyer un DM")
                     campaign.total_processed = (campaign.total_processed or 0) + 1
                     campaign.total_failed = (campaign.total_failed or 0) + 1
-                    db.add(CampaignContact(
-                        campaign_id=campaign_id, contact_id=contact.id,
-                        status="perdu", last_sequence_sent=0,
-                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
-                    ))
-                    db.commit()
+                    try:
+                        db.add(CampaignContact(
+                            campaign_id=campaign_id, contact_id=contact.id,
+                            status="perdu", last_sequence_sent=0,
+                            main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                        ))
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
                     send_ok = None  # signal: already handled
                     break
 
@@ -304,20 +320,23 @@ async def run_dm_campaign(campaign_id: int) -> None:
             _consecutive_ai_failures = 0  # reset on non-AI outcome
 
             if send_ok:
-                cc = CampaignContact(
-                    campaign_id=campaign_id,
-                    contact_id=contact.id,
-                    status="envoye",
-                    last_sequence_sent=0,
-                    main_sent_at=datetime.utcnow(),
-                    last_sent_at=datetime.utcnow(),
-                )
-                db.add(cc)
-                campaign.total_processed = (campaign.total_processed or 0) + 1
-                contact.last_interaction_at = datetime.utcnow()
-                _log_action(db, campaign_id, contact.id, "dm_send", "success")
-                logger.info("Campaign %d: main DM sent to contact %d", campaign_id, contact.id)
-                db.commit()
+                try:
+                    cc = CampaignContact(
+                        campaign_id=campaign_id,
+                        contact_id=contact.id,
+                        status="envoye",
+                        last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(),
+                        last_sent_at=datetime.utcnow(),
+                    )
+                    db.add(cc)
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    contact.last_interaction_at = datetime.utcnow()
+                    _log_action(db, campaign_id, contact.id, "dm_send", "success")
+                    logger.info("Campaign %d: main DM sent to contact %d", campaign_id, contact.id)
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 break  # Sent one real message — wait for next tick
             else:
                 # Failed after all retries — mark perdu and move to next contact immediately
@@ -325,12 +344,15 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "dm_send", "failed", last_error)
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
-                db.add(CampaignContact(
-                    campaign_id=campaign_id, contact_id=contact.id,
-                    status="perdu", last_sequence_sent=0,
-                    main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
-                ))
-                db.commit()
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue  # Next contact immediately, no cooldown
 
         # =====================================================================
@@ -384,7 +406,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
             db.rollback()
             campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
             if campaign:
-                campaign.error_message = f"[{datetime.utcnow().strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
+                campaign.error_message = f"[{datetime.now(ZoneInfo('Europe/Paris')).strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
                 db.commit()
         except Exception:
             pass
@@ -392,7 +414,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
         db.close()
 
 
-async def _render_message(campaign, template, contact, client):
+async def _render_message(campaign, template, contact, client, api_key=""):
     """Render a message for a contact, using AI if needed."""
     contact_data = {
         "first_name": contact.first_name,
@@ -401,7 +423,7 @@ async def _render_message(campaign, template, contact, client):
         "location": contact.location,
     }
 
-    if campaign.full_personalize and campaign.use_ai:
+    if campaign.full_personalize and campaign.use_ai and api_key:
         profile_data = None
         recent_posts = None
         try:
@@ -419,7 +441,7 @@ async def _render_message(campaign, template, contact, client):
                 generate_full_personalized_messages,
                 contact_data, profile_data, recent_posts,
                 campaign.context_text or "", campaign.ai_prompt or "",
-                0, [],
+                0, [], api_key,
             )
             if msgs and msgs[0].get("rendered"):
                 return msgs[0]["rendered"]
@@ -427,7 +449,7 @@ async def _render_message(campaign, template, contact, client):
             logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
         return render_template(template, contact_data)
 
-    elif campaign.use_ai and "{compliment}" in template:
+    elif campaign.use_ai and api_key and "{compliment}" in template:
         profile_data = None
         recent_posts = None
         try:
@@ -444,6 +466,7 @@ async def _render_message(campaign, template, contact, client):
             compliment = await asyncio.to_thread(
                 generate_compliment, contact_data, profile_data, recent_posts,
                 campaign.context_text or "", campaign.ai_prompt or "",
+                api_key,
             )
         except Exception as exc:
             logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)

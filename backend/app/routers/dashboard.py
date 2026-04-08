@@ -68,23 +68,22 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
     # --- global connection rate ---
     global_connection_rate = 0.0
     conn_dm_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type == "connection_dm").all()]
-    conn_only_campaigns = db.query(Campaign).filter(Campaign.user_id == _user.id, Campaign.type == "connection").all()
+    conn_only_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type == "connection").all()]
+    all_conn_ids = conn_dm_ids + conn_only_ids
 
     total_conn_requests = 0
     total_conn_accepted = 0
-    if conn_dm_ids:
-        total_conn_requests += db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id.in_(conn_dm_ids),
+    if all_conn_ids:
+        # Sent = all contacts that got a connection request (not just pending in DB)
+        total_conn_requests = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id.in_(all_conn_ids),
             CampaignContact.status != "pending",
         ).scalar() or 0
-        total_conn_accepted += db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id.in_(conn_dm_ids),
-            CampaignContact.status.notin_(["pending", "en_attente"]),
+        # Accepted = contacts where connection was actually accepted
+        total_conn_accepted = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id.in_(all_conn_ids),
+            CampaignContact.connection_accepted_at.isnot(None),
         ).scalar() or 0
-    for cc in conn_only_campaigns:
-        sent = (cc.total_succeeded or 0) + (cc.total_failed or 0)
-        total_conn_requests += sent
-        total_conn_accepted += cc.total_succeeded or 0
     if total_conn_requests > 0:
         global_connection_rate = round(total_conn_accepted / total_conn_requests * 100, 1)
 

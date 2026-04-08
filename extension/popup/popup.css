@@ -182,6 +182,37 @@ body {
   border-radius: 6px;
 }
 
+/* Cookie sync */
+.btn-cookies {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.btn-cookies:hover { border-color: #0084FF; background: #f0f7ff; color: #0084FF; }
+.btn-cookies:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-cookies.success { border-color: #059669; background: #ecfdf5; color: #059669; }
+.btn-cookies.error { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
+.cookie-status {
+  font-size: 12px;
+  text-align: center;
+  margin-top: 6px;
+  padding: 4px;
+}
+.cookie-status.ok { color: #059669; }
+.cookie-status.err { color: #dc2626; }
+
 .placeholder {
   text-align: center;
   color: #9ca3af;

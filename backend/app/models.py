@@ -22,6 +22,7 @@ class User(Base):
     li_at_cookie = Column(Text)
     jsessionid_cookie = Column(Text)
     cookies_valid = Column(Boolean, default=True)
+    gemini_api_key = Column(Text, nullable=True)
     onboarding_completed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -542,7 +542,9 @@ async def generate_ai_message(
     if not contact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
 
-    if not is_ollama_available():
+    if not user.gemini_api_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Clé API Gemini non configurée. Ajoutez-la dans les paramètres.")
+    if not is_ollama_available(api_key=user.gemini_api_key):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="L'IA n'est pas disponible")
 
     contact_data = {
@@ -574,6 +576,7 @@ async def generate_ai_message(
         2000,
         profile_data,
         recent_posts,
+        user.gemini_api_key or "",
     )
     if not message:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="L'IA n'a pas pu generer de message")

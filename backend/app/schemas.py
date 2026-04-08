@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     reason_for_using: Optional[str] = None
     linkedin_profile_url: Optional[str] = None
     cookies_valid: bool
+    has_gemini_key: bool = False
     onboarding_completed: bool
 
 class CookiesUpdate(BaseModel):

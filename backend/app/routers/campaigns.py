@@ -423,6 +423,7 @@ def generate_messages(
         context_text=body.context_text or "",
         followup_count=body.followup_count,
         followup_delays=body.followup_delays,
+        api_key=_user.gemini_api_key or "",
     )
 
     if not messages:
@@ -498,6 +499,7 @@ async def preview_personalization(
             body.ai_prompt,
             body.followup_count,
             body.followup_delays,
+            user.gemini_api_key or "",
         )
 
         previews.append({

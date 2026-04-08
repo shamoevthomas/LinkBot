@@ -12,6 +12,8 @@ Flow per contact:
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.models import (
@@ -128,7 +130,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
 
                 if get_global_actions_today(dm_action_types, db) < dm_limit:
                     template = campaign.message_template or ""
-                    message_body = await _render_message(campaign, template, contact, client)
+                    message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                     try:
                         success = await send_message(client, contact.urn_id, message_body)
                     except Exception as exc:
@@ -188,7 +190,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     continue
 
                 template = campaign.message_template or ""
-                message_body = await _render_message(campaign, template, contact, client)
+                message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                 try:
                     success = await send_message(client, contact.urn_id, message_body)
                 except Exception as exc:
@@ -248,97 +250,110 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 6: Send connection request to next unprocessed contact
         # =====================================================================
-        if get_global_actions_today(["connection_request"], db) < conn_limit:
+        while get_global_actions_today(["connection_request"], db) < conn_limit:
             total_contacted = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
             ).count()
 
-            if not campaign.total_target or total_contacted < campaign.total_target:
-                already_ids = (
-                    db.query(CampaignContact.contact_id)
-                    .filter(CampaignContact.campaign_id == campaign_id)
-                    .subquery()
+            if campaign.total_target and total_contacted >= campaign.total_target:
+                break
+
+            already_ids = (
+                db.query(CampaignContact.contact_id)
+                .filter(CampaignContact.campaign_id == campaign_id)
+                .subquery()
+            )
+            contact = (
+                db.query(Contact)
+                .filter(
+                    Contact.crm_id == campaign.crm_id,
+                    ~Contact.id.in_(already_ids),
                 )
-                contact = (
-                    db.query(Contact)
-                    .filter(
-                        Contact.crm_id == campaign.crm_id,
-                        ~Contact.id.in_(already_ids),
+                .order_by(Contact.added_at.asc())
+                .first()
+            )
+
+            if not contact:
+                break
+
+            # Skip if already in this campaign (race condition guard)
+            already = db.query(CampaignContact).filter(
+                CampaignContact.campaign_id == campaign_id,
+                CampaignContact.contact_id == contact.id,
+            ).first()
+            if already:
+                continue
+
+            # Resolve URN
+            resolved_urn = await resolve_contact_urn(client, contact)
+            if not resolved_urn:
+                _log_action(db, campaign_id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.commit()
+                continue
+
+            # Blacklist check
+            if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id, Blacklist.user_id == campaign.user_id).first():
+                _log_action(db, campaign_id, contact.id, "connection_request", "skipped", "Blacklisted")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_skipped = (campaign.total_skipped or 0) + 1
+                db.commit()
+                continue
+
+            # Skip if already connected
+            if contact.connection_status in ("connected", "DISTANCE_1"):
+                # Already connected → go straight to DM
+                try:
+                    cc = CampaignContact(
+                        campaign_id=campaign_id,
+                        contact_id=contact.id,
+                        status="envoye",
+                        last_sequence_sent=-1,  # DM not yet sent
+                        main_sent_at=datetime.utcnow(),
                     )
-                    .order_by(Contact.added_at.asc())
-                    .first()
+                    db.add(cc)
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    _log_action(db, campaign_id, contact.id, "already_connected", "success")
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
+                continue
+
+            # Send connection request
+            try:
+                result = await send_connection_request(client, contact.urn_id)
+            except Exception as exc:
+                _log_action(db, campaign_id, contact.id, "connection_request", "failed", str(exc)[:500])
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                db.commit()
+                continue
+
+            contact.connection_status = "pending"
+            if isinstance(result, dict):
+                inv_id = result.get("invitation_id") or result.get("invitationId")
+                if inv_id:
+                    contact.invitation_id = str(inv_id)
+            contact.last_interaction_at = datetime.utcnow()
+
+            try:
+                cc = CampaignContact(
+                    campaign_id=campaign_id,
+                    contact_id=contact.id,
+                    status="en_attente",
+                    last_sequence_sent=-1,
+                    main_sent_at=datetime.utcnow(),  # tracks when connection was sent
                 )
-
-                if contact:
-                    # Skip if already in this campaign (race condition guard)
-                    already = db.query(CampaignContact).filter(
-                        CampaignContact.campaign_id == campaign_id,
-                        CampaignContact.contact_id == contact.id,
-                    ).first()
-                    if already:
-                        return
-
-                    # Resolve URN
-                    resolved_urn = await resolve_contact_urn(client, contact)
-                    if not resolved_urn:
-                        _log_action(db, campaign_id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        campaign.total_failed = (campaign.total_failed or 0) + 1
-                        db.commit()
-                        return
-
-                    # Blacklist check
-                    if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id, Blacklist.user_id == campaign.user_id).first():
-                        _log_action(db, campaign_id, contact.id, "connection_request", "skipped", "Blacklisted")
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        campaign.total_skipped = (campaign.total_skipped or 0) + 1
-                        db.commit()
-                        return
-
-                    # Skip if already connected
-                    if contact.connection_status in ("connected", "DISTANCE_1"):
-                        # Already connected → go straight to DM
-                        cc = CampaignContact(
-                            campaign_id=campaign_id,
-                            contact_id=contact.id,
-                            status="envoye",
-                            last_sequence_sent=-1,  # DM not yet sent
-                            main_sent_at=datetime.utcnow(),
-                        )
-                        db.add(cc)
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        _log_action(db, campaign_id, contact.id, "already_connected", "success")
-                        db.commit()
-                    else:
-                        # Send connection request
-                        try:
-                            result = await send_connection_request(client, contact.urn_id)
-                        except Exception as exc:
-                            _log_action(db, campaign_id, contact.id, "connection_request", "failed", str(exc)[:500])
-                            campaign.total_processed = (campaign.total_processed or 0) + 1
-                            campaign.total_failed = (campaign.total_failed or 0) + 1
-                            db.commit()
-                            return
-
-                        contact.connection_status = "pending"
-                        if isinstance(result, dict):
-                            inv_id = result.get("invitation_id") or result.get("invitationId")
-                            if inv_id:
-                                contact.invitation_id = str(inv_id)
-                        contact.last_interaction_at = datetime.utcnow()
-
-                        cc = CampaignContact(
-                            campaign_id=campaign_id,
-                            contact_id=contact.id,
-                            status="en_attente",
-                            last_sequence_sent=-1,
-                            main_sent_at=datetime.utcnow(),  # tracks when connection was sent
-                        )
-                        db.add(cc)
-                        campaign.total_processed = (campaign.total_processed or 0) + 1
-                        _log_action(db, campaign_id, contact.id, "connection_request", "success")
-                        logger.info("Campaign %d: connection request sent to contact %d", campaign_id, contact.id)
-                        db.commit()
+                db.add(cc)
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                _log_action(db, campaign_id, contact.id, "connection_request", "success")
+                logger.info("Campaign %d: connection request sent to contact %d", campaign_id, contact.id)
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            # Sent one request — wait for next tick
+            break
 
         # =====================================================================
         # PHASE 7: Check campaign completion
@@ -389,7 +404,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             db.rollback()
             campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
             if campaign:
-                campaign.error_message = f"[{datetime.utcnow().strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
+                campaign.error_message = f"[{datetime.now(ZoneInfo('Europe/Paris')).strftime('%H:%M:%S')}] {type(exc).__name__}: {str(exc)[:300]}"
                 db.commit()
         except Exception:
             pass
@@ -397,7 +412,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         db.close()
 
 
-async def _render_message(campaign, template, contact, client):
+async def _render_message(campaign, template, contact, client, api_key=""):
     """Render a message for a contact, using AI if needed."""
     contact_data = {
         "first_name": contact.first_name,
@@ -406,7 +421,7 @@ async def _render_message(campaign, template, contact, client):
         "location": contact.location,
     }
 
-    if campaign.full_personalize and campaign.use_ai:
+    if campaign.full_personalize and campaign.use_ai and api_key:
         profile_data = None
         recent_posts = None
         try:
@@ -424,7 +439,7 @@ async def _render_message(campaign, template, contact, client):
                 generate_full_personalized_messages,
                 contact_data, profile_data, recent_posts,
                 campaign.context_text or "", campaign.ai_prompt or "",
-                0, [],
+                0, [], api_key,
             )
             if msgs and msgs[0].get("rendered"):
                 return msgs[0]["rendered"]
@@ -432,7 +447,7 @@ async def _render_message(campaign, template, contact, client):
             logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
         return render_template(template, contact_data)
 
-    elif campaign.use_ai and "{compliment}" in template:
+    elif campaign.use_ai and api_key and "{compliment}" in template:
         profile_data = None
         recent_posts = None
         try:
@@ -449,6 +464,7 @@ async def _render_message(campaign, template, contact, client):
             compliment = await asyncio.to_thread(
                 generate_compliment, contact_data, profile_data, recent_posts,
                 campaign.context_text or "", campaign.ai_prompt or "",
+                api_key,
             )
         except Exception as exc:
             logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Upload, Loader2, Key, Download, Settings, Activity, Copy, Check, ShieldOff, Trash2, Plus, Search, AlertTriangle, ChevronDown } from 'lucide-react';
-import { updateCookies, getCookiesStatus } from '../api/user';
+import { updateCookies, getCookiesStatus, updateGeminiKey } from '../api/user';
 import { getSettings, updateSettings, importConnections, importCSV, getLogs, getImportStatus } from '../api/config';
 import { getCRMs } from '../api/crm';
 import { getBlacklist, addToBlacklist, removeFromBlacklist } from '../api/blacklist';
@@ -80,7 +80,7 @@ function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, lo
 }
 
 export default function ConfigPage() {
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [tab, setTab] = useState('credentials');
   const [loading, setLoading] = useState(false);
 
@@ -91,6 +91,10 @@ export default function ConfigPage() {
 
   // Settings
   const [settings, setSettings] = useState({});
+
+  // Gemini API key
+  const [geminiKey, setGeminiKey] = useState('');
+  const [geminiSaving, setGeminiSaving] = useState(false);
 
   // Import
   const [crms, setCrms] = useState([]);
@@ -532,6 +536,78 @@ export default function ConfigPage() {
               {loading ? <Loader2 size={16} className="animate-spin" /> : null}
               Sauvegarder
             </button>
+
+            <hr className="border-gray-200" />
+
+            {/* Gemini API Key */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">Clé API Gemini (IA)</h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Votre clé personnelle pour les messages générés par IA.{' '}
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">Obtenir une clé</a>
+              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-1.5">
+                  {user?.has_gemini_key ? (
+                    <>
+                      <CheckCircle size={14} className="text-green-500" />
+                      <span className="text-xs text-green-600 font-medium">Clé configurée</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle size={14} className="text-gray-400" />
+                      <span className="text-xs text-gray-500">Aucune clé configurée</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)}
+                placeholder={user?.has_gemini_key ? 'Entrez une nouvelle clé pour remplacer...' : 'AIzaSy...'}
+                className="input-glass w-full mb-2" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
+              {user?.has_gemini_key && (
+                <div className="flex items-center gap-1.5 mb-3 p-2 rounded-lg" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                  <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                  <span className="text-xs text-amber-700">Changer la clé mettra en pause toutes vos campagnes IA en cours.</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={async () => {
+                  if (!geminiKey.trim()) return;
+                  setGeminiSaving(true);
+                  try {
+                    await updateGeminiKey(geminiKey.trim());
+                    toast.success('Clé API Gemini mise à jour');
+                    setGeminiKey('');
+                    refreshUser();
+                  } catch { toast.error('Erreur'); }
+                  finally { setGeminiSaving(false); }
+                }} disabled={geminiSaving || !geminiKey.trim()}
+                  className="cta-btn px-4 py-2 rounded-lg text-sm disabled:opacity-40 flex items-center gap-2">
+                  {geminiSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Sauvegarder la clé
+                </button>
+                {user?.has_gemini_key && (
+                  <button onClick={async () => {
+                    setGeminiSaving(true);
+                    try {
+                      await updateGeminiKey('');
+                      toast.success('Clé API supprimée');
+                      refreshUser();
+                    } catch { toast.error('Erreur'); }
+                    finally { setGeminiSaving(false); }
+                  }} disabled={geminiSaving}
+                    className="px-4 py-2 rounded-lg text-sm border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40">
+                    Supprimer la clé
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Besoin d'aide ?{' '}
+                <a href="https://www.linkedin.com/in/thomas-shamoev/" target="_blank" rel="noopener noreferrer" className="text-purple-500 underline">
+                  Contactez Thomas Shamoev sur LinkedIn
+                </a>
+              </p>
+            </div>
           </div>
         )}
 
