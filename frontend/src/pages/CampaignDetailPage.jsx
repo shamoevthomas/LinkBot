@@ -148,7 +148,7 @@ export default function CampaignDetailPage() {
 
   // Countdown extracted to <CountdownTimer /> component
 
-  const progress = campaign?.total_target ? Math.round((campaign.total_processed / campaign.total_target) * 100) : 0;
+  const progress = campaign?.status === 'completed' ? 100 : (campaign?.total_target ? Math.round((campaign.total_processed / campaign.total_target) * 100) : 0);
 
   const showReplyRate = campaign?.type && ['dm', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
   const showConnectionRate = campaign?.type && ['connection', 'connection_dm', 'search_connection_dm'].includes(campaign.type);

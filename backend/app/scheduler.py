@@ -49,6 +49,9 @@ async def _run_campaign_tick(campaign_id: int, campaign_type: str):
     elif campaign_type == "search_connection_dm":
         from app.jobs.search_connection_dm_campaign import run_search_connection_dm_campaign
         await run_search_connection_dm_campaign(campaign_id)
+    elif campaign_type == "lead_magnet":
+        from app.jobs.lead_magnet_job import run_lead_magnet_tick
+        await run_lead_magnet_tick(campaign_id)
     else:
         logger.warning("Unknown campaign type: %s", campaign_type)
 
@@ -110,12 +113,18 @@ async def _main_loop():
                 if now >= info["next_run"]:
                     print(f"[SCHEDULER] Firing campaign {cid} ({info['type']})", flush=True)
                     try:
-                        await _run_campaign_tick(cid, info["type"])
+                        # For lead magnets, extract numeric ID from "lm_5" key
+                        tick_id = int(str(cid).replace("lm_", "")) if info["type"] == "lead_magnet" else cid
+                        await _run_campaign_tick(tick_id, info["type"])
                     except Exception:
-                        logger.exception("Error running campaign %d", cid)
+                        logger.exception("Error running campaign %s", cid)
 
                     # Dynamic interval: recalculate based on remaining quota & time
-                    dynamic_secs = _compute_dynamic_interval(info["type"])
+                    # Lead magnets use their own fixed check interval
+                    if info["type"] == "lead_magnet":
+                        dynamic_secs = info["interval"]
+                    else:
+                        dynamic_secs = _compute_dynamic_interval(info["type"])
                     info["last_run"] = datetime.utcnow()
                     info["next_run"] = info["last_run"] + timedelta(seconds=dynamic_secs)
                     print(
@@ -294,11 +303,14 @@ def _compute_dynamic_interval(campaign_type: str) -> int:
 # ---------------------------------------------------------------------------
 
 def schedule_campaign_job(
-    campaign_id: int,
+    campaign_id,
     campaign_type: str,
     interval_seconds: Optional[int] = None,
 ) -> None:
-    """Register a campaign for periodic execution."""
+    """Register a campaign for periodic execution.
+
+    campaign_id can be int (campaigns) or str like "lm_5" (lead magnets).
+    """
     from app.database import SessionLocal
     from app.models import AppSettings
 
@@ -308,25 +320,34 @@ def schedule_campaign_job(
     # Determine interval
     db = SessionLocal()
     try:
-        limit_key = "max_dms_per_day" if campaign_type in ("dm", "connection_dm", "search_connection_dm") else "max_connections_per_day"
-        row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
-        daily_limit = int(row.value) if row else 25
-
-        schedule_interval = _get_schedule_interval(daily_limit)
-
-        if schedule_interval:
-            interval = schedule_interval
-            jitter = max(15, int(interval * 0.5))
+        if campaign_type == "lead_magnet":
+            # Lead magnets use their own check interval from the model
+            from app.models import LeadMagnet
+            # Extract numeric ID from "lm_5" key
+            lm_id = int(str(campaign_id).replace("lm_", ""))
+            lm = db.query(LeadMagnet).filter(LeadMagnet.id == lm_id).first()
+            interval = lm.check_interval_seconds if lm else 300
+            jitter = 0  # Fixed interval, no jitter
         else:
-            # Use user-configured interval range (in minutes)
-            min_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_min").first()
-            max_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_max").first()
-            interval_min = int(min_row.value) * 60 if min_row and min_row.value else 120  # 2 min default
-            interval_max = int(max_row.value) * 60 if max_row and max_row.value else 300  # 5 min default
-            if interval_max < interval_min:
-                interval_max = interval_min
-            interval = interval_min
-            jitter = max(0, interval_max - interval_min)
+            limit_key = "max_dms_per_day" if campaign_type in ("dm", "connection_dm", "search_connection_dm") else "max_connections_per_day"
+            row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
+            daily_limit = int(row.value) if row else 25
+
+            schedule_interval = _get_schedule_interval(daily_limit)
+
+            if schedule_interval:
+                interval = schedule_interval
+                jitter = max(15, int(interval * 0.5))
+            else:
+                # Use user-configured interval range (in minutes)
+                min_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_min").first()
+                max_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_max").first()
+                interval_min = int(min_row.value) * 60 if min_row and min_row.value else 120  # 2 min default
+                interval_max = int(max_row.value) * 60 if max_row and max_row.value else 300  # 5 min default
+                if interval_max < interval_min:
+                    interval_max = interval_min
+                interval = interval_min
+                jitter = max(0, interval_max - interval_min)
     finally:
         db.close()
 
@@ -350,14 +371,14 @@ def schedule_campaign_job(
     )
 
 
-def pause_campaign_job(campaign_id: int) -> None:
+def pause_campaign_job(campaign_id) -> None:
     """Pause a campaign."""
     if campaign_id in _campaigns:
         _campaigns[campaign_id]["paused"] = True
         print(f"[SCHEDULER] Paused campaign {campaign_id}", flush=True)
 
 
-def resume_campaign_job(campaign_id: int) -> None:
+def resume_campaign_job(campaign_id) -> None:
     """Resume a paused campaign."""
     if campaign_id in _campaigns:
         _campaigns[campaign_id]["paused"] = False
@@ -365,14 +386,14 @@ def resume_campaign_job(campaign_id: int) -> None:
         print(f"[SCHEDULER] Resumed campaign {campaign_id}", flush=True)
 
 
-def cancel_campaign_job(campaign_id: int) -> None:
+def cancel_campaign_job(campaign_id) -> None:
     """Remove a campaign from the scheduler."""
     removed = _campaigns.pop(campaign_id, None)
     if removed:
         print(f"[SCHEDULER] Cancelled campaign {campaign_id}", flush=True)
 
 
-def get_campaign_next_run_time(campaign_id: int):
+def get_campaign_next_run_time(campaign_id):
     """Return the next scheduled run time for a campaign, or None."""
     info = _campaigns.get(campaign_id)
     if info and not info.get("paused"):

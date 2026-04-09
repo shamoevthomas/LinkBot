@@ -254,5 +254,65 @@ class BulkTagAssign(BaseModel):
     contact_ids: List[int]
     tag_id: int
 
+# Lead Magnets
+class LeadMagnetCreate(BaseModel):
+    name: str
+    post_url: str
+    keyword: str
+    check_interval_seconds: int = 300
+    action_interval_seconds: int = 60
+    dm_template: str
+    reply_template_connected: Optional[str] = None
+    reply_template_not_connected: Optional[str] = None
+    connection_message: Optional[str] = None
+
+class LeadMagnetUpdate(BaseModel):
+    name: Optional[str] = None
+    post_url: Optional[str] = None
+    keyword: Optional[str] = None
+    check_interval_seconds: Optional[int] = None
+    action_interval_seconds: Optional[int] = None
+    dm_template: Optional[str] = None
+    reply_template_connected: Optional[str] = None
+    reply_template_not_connected: Optional[str] = None
+    connection_message: Optional[str] = None
+
+class LeadMagnetResponse(BaseModel):
+    id: int
+    name: str
+    status: str
+    post_url: str
+    keyword: str
+    check_interval_seconds: int
+    action_interval_seconds: int
+    dm_template: str
+    reply_template_connected: Optional[str] = None
+    reply_template_not_connected: Optional[str] = None
+    connection_message: Optional[str] = None
+    total_processed: int = 0
+    total_dm_sent: int = 0
+    total_connections_sent: int = 0
+    total_replies_sent: int = 0
+    total_likes: int = 0
+    error_message: Optional[str] = None
+    started_at: Optional[datetime] = None
+    created_at: datetime
+
+class LeadMagnetContactResponse(BaseModel):
+    id: int
+    lead_magnet_id: int
+    commenter_urn_id: str
+    commenter_name: Optional[str] = None
+    comment_text: Optional[str] = None
+    status: str
+    is_connected: bool
+    liked_comment: bool
+    replied_to_comment: bool
+    dm_sent: bool
+    connection_sent_at: Optional[datetime] = None
+    connection_accepted_at: Optional[datetime] = None
+    dm_sent_at: Optional[datetime] = None
+    created_at: datetime
+
 class ImportConnectionsRequest(BaseModel):
     crm_id: int

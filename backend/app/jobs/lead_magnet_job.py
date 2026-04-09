@@ -1,0 +1,378 @@
+"""
+Lead Magnet job runner.
+
+Each tick:
+1. Fetch post comments, detect new keyword matches
+2. Check pending connection requests
+3. Process actions: like, reply, DM, or connection request
+"""
+
+import asyncio
+import json
+import logging
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from app.database import SessionLocal
+from app.models import LeadMagnet, LeadMagnetContact, CampaignAction, User
+from app.linkedin_service import (
+    get_linkedin_client, get_post_comments, like_comment, reply_to_comment,
+    send_message, send_connection_request, get_profile,
+)
+from app.utils.template_engine import render_template
+from app.scheduler import cancel_campaign_job
+
+
+def _lm_key(lm_id: int) -> str:
+    return f"lm_{lm_id}"
+
+logger = logging.getLogger(__name__)
+
+CONNECTION_WAIT_DAYS = 7
+
+
+def _log_action(db, lead_magnet_id, contact_id, action_type, status, error_message=None):
+    db.add(CampaignAction(
+        lead_magnet_id=lead_magnet_id,
+        contact_id=contact_id,
+        action_type=action_type,
+        status=status,
+        error_message=error_message,
+    ))
+
+
+def _render(template, commenter_name):
+    """Render a template with commenter info."""
+    if not template:
+        return ""
+    parts = (commenter_name or "").split(" ", 1)
+    contact_data = {
+        "first_name": parts[0] if parts else "",
+        "last_name": parts[1] if len(parts) > 1 else "",
+        "name": commenter_name or "",
+    }
+    return render_template(template, contact_data)
+
+
+async def run_lead_magnet_tick(lead_magnet_id: int) -> None:
+    """Run one tick of a lead magnet."""
+    print(f"[LEAD MAGNET] #{lead_magnet_id}: tick start", flush=True)
+    db = SessionLocal()
+    try:
+        lm = db.query(LeadMagnet).filter(LeadMagnet.id == lead_magnet_id).first()
+        if not lm:
+            cancel_campaign_job(_lm_key(lead_magnet_id))
+            return
+        if lm.status != "running":
+            return
+
+        user = db.query(User).filter(User.id == lm.user_id).first()
+        if not user or not user.li_at_cookie or not user.cookies_valid:
+            lm.status = "failed"
+            lm.error_message = "No valid LinkedIn cookies"
+            db.commit()
+            cancel_campaign_job(_lm_key(lead_magnet_id))
+            return
+
+        client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
+
+        # =================================================================
+        # PHASE 1: Fetch comments & detect new keyword matches
+        # =================================================================
+        await _phase_detect_comments(db, lm, client)
+
+        # =================================================================
+        # PHASE 2: Check pending connections
+        # =================================================================
+        await _phase_check_connections(db, lm, client)
+
+        # =================================================================
+        # PHASE 3: Process actions (like, reply, DM, connection)
+        # =================================================================
+        await _phase_process_actions(db, lm, client)
+
+        db.commit()
+
+    except Exception as exc:
+        logger.exception("Error in lead magnet %d", lead_magnet_id)
+        try:
+            db.rollback()
+            lm = db.query(LeadMagnet).filter(LeadMagnet.id == lead_magnet_id).first()
+            if lm:
+                lm.error_message = (
+                    f"[{datetime.now(ZoneInfo('Europe/Paris')).strftime('%H:%M:%S')}] "
+                    f"{type(exc).__name__}: {str(exc)[:300]}"
+                )
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+        print(f"[LEAD MAGNET] #{lead_magnet_id}: tick done", flush=True)
+
+
+async def _phase_detect_comments(db, lm, client):
+    """Fetch post comments and detect new keyword matches."""
+    try:
+        comments = await get_post_comments(client, lm.post_activity_urn)
+    except Exception as exc:
+        logger.warning("Failed to fetch comments for lead magnet %d: %s", lm.id, exc)
+        lm.error_message = f"Comment fetch error: {str(exc)[:200]}"
+        db.commit()
+        return
+
+    processed_ids = set(json.loads(lm.processed_comment_ids or "[]"))
+    keyword = (lm.keyword or "").lower()
+    new_matches = 0
+
+    for element in comments:
+        # Extract comment data from LinkedIn API response
+        comment_urn = element.get("dashEntityUrn") or element.get("urn") or ""
+        if not comment_urn:
+            continue
+
+        # Skip already processed
+        if comment_urn in processed_ids:
+            continue
+        processed_ids.add(comment_urn)
+
+        # Extract comment text
+        commentary = element.get("commentary") or element.get("comment") or {}
+        if isinstance(commentary, dict):
+            comment_text = commentary.get("text", "")
+        elif isinstance(commentary, str):
+            comment_text = commentary
+        else:
+            comment_text = str(commentary)
+
+        # Check keyword match (partial, case-insensitive)
+        if keyword and keyword not in comment_text.lower():
+            continue
+
+        # Extract commenter info
+        commenter = element.get("commenter") or {}
+        commenter_entity = commenter.get("com.linkedin.voyager.feed.MemberActor") or commenter
+        commenter_urn_id = ""
+        commenter_name = ""
+
+        # Try different paths to get commenter URN
+        member_urn = commenter_entity.get("urn") or commenter_entity.get("miniProfile", {}).get("dashEntityUrn") or ""
+        if member_urn:
+            # Extract ID from urn:li:fsd_profile:xxx or urn:li:member:xxx
+            parts = member_urn.split(":")
+            commenter_urn_id = parts[-1] if parts else ""
+
+        # Try to get name
+        mini = commenter_entity.get("miniProfile") or commenter_entity.get("actor") or {}
+        if isinstance(mini, dict):
+            first = mini.get("firstName", "")
+            last = mini.get("lastName", "")
+            commenter_name = f"{first} {last}".strip()
+            if not commenter_urn_id:
+                ep = mini.get("entityUrn") or mini.get("dashEntityUrn") or ""
+                if ep:
+                    commenter_urn_id = ep.split(":")[-1]
+
+        if not commenter_urn_id:
+            continue
+
+        # Check if already tracked
+        existing = db.query(LeadMagnetContact).filter(
+            LeadMagnetContact.lead_magnet_id == lm.id,
+            LeadMagnetContact.commenter_urn_id == commenter_urn_id,
+        ).first()
+        if existing:
+            continue
+
+        # Check connection status
+        is_connected = False
+        try:
+            profile = await get_profile(client, urn_id=commenter_urn_id)
+            distance = profile.get("distance")
+            is_connected = distance in (1, "DISTANCE_1", "1")
+            if not commenter_name:
+                commenter_name = f"{profile.get('firstName', '')} {profile.get('lastName', '')}".strip()
+        except Exception:
+            pass
+
+        lmc = LeadMagnetContact(
+            lead_magnet_id=lm.id,
+            commenter_urn_id=commenter_urn_id,
+            commenter_name=commenter_name,
+            comment_urn=comment_urn,
+            comment_text=comment_text[:500] if comment_text else None,
+            status="pending_actions",
+            is_connected=is_connected,
+        )
+        db.add(lmc)
+        lm.total_processed = (lm.total_processed or 0) + 1
+        new_matches += 1
+        _log_action(db, lm.id, None, "lm_comment_detected", "success", f"Keyword '{lm.keyword}' matched")
+
+    # Save processed IDs
+    lm.processed_comment_ids = json.dumps(list(processed_ids))
+    db.commit()
+
+    if new_matches > 0:
+        print(f"[LEAD MAGNET] #{lm.id}: {new_matches} new keyword matches detected", flush=True)
+
+
+async def _phase_check_connections(db, lm, client):
+    """Check if pending connections have been accepted."""
+    pending = db.query(LeadMagnetContact).filter(
+        LeadMagnetContact.lead_magnet_id == lm.id,
+        LeadMagnetContact.status == "connection_sent",
+    ).all()
+
+    for lmc in pending:
+        try:
+            profile = await get_profile(client, urn_id=lmc.commenter_urn_id)
+            distance = profile.get("distance")
+            if distance in (1, "DISTANCE_1", "1"):
+                lmc.status = "dm_pending"
+                lmc.connection_accepted_at = datetime.utcnow()
+                lmc.is_connected = True
+                _log_action(db, lm.id, None, "lm_connection_accepted", "success")
+                print(f"[LEAD MAGNET] #{lm.id}: connection accepted by {lmc.commenter_name}", flush=True)
+            elif lmc.connection_sent_at and datetime.utcnow() - lmc.connection_sent_at > timedelta(days=CONNECTION_WAIT_DAYS):
+                lmc.status = "failed"
+                _log_action(db, lm.id, None, "lm_connection_timeout", "failed", "Connection not accepted after 7 days")
+        except Exception as exc:
+            logger.warning("Failed to check connection for %s: %s", lmc.commenter_urn_id, exc)
+
+    db.commit()
+
+
+async def _phase_process_actions(db, lm, client):
+    """Process pending actions: like, reply, DM, connection request."""
+    to_process = db.query(LeadMagnetContact).filter(
+        LeadMagnetContact.lead_magnet_id == lm.id,
+        LeadMagnetContact.status.in_(["pending_actions", "dm_pending"]),
+    ).order_by(LeadMagnetContact.created_at.asc()).all()
+
+    action_count = 0
+    for lmc in to_process:
+        # Spacing between actions
+        if action_count > 0:
+            await asyncio.sleep(lm.action_interval_seconds)
+
+        # Re-check lead magnet status (may have been paused mid-tick)
+        db.refresh(lm)
+        if lm.status != "running":
+            break
+
+        try:
+            if lmc.is_connected and lmc.status == "pending_actions":
+                await _handle_connected(db, lm, lmc, client)
+            elif not lmc.is_connected and lmc.status == "pending_actions":
+                await _handle_not_connected(db, lm, lmc, client)
+            elif lmc.status == "dm_pending":
+                await _handle_dm_pending(db, lm, lmc, client)
+            action_count += 1
+        except Exception as exc:
+            logger.warning("Error processing lead magnet contact %d: %s", lmc.id, exc)
+            _log_action(db, lm.id, None, "lm_action_error", "failed", str(exc)[:300])
+
+        db.commit()
+
+
+async def _handle_connected(db, lm, lmc, client):
+    """Connected commenter: like comment + reply + send DM."""
+    # 1. Like comment
+    if not lmc.liked_comment and lmc.comment_urn:
+        try:
+            ok = await like_comment(client, lmc.comment_urn)
+            if ok:
+                lmc.liked_comment = True
+                lm.total_likes = (lm.total_likes or 0) + 1
+                _log_action(db, lm.id, None, "lm_like_comment", "success")
+        except Exception as exc:
+            _log_action(db, lm.id, None, "lm_like_comment", "failed", str(exc)[:200])
+
+    # 2. Reply to comment
+    if not lmc.replied_to_comment and lm.reply_template_connected and lmc.comment_urn:
+        try:
+            reply_text = _render(lm.reply_template_connected, lmc.commenter_name)
+            ok = await reply_to_comment(client, lm.post_activity_urn, lmc.comment_urn, reply_text)
+            if ok:
+                lmc.replied_to_comment = True
+                lm.total_replies_sent = (lm.total_replies_sent or 0) + 1
+                _log_action(db, lm.id, None, "lm_reply_comment", "success")
+        except Exception as exc:
+            _log_action(db, lm.id, None, "lm_reply_comment", "failed", str(exc)[:200])
+
+    # 3. Send DM
+    if not lmc.dm_sent and lm.dm_template:
+        try:
+            dm_text = _render(lm.dm_template, lmc.commenter_name)
+            ok = await send_message(client, lmc.commenter_urn_id, dm_text)
+            if ok:
+                lmc.dm_sent = True
+                lmc.dm_sent_at = datetime.utcnow()
+                lm.total_dm_sent = (lm.total_dm_sent or 0) + 1
+                _log_action(db, lm.id, None, "lm_dm_send", "success")
+                print(f"[LEAD MAGNET] #{lm.id}: DM sent to {lmc.commenter_name}", flush=True)
+            else:
+                _log_action(db, lm.id, None, "lm_dm_send", "failed", "LinkedIn returned error")
+        except Exception as exc:
+            _log_action(db, lm.id, None, "lm_dm_send", "failed", str(exc)[:200])
+
+    lmc.status = "completed"
+
+
+async def _handle_not_connected(db, lm, lmc, client):
+    """Non-connected commenter: like comment + reply + send connection request."""
+    # 1. Like comment
+    if not lmc.liked_comment and lmc.comment_urn:
+        try:
+            ok = await like_comment(client, lmc.comment_urn)
+            if ok:
+                lmc.liked_comment = True
+                lm.total_likes = (lm.total_likes or 0) + 1
+                _log_action(db, lm.id, None, "lm_like_comment", "success")
+        except Exception as exc:
+            _log_action(db, lm.id, None, "lm_like_comment", "failed", str(exc)[:200])
+
+    # 2. Reply to comment
+    if not lmc.replied_to_comment and lm.reply_template_not_connected and lmc.comment_urn:
+        try:
+            reply_text = _render(lm.reply_template_not_connected, lmc.commenter_name)
+            ok = await reply_to_comment(client, lm.post_activity_urn, lmc.comment_urn, reply_text)
+            if ok:
+                lmc.replied_to_comment = True
+                lm.total_replies_sent = (lm.total_replies_sent or 0) + 1
+                _log_action(db, lm.id, None, "lm_reply_comment", "success")
+        except Exception as exc:
+            _log_action(db, lm.id, None, "lm_reply_comment", "failed", str(exc)[:200])
+
+    # 3. Send connection request
+    try:
+        await send_connection_request(client, lmc.commenter_urn_id, message=lm.connection_message)
+        lmc.status = "connection_sent"
+        lmc.connection_sent_at = datetime.utcnow()
+        lm.total_connections_sent = (lm.total_connections_sent or 0) + 1
+        _log_action(db, lm.id, None, "lm_connection_request", "success")
+        print(f"[LEAD MAGNET] #{lm.id}: connection request sent to {lmc.commenter_name}", flush=True)
+    except Exception as exc:
+        _log_action(db, lm.id, None, "lm_connection_request", "failed", str(exc)[:200])
+        lmc.status = "failed"
+
+
+async def _handle_dm_pending(db, lm, lmc, client):
+    """Connection accepted — send DM now."""
+    if not lmc.dm_sent and lm.dm_template:
+        try:
+            dm_text = _render(lm.dm_template, lmc.commenter_name)
+            ok = await send_message(client, lmc.commenter_urn_id, dm_text)
+            if ok:
+                lmc.dm_sent = True
+                lmc.dm_sent_at = datetime.utcnow()
+                lm.total_dm_sent = (lm.total_dm_sent or 0) + 1
+                _log_action(db, lm.id, None, "lm_dm_send", "success")
+                print(f"[LEAD MAGNET] #{lm.id}: DM sent to {lmc.commenter_name} (after connection)", flush=True)
+            else:
+                _log_action(db, lm.id, None, "lm_dm_send", "failed", "LinkedIn returned error")
+        except Exception as exc:
+            _log_action(db, lm.id, None, "lm_dm_send", "failed", str(exc)[:200])
+
+    lmc.status = "completed"

@@ -66,8 +66,8 @@ def seed_db():
 
 
 def _recover_running_campaigns():
-    """Re-register scheduler jobs for campaigns that are still 'running'."""
-    from app.models import Campaign
+    """Re-register scheduler jobs for campaigns and lead magnets that are still 'running'."""
+    from app.models import Campaign, LeadMagnet
     from app.scheduler import schedule_campaign_job
 
     db = SessionLocal()
@@ -76,6 +76,11 @@ def _recover_running_campaigns():
         for c in running:
             schedule_campaign_job(c.id, c.type)
             print(f"[STARTUP] Recovered campaign {c.id} ({c.type})", flush=True)
+
+        running_lm = db.query(LeadMagnet).filter(LeadMagnet.status == "running").all()
+        for lm in running_lm:
+            schedule_campaign_job(f"lm_{lm.id}", "lead_magnet")
+            print(f"[STARTUP] Recovered lead magnet {lm.id} ({lm.name})", flush=True)
     finally:
         db.close()
 
@@ -119,6 +124,7 @@ from app.routers import dashboard as dashboard_router
 from app.routers import blacklist as blacklist_router
 from app.routers import tags as tags_router
 from app.routers import notifications as notifications_router
+from app.routers import lead_magnets as lead_magnets_router
 
 app.include_router(auth_router.router)
 app.include_router(user_router.router)
@@ -130,6 +136,7 @@ app.include_router(dashboard_router.router)
 app.include_router(blacklist_router.router)
 app.include_router(tags_router.router)
 app.include_router(notifications_router.router)
+app.include_router(lead_magnets_router.router)
 
 
 @app.get("/api/health")

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Rocket, Settings, Link, Contact, Bell, Check } from 'lucide-react';
+import { LayoutDashboard, Users, Rocket, Settings, Link, Contact, Bell, Check, Magnet } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getNotifications } from '../../api/dashboard';
 import { getNotificationsList, markNotificationRead, markAllNotificationsRead } from '../../api/notifications';
@@ -11,6 +11,7 @@ const links = [
   { to: '/dashboard/crms', icon: Users, label: 'CRM' },
   { to: '/dashboard/contacts', icon: Contact, label: 'Contacts' },
   { to: '/dashboard/campaigns', icon: Rocket, label: 'Campagnes', badgeKey: 'campaigns_attention' },
+  { to: '/dashboard/lead-magnets', icon: Magnet, label: 'Lead Magnets' },
   { to: '/dashboard/config', icon: Settings, label: 'Configuration', dotKey: 'cookies_invalid' },
 ];
 

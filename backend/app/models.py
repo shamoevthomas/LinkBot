@@ -117,7 +117,8 @@ class CampaignAction(Base):
     __tablename__ = "campaign_action"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    campaign_id = Column(Integer, ForeignKey("campaign.id", ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(Integer, ForeignKey("campaign.id", ondelete="CASCADE"))
+    lead_magnet_id = Column(Integer, ForeignKey("lead_magnet.id", ondelete="CASCADE"))
     contact_id = Column(Integer, ForeignKey("contact.id", ondelete="SET NULL"))
     action_type = Column(String, nullable=False)
     status = Column(String, nullable=False)  # success, failed, skipped
@@ -215,6 +216,62 @@ class ContactTag(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     contact_id = Column(Integer, ForeignKey("contact.id", ondelete="CASCADE"), nullable=False)
     tag_id = Column(Integer, ForeignKey("tag.id", ondelete="CASCADE"), nullable=False)
+
+
+class LeadMagnet(Base):
+    __tablename__ = "lead_magnet"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    name = Column(String, nullable=False)
+    status = Column(String, default="pending")  # pending, running, paused, cancelled
+    post_url = Column(Text, nullable=False)
+    post_activity_urn = Column(String, nullable=False)
+    keyword = Column(String, nullable=False)
+    check_interval_seconds = Column(Integer, default=300)
+    action_interval_seconds = Column(Integer, default=60)
+    dm_template = Column(Text, nullable=False)
+    reply_template_connected = Column(Text)
+    reply_template_not_connected = Column(Text)
+    connection_message = Column(Text)
+    processed_comment_ids = Column(Text, default="[]")  # JSON array
+    total_processed = Column(Integer, default=0)
+    total_dm_sent = Column(Integer, default=0)
+    total_connections_sent = Column(Integer, default=0)
+    total_replies_sent = Column(Integer, default=0)
+    total_likes = Column(Integer, default=0)
+    error_message = Column(Text)
+    started_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", backref="lead_magnets")
+    contacts = relationship("LeadMagnetContact", back_populates="lead_magnet", cascade="all, delete-orphan")
+
+
+class LeadMagnetContact(Base):
+    __tablename__ = "lead_magnet_contact"
+    __table_args__ = (
+        UniqueConstraint("lead_magnet_id", "commenter_urn_id", name="uq_lm_commenter"),
+        Index("ix_lmc_status", "lead_magnet_id", "status"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lead_magnet_id = Column(Integer, ForeignKey("lead_magnet.id", ondelete="CASCADE"), nullable=False)
+    commenter_urn_id = Column(String, nullable=False)
+    commenter_name = Column(String)
+    comment_urn = Column(String)
+    comment_text = Column(Text)
+    status = Column(String, default="pending_actions")  # pending_actions, connection_sent, dm_pending, completed, failed
+    is_connected = Column(Boolean, default=False)
+    liked_comment = Column(Boolean, default=False)
+    replied_to_comment = Column(Boolean, default=False)
+    dm_sent = Column(Boolean, default=False)
+    connection_sent_at = Column(DateTime)
+    connection_accepted_at = Column(DateTime)
+    dm_sent_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    lead_magnet = relationship("LeadMagnet", back_populates="contacts")
 
 
 class Notification(Base):

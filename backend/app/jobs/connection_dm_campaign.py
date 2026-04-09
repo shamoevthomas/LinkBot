@@ -384,7 +384,32 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         campaign.total_succeeded = total_reussi
 
         all_sent = total_remaining == 0 or (campaign.total_target and total_contacts >= campaign.total_target)
-        all_done = all_sent and total_final == total_contacts and total_contacts > 0
+
+        # Check if there are still follow-ups pending (active contacts that haven't
+        # exhausted all follow-up sequences).  reply_checker will continue monitoring
+        # active contacts even after completion.
+        pending_followups = 0
+        if all_sent and max_followup_seq > 0:
+            pending_followups = db.query(CampaignContact).filter(
+                CampaignContact.campaign_id == campaign_id,
+                CampaignContact.status.in_(ACTIVE_STATUSES),
+                CampaignContact.last_sequence_sent < max_followup_seq,
+            ).count()
+
+        # Also check for contacts waiting for connection acceptance
+        pending_connections = 0
+        if all_sent:
+            pending_connections = db.query(CampaignContact).filter(
+                CampaignContact.campaign_id == campaign_id,
+                CampaignContact.status == "en_attente",
+            ).count()
+
+        all_done = (
+            all_sent
+            and total_contacts > 0
+            and pending_connections == 0
+            and (total_final == total_contacts or pending_followups == 0)
+        )
 
         if all_done:
             campaign.status = "completed"

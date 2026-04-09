@@ -165,11 +165,17 @@ async def run_reply_checks() -> None:
     print("[REPLY CHECKER] tick start", flush=True)
     db = SessionLocal()
     try:
+        # Check running campaigns + recently completed ones (replies can still come in)
+        cutoff = datetime.utcnow() - timedelta(days=7)
+        from sqlalchemy import or_, and_
         campaigns = (
             db.query(Campaign)
             .filter(
-                Campaign.status == "running",
                 Campaign.type.in_(["dm", "connection_dm", "search_connection_dm"]),
+                or_(
+                    Campaign.status == "running",
+                    and_(Campaign.status == "completed", Campaign.completed_at >= cutoff),
+                ),
             )
             .all()
         )
@@ -235,7 +241,11 @@ async def run_reply_checks() -> None:
 
                 # =============================================================
                 # PART 2: Send follow-ups where delay has been reached
+                # (skip for completed campaigns — only reply detection)
                 # =============================================================
+                if campaign.status == "completed":
+                    continue
+
                 followups = (
                     db.query(CampaignMessage)
                     .filter(CampaignMessage.campaign_id == campaign.id, CampaignMessage.sequence > 0)

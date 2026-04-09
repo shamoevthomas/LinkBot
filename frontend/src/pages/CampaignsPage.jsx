@@ -89,7 +89,7 @@ export default function CampaignsPage() {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  const progress = (c) => c.total_target ? Math.round((c.total_processed / c.total_target) * 100) : 0;
+  const progress = (c) => c.status === 'completed' ? 100 : (c.total_target ? Math.round((c.total_processed / c.total_target) * 100) : 0);
 
   return (
     <PageWrapper>

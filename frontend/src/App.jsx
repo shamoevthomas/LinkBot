@@ -13,6 +13,8 @@ import CampaignDetailPage from './pages/CampaignDetailPage';
 import NewDMCampaignPage from './pages/NewDMCampaignPage';
 import ContactsPage from './pages/ContactsPage';
 import ConfigPage from './pages/ConfigPage';
+import LeadMagnetsPage from './pages/LeadMagnetsPage';
+import LeadMagnetDetailPage from './pages/LeadMagnetDetailPage';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -61,6 +63,12 @@ function AppRoutes() {
       } />
       <Route path="/dashboard/campaigns/:id" element={
         <ProtectedRoute><DashboardWrapper><CampaignDetailPage /></DashboardWrapper></ProtectedRoute>
+      } />
+      <Route path="/dashboard/lead-magnets" element={
+        <ProtectedRoute><DashboardWrapper><LeadMagnetsPage /></DashboardWrapper></ProtectedRoute>
+      } />
+      <Route path="/dashboard/lead-magnets/:id" element={
+        <ProtectedRoute><DashboardWrapper><LeadMagnetDetailPage /></DashboardWrapper></ProtectedRoute>
       } />
       <Route path="/dashboard/config" element={
         <ProtectedRoute><DashboardWrapper><ConfigPage /></DashboardWrapper></ProtectedRoute>

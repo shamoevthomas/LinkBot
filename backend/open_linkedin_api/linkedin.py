@@ -2368,6 +2368,51 @@ class Linkedin(object):
 
         return res.status_code != 201
 
+    def react_to_comment(self, comment_urn, reaction_type="LIKE"):
+        """React to a comment.
+
+        :param comment_urn: Full comment URN (e.g. urn:li:comment:(activityId,commentId))
+        :type comment_urn: str
+        :param reaction_type: Reaction type, defaults to "LIKE"
+        :type reaction_type: str
+
+        :return: Error state. If True, an error occurred.
+        :rtype: boolean
+        """
+        params = {"threadUrn": comment_urn}
+        payload = {"reactionType": reaction_type}
+
+        res = self._post(
+            "/voyagerSocialDashReactions",
+            params=params,
+            data=json.dumps(payload),
+        )
+
+        return res.status_code != 201
+
+    def reply_to_comment(self, activity_urn, parent_comment_urn, reply_text):
+        """Reply to a comment on a post.
+
+        :param activity_urn: Numeric activity ID (e.g. '1234567890')
+        :type activity_urn: str
+        :param parent_comment_urn: Full parent comment URN
+        :type parent_comment_urn: str
+        :param reply_text: The reply text
+        :type reply_text: str
+
+        :return: True if successful, False otherwise
+        :rtype: boolean
+        """
+        url = "/feed/comments"
+        payload = {
+            "updateId": f"activity:{activity_urn}",
+            "parentComment": parent_comment_urn,
+            "commentary": {"text": reply_text},
+        }
+
+        res = self._post(url, data=json.dumps(payload))
+        return res.status_code in (200, 201)
+
     def get_job_skills(self, job_id: str) -> Dict:
         """Fetch skills associated with a given job.
         :param job_id: LinkedIn job ID

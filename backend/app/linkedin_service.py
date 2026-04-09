@@ -375,6 +375,73 @@ async def get_profile_posts(
 
 
 # ---------------------------------------------------------------------------
+# Post comments
+# ---------------------------------------------------------------------------
+
+async def get_post_comments(
+    client: Linkedin,
+    post_urn: str,
+    comment_count: int = 100,
+) -> List[Dict[str, Any]]:
+    """Fetch comments for a LinkedIn post."""
+    try:
+        results = await asyncio.to_thread(
+            client.get_post_comments,
+            post_urn,
+            comment_count,
+        )
+        return results or []
+    except UnauthorizedException:
+        logger.warning("LinkedIn cookies expired during get_post_comments")
+        raise
+    except Exception:
+        logger.exception("Error in get_post_comments for post_urn=%s", post_urn)
+        raise
+
+
+async def like_comment(
+    client: Linkedin,
+    comment_urn: str,
+) -> bool:
+    """Like a comment. Returns True on success."""
+    try:
+        had_error = await asyncio.to_thread(
+            client.react_to_comment,
+            comment_urn,
+        )
+        return not had_error
+    except UnauthorizedException:
+        logger.warning("LinkedIn cookies expired during like_comment")
+        raise
+    except Exception:
+        logger.exception("Error in like_comment for comment_urn=%s", comment_urn)
+        raise
+
+
+async def reply_to_comment(
+    client: Linkedin,
+    activity_urn: str,
+    parent_comment_urn: str,
+    reply_text: str,
+) -> bool:
+    """Reply to a comment on a post. Returns True on success."""
+    try:
+        success = await asyncio.to_thread(
+            client.reply_to_comment,
+            activity_urn,
+            parent_comment_urn,
+            reply_text,
+        )
+        return success
+    except UnauthorizedException:
+        logger.warning("LinkedIn cookies expired during reply_to_comment")
+        raise
+    except Exception:
+        logger.exception("Error in reply_to_comment for comment_urn=%s", parent_comment_urn)
+        raise
+
+
+# ---------------------------------------------------------------------------
 # Connections list
 # ---------------------------------------------------------------------------
 

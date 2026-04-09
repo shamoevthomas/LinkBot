@@ -16,7 +16,7 @@ class Base(DeclarativeBase):
 
 
 def init_db():
-    from app.models import User, CRM, Contact, Campaign, CampaignAction, AppSettings, Notification  # noqa: F401
+    from app.models import User, CRM, Contact, Campaign, CampaignAction, AppSettings, Notification, LeadMagnet, LeadMagnetContact  # noqa: F401
     Base.metadata.create_all(bind=engine)
     _run_migrations()
 
@@ -64,6 +64,20 @@ def _run_migrations():
         conn.execute(text(
             "DELETE FROM contact WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '5 minutes'"
         )) if is_pg else None
+
+        # Add lead_magnet_id column to campaign_action for lead magnet action logging
+        action_columns = [c["name"] for c in inspector.get_columns("campaign_action")]
+        if "lead_magnet_id" not in action_columns:
+            conn.execute(text('ALTER TABLE "campaign_action" ADD COLUMN lead_magnet_id INTEGER'))
+            print("[MIGRATION] Added lead_magnet_id to campaign_action", flush=True)
+
+        # Make campaign_action.campaign_id nullable (lead magnet actions don't have a campaign)
+        if is_pg:
+            try:
+                conn.execute(text('ALTER TABLE "campaign_action" ALTER COLUMN campaign_id DROP NOT NULL'))
+                print("[MIGRATION] Made campaign_action.campaign_id nullable", flush=True)
+            except Exception:
+                pass  # Already nullable or constraint doesn't exist
 
     # Performance indexes — run in separate connections to avoid deadlock on concurrent startup
     for idx_sql in [
