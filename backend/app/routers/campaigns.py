@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
 
-from sqlalchemy import func, case
+from sqlalchemy import func, case, and_
 from app.dependencies import get_db, get_current_user
 from app.models import User, Campaign, CampaignAction, CampaignMessage, CampaignContact, CRM, Contact, AppSettings
 from app.schemas import (
@@ -50,6 +50,7 @@ def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
         func.count(case((CampaignContact.status.notin_(["pending", "en_attente"]), 1))).label("messaged"),
         func.count(case((CampaignContact.status != "pending", 1))).label("not_pending"),
         func.count(case((CampaignContact.status == "demande_envoyee", 1))).label("demande_envoyee"),
+        func.count(case((and_(CampaignContact.status == "perdu", CampaignContact.last_sequence_sent == 0), 1))).label("failed_no_send"),
     ).filter(
         CampaignContact.campaign_id.in_(campaign_ids)
     ).group_by(CampaignContact.campaign_id).all()
@@ -59,9 +60,10 @@ def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
         "sent": r.sent, "relance": r.relance,
         "messaged": r.messaged, "not_pending": r.not_pending,
         "demande_envoyee": r.demande_envoyee,
+        "failed_no_send": r.failed_no_send,
     } for r in rows}
 
-_EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0, "demande_envoyee": 0}
+_EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0, "demande_envoyee": 0, "failed_no_send": 0}
 
 
 def _compute_limit_info(db: Session) -> dict:
@@ -98,7 +100,7 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
     connection_rate = None
 
     if db and c.type in ("dm", "connection_dm"):
-        messaged = stats["messaged"]
+        messaged = stats["messaged"] - stats["failed_no_send"]
         replied = stats["reussi"]
         reply_rate = round(replied / messaged * 100, 1) if messaged > 0 else None
 

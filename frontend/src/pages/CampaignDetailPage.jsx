@@ -159,7 +159,7 @@ export default function CampaignDetailPage() {
   const isConnectionDM = campaign?.type === 'connection_dm';
   const statsFromContacts = {
     en_attente: contacts.filter(c => c.status === 'en_attente').length,
-    envoye: contacts.filter(c => c.main_sent_at).length,
+    envoye: contacts.filter(c => c.main_sent_at && !(c.status === 'perdu' && c.last_sequence_sent === 0)).length,
     relance: contacts.filter(c => c.status.startsWith('relance_')).length,
     reussi: contacts.filter(c => c.status === 'reussi').length,
     perdu: contacts.filter(c => c.status === 'perdu').length,

@@ -213,7 +213,14 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 db.flush()
             except IntegrityError:
                 db.rollback()
-                _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Contact duplique dans le CRM (meme URN)")
+                # Find the existing contact with the same URN
+                existing = db.query(Contact).filter(
+                    Contact.crm_id == campaign.crm_id,
+                    Contact.urn_id == contact.urn_id,
+                    Contact.id != contact.id,
+                ).first()
+                dup_name = f"{existing.first_name or ''} {existing.last_name or ''}".strip() if existing else "inconnu"
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", f"Contact duplique dans le CRM (meme URN que {dup_name})")
                 campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
@@ -255,15 +262,17 @@ async def run_dm_campaign(campaign_id: int) -> None:
                             }
                             message_body = render_template(campaign.fallback_message, contact_data)
                             print(f"[DM JOB] Campaign {campaign_id}: AI failed, using fallback message for contact {contact.id}", flush=True)
+                            # Don't break — fall through to send the message below
+                        else:
+                            print(f"[DM JOB] Campaign {campaign_id}: AI unavailable (Gemini down), no fallback — skipping", flush=True)
+                            _skip_no_perdu = True
                             break
-                        print(f"[DM JOB] Campaign {campaign_id}: AI unavailable (Gemini down), no fallback — skipping", flush=True)
-                        _skip_no_perdu = True
-                        break
-                    if attempt < 3:
-                        delay = random.randint(60, 180)
-                        print(f"[DM JOB] Campaign {campaign_id}: attempt {attempt}/3 failed for contact {contact.id} (empty message), retry in {delay}s", flush=True)
-                        await asyncio.sleep(delay)
-                    continue
+                    else:
+                        if attempt < 3:
+                            delay = random.randint(60, 180)
+                            print(f"[DM JOB] Campaign {campaign_id}: attempt {attempt}/3 failed for contact {contact.id} (empty message), retry in {delay}s", flush=True)
+                            await asyncio.sleep(delay)
+                        continue
 
                 _not_connected = False
                 try:

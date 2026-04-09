@@ -141,7 +141,7 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
         except Exception:
             pass
 
-    # Strategy 3: search by name
+    # Strategy 3: search by name — require secondary signal to avoid false positives
     name_query = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
     if name_query:
         try:
@@ -150,13 +150,34 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
                 r_urn = r.get("urn_id", "")
                 r_name = r.get("name", "").lower()
                 expected = name_query.lower()
-                if r_name == expected or (
+                # Name must match
+                name_ok = r_name == expected or (
                     contact.first_name and contact.first_name.lower() in r_name
                     and contact.last_name and contact.last_name.lower() in r_name
-                ):
-                    logger.info("Resolved urn via search '%s' -> %s", name_query, r_urn)
+                )
+                if not name_ok:
+                    continue
+                # Require at least one secondary signal (headline/jobtitle or location)
+                secondary_match = False
+                r_jobtitle = (r.get("jobtitle") or "").lower()
+                r_location = (r.get("location") or "").lower()
+                c_headline = (contact.headline or "").lower()
+                c_location = (contact.location or "").lower()
+                if c_headline and r_jobtitle:
+                    # Check if jobtitle words overlap with headline
+                    title_words = {w for w in r_jobtitle.split() if len(w) > 2}
+                    headline_words = {w for w in c_headline.split() if len(w) > 2}
+                    if title_words & headline_words:
+                        secondary_match = True
+                if not secondary_match and c_location and r_location:
+                    if c_location in r_location or r_location in c_location:
+                        secondary_match = True
+                if secondary_match:
+                    logger.info("Resolved urn via search '%s' -> %s (confirmed by secondary signal)", name_query, r_urn)
                     contact.urn_id = r_urn
                     return r_urn
+                else:
+                    logger.info("Search match '%s' -> %s rejected: name matched but no secondary signal", name_query, r_urn)
         except Exception:
             pass
 
