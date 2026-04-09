@@ -301,6 +301,8 @@ async def run_dm_campaign(campaign_id: int) -> None:
 
                 if _not_connected:
                     # Permanent error — mark perdu immediately, skip to next contact
+                    # Update connection_status so pre-screening catches similar contacts
+                    contact.connection_status = "not_connected"
                     print(f"[DM JOB] Campaign {campaign_id}: contact {contact.id} not connected, skipping", flush=True)
                     _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Non connecte — impossible d'envoyer un DM")
                     campaign.total_processed = (campaign.total_processed or 0) + 1
