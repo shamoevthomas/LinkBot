@@ -59,7 +59,7 @@ def _to_response(lm: LeadMagnet) -> LeadMagnetResponse:
 # CRUD
 # ---------------------------------------------------------------------------
 
-@router.get("/", response_model=list[LeadMagnetResponse])
+@router.get("", response_model=list[LeadMagnetResponse])
 def list_lead_magnets(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -73,7 +73,7 @@ def list_lead_magnets(
     return [_to_response(lm) for lm in items]
 
 
-@router.post("/", response_model=LeadMagnetResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=LeadMagnetResponse, status_code=status.HTTP_201_CREATED)
 def create_lead_magnet(
     body: LeadMagnetCreate,
     db: Session = Depends(get_db),
