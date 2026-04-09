@@ -235,6 +235,22 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     db.rollback()
                 continue
 
+            # Re-check connection after URN resolution (profile fetch updates connection_status)
+            if contact.connection_status not in ("connected", "DISTANCE_1"):
+                _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Non connecte (verifie apres resolution URN)")
+                campaign.total_processed = (campaign.total_processed or 0) + 1
+                campaign.total_failed = (campaign.total_failed or 0) + 1
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=0,
+                        main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
+                continue
+
             template = campaign.message_template or ""
 
             # Retry up to 3 times with 1-3 min intervals
@@ -363,6 +379,150 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 except IntegrityError:
                     db.rollback()
                 continue  # Next contact immediately, no cooldown
+
+        # =====================================================================
+        # PHASE 4b: Pre-screen upcoming contacts (resolve URN + check connection)
+        # Eliminates invalid contacts now so next tick doesn't waste time on them
+        # =====================================================================
+        PRESCREEN_BATCH = 5
+        _prescreened = 0
+        _prescreen_max = 20  # safety cap
+        while _prescreened < _prescreen_max:
+            already_ids = (
+                db.query(CampaignContact.contact_id)
+                .filter(CampaignContact.campaign_id == campaign_id)
+                .subquery()
+            )
+            upcoming = (
+                db.query(Contact)
+                .filter(
+                    Contact.crm_id == campaign.crm_id,
+                    ~Contact.id.in_(already_ids),
+                )
+                .order_by(Contact.added_at.asc())
+                .limit(PRESCREEN_BATCH)
+                .all()
+            )
+            if not upcoming:
+                break
+
+            had_invalid = False
+            for contact in upcoming:
+                _prescreened += 1
+                # Quick DB check first
+                if contact.connection_status not in ("connected", "DISTANCE_1"):
+                    _log_action(db, campaign_id, contact.id, "dm_send", "skipped", "Non connecte (pre-screening)")
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    campaign.total_skipped = (campaign.total_skipped or 0) + 1
+                    try:
+                        db.add(CampaignContact(
+                            campaign_id=campaign_id, contact_id=contact.id,
+                            status="perdu", last_sequence_sent=0,
+                            main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                        ))
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
+                    had_invalid = True
+                    continue
+
+                # Blacklist check
+                if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id, Blacklist.user_id == campaign.user_id).first():
+                    _log_action(db, campaign_id, contact.id, "dm_send", "skipped", "Blacklisted (pre-screening)")
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    campaign.total_skipped = (campaign.total_skipped or 0) + 1
+                    try:
+                        db.add(CampaignContact(
+                            campaign_id=campaign_id, contact_id=contact.id,
+                            status="perdu", last_sequence_sent=0,
+                            main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                        ))
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
+                    had_invalid = True
+                    continue
+
+                # Resolve URN and re-check connection via LinkedIn API
+                try:
+                    resolved_urn = await resolve_contact_urn(client, contact)
+                except Exception:
+                    resolved_urn = None
+
+                if not resolved_urn:
+                    _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Could not resolve LinkedIn URN (pre-screening)")
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    campaign.total_failed = (campaign.total_failed or 0) + 1
+                    try:
+                        db.add(CampaignContact(
+                            campaign_id=campaign_id, contact_id=contact.id,
+                            status="perdu", last_sequence_sent=0,
+                            main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                        ))
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
+                    had_invalid = True
+                    continue
+
+                # Flush URN update
+                try:
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    existing = db.query(Contact).filter(
+                        Contact.crm_id == campaign.crm_id,
+                        Contact.urn_id == contact.urn_id,
+                        Contact.id != contact.id,
+                    ).first()
+                    dup_name = f"{existing.first_name or ''} {existing.last_name or ''}".strip() if existing else "inconnu"
+                    _log_action(db, campaign_id, contact.id, "dm_send", "failed", f"Contact duplique dans le CRM (meme URN que {dup_name}) (pre-screening)")
+                    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    campaign.total_failed = (campaign.total_failed or 0) + 1
+                    try:
+                        db.add(CampaignContact(
+                            campaign_id=campaign_id, contact_id=contact.id,
+                            status="perdu", last_sequence_sent=0,
+                            main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                        ))
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
+                    had_invalid = True
+                    continue
+
+                # Re-check connection after URN resolution
+                if contact.connection_status not in ("connected", "DISTANCE_1"):
+                    _log_action(db, campaign_id, contact.id, "dm_send", "failed", "Non connecte (verifie apres resolution URN, pre-screening)")
+                    campaign.total_processed = (campaign.total_processed or 0) + 1
+                    campaign.total_failed = (campaign.total_failed or 0) + 1
+                    try:
+                        db.add(CampaignContact(
+                            campaign_id=campaign_id, contact_id=contact.id,
+                            status="perdu", last_sequence_sent=0,
+                            main_sent_at=datetime.utcnow(), last_sent_at=datetime.utcnow(),
+                        ))
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
+                    had_invalid = True
+                    continue
+
+                # This contact looks valid — commit URN update and stop pre-screening
+                db.commit()
+                break
+            else:
+                # All contacts in this batch were invalid — check next batch
+                if had_invalid:
+                    print(f"[DM JOB] Campaign {campaign_id}: pre-screened batch of {PRESCREEN_BATCH}, all invalid — checking next batch", flush=True)
+                    continue
+                break
+            # Found a valid contact — stop
+            break
+
+        if _prescreened > 0:
+            print(f"[DM JOB] Campaign {campaign_id}: pre-screened {_prescreened} contacts", flush=True)
 
         # =====================================================================
         # PHASE 5: Check campaign completion

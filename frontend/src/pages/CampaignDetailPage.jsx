@@ -604,7 +604,10 @@ export default function CampaignDetailPage() {
                   <tr key={a.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       {a.contact_first_name ? (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
+                          const cc = contacts.find(c => c.contact_id === a.contact_id);
+                          if (cc) setSelectedContact(cc);
+                        }}>
                           {a.contact_profile_picture_url ? (
                             <img src={a.contact_profile_picture_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
                           ) : (
@@ -612,14 +615,14 @@ export default function CampaignDetailPage() {
                               {(a.contact_first_name?.[0] || '')}{(a.contact_last_name?.[0] || '')}
                             </div>
                           )}
-                          <span className="text-sm text-gray-900">{a.contact_first_name} {a.contact_last_name}</span>
+                          <span className="text-sm text-gray-900 hover:underline">{a.contact_first_name} {a.contact_last_name}</span>
                         </div>
                       ) : <span className="text-xs text-gray-400">-</span>}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(a.created_at)}</td>
                     <td className="px-4 py-3 text-gray-700">{a.action_type}</td>
                     <td className="px-4 py-3"><Badge status={a.status} /></td>
-                    <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">{a.error_message || '-'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 max-w-xs whitespace-normal break-words">{a.error_message || '-'}</td>
                     <td className="px-4 py-3">
                       {a.status === 'failed' && (
                         <button
