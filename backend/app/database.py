@@ -40,8 +40,13 @@ def _run_migrations():
                 ))
                 print(f"[MIGRATION] Added user_id to {table}", flush=True)
 
-        # Add fallback_message column to campaign
+        # Add search_regions column to campaign
         campaign_columns = [c["name"] for c in inspector.get_columns("campaign")]
+        if "search_regions" not in campaign_columns:
+            conn.execute(text('ALTER TABLE "campaign" ADD COLUMN search_regions TEXT'))
+            print("[MIGRATION] Added search_regions to campaign", flush=True)
+
+        # Add fallback_message column to campaign
         if "fallback_message" not in campaign_columns:
             conn.execute(text('ALTER TABLE "campaign" ADD COLUMN fallback_message TEXT'))
             print("[MIGRATION] Added fallback_message to campaign", flush=True)

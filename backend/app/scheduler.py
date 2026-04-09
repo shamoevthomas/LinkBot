@@ -46,6 +46,9 @@ async def _run_campaign_tick(campaign_id: int, campaign_type: str):
     elif campaign_type == "connection_dm":
         from app.jobs.connection_dm_campaign import run_connection_dm_campaign
         await run_connection_dm_campaign(campaign_id)
+    elif campaign_type == "search_connection_dm":
+        from app.jobs.search_connection_dm_campaign import run_search_connection_dm_campaign
+        await run_search_connection_dm_campaign(campaign_id)
     else:
         logger.warning("Unknown campaign type: %s", campaign_type)
 
@@ -111,14 +114,12 @@ async def _main_loop():
                     except Exception:
                         logger.exception("Error running campaign %d", cid)
 
-                    # Schedule next run with jitter
-                    jitter_secs = random.randint(0, info["jitter"])
+                    # Dynamic interval: recalculate based on remaining quota & time
+                    dynamic_secs = _compute_dynamic_interval(info["type"])
                     info["last_run"] = datetime.utcnow()
-                    info["next_run"] = info["last_run"] + timedelta(
-                        seconds=info["interval"] + jitter_secs
-                    )
+                    info["next_run"] = info["last_run"] + timedelta(seconds=dynamic_secs)
                     print(
-                        f"[SCHEDULER] Campaign {cid}: next run in {info['interval'] + jitter_secs}s",
+                        f"[SCHEDULER] Campaign {cid}: next run in {dynamic_secs}s",
                         flush=True,
                     )
 
@@ -198,6 +199,96 @@ def _get_schedule_interval(max_per_day: int) -> int | None:
         db.close()
 
 
+def _compute_dynamic_interval(campaign_type: str) -> int:
+    """Compute next tick interval so daily limit is always reached.
+
+    Formula: remaining_time_in_window / remaining_actions
+    If schedule is disabled, distributes over remaining hours until midnight.
+    Adds small jitter (10%) for human-like timing.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    from zoneinfo import ZoneInfo
+    from app.database import SessionLocal
+    from app.models import AppSettings
+
+    db = SessionLocal()
+    try:
+        # 1. Daily limit for this campaign type
+        if campaign_type in ("dm", "connection_dm", "search_connection_dm"):
+            limit_key = "max_dms_per_day"
+            action_types = ["dm_send"]
+        else:
+            limit_key = "max_connections_per_day"
+            action_types = ["connection_request"]
+
+        row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
+        raw_limit = int(row.value) if row else 25
+        daily_limit = get_effective_daily_limit(raw_limit, db)
+
+        # 2. How many successful actions done today
+        done_today = get_global_actions_today(action_types, db)
+        remaining = daily_limit - done_today
+
+        if remaining <= 0:
+            print(f"[SCHEDULER] Dynamic interval: limit reached ({done_today}/{daily_limit}), sleeping 1h", flush=True)
+            return 3600
+
+        # 3. Remaining time in schedule window (or until midnight)
+        tz_row = db.query(AppSettings).filter(AppSettings.key == "schedule_timezone").first()
+        tz_name = tz_row.value if tz_row and tz_row.value else "Europe/Paris"
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("Europe/Paris")
+
+        now_local = _dt.now(_tz.utc).astimezone(tz)
+
+        enabled_row = db.query(AppSettings).filter(AppSettings.key == "schedule_enabled").first()
+        schedule_on = enabled_row and enabled_row.value.lower() == "true"
+
+        if not schedule_on:
+            # Schedule disabled — use manual interval settings (user controls timing)
+            min_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_min").first()
+            max_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_max").first()
+            interval_min = int(min_row.value) * 60 if min_row and min_row.value else 120
+            interval_max = int(max_row.value) * 60 if max_row and max_row.value else 300
+            if interval_max < interval_min:
+                interval_max = interval_min
+            return random.randint(interval_min, interval_max)
+
+        # Schedule enabled — dynamic: remaining_time / remaining_actions
+        end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
+        end_val = end_row.value if end_row and end_row.value else "20:00"
+        end_h, end_m = map(int, end_val.split(":"))
+        end_today = now_local.replace(hour=end_h, minute=end_m, second=0, microsecond=0)
+
+        if end_today <= now_local:
+            return 3600  # Past schedule window
+        remaining_secs = (end_today - now_local).total_seconds()
+
+        # 4. Interval = time_left / actions_left
+        interval = int(remaining_secs / remaining)
+
+        # 5. Small jitter (10%) for human-like timing
+        jitter = random.randint(0, max(5, int(interval * 0.1)))
+
+        # 6. Clamp: min 30s, max 1h
+        final = max(30, min(3600, interval + jitter))
+
+        print(
+            f"[SCHEDULER] Dynamic interval: {done_today}/{daily_limit} done, "
+            f"{remaining} left, {int(remaining_secs)}s window -> {final}s",
+            flush=True,
+        )
+        return final
+
+    except Exception:
+        logger.exception("Error computing dynamic interval")
+        return 300  # Fallback: 5 min
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # Campaign job management
 # ---------------------------------------------------------------------------
@@ -217,7 +308,7 @@ def schedule_campaign_job(
     # Determine interval
     db = SessionLocal()
     try:
-        limit_key = "max_dms_per_day" if campaign_type in ("dm",) else "max_connections_per_day"
+        limit_key = "max_dms_per_day" if campaign_type in ("dm", "connection_dm", "search_connection_dm") else "max_connections_per_day"
         row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
         daily_limit = int(row.value) if row else 25
 

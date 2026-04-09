@@ -150,13 +150,13 @@ export default function CampaignDetailPage() {
 
   const progress = campaign?.total_target ? Math.round((campaign.total_processed / campaign.total_target) * 100) : 0;
 
-  const showReplyRate = campaign?.type && ['dm', 'connection_dm'].includes(campaign.type);
-  const showConnectionRate = campaign?.type && ['connection', 'connection_dm'].includes(campaign.type);
+  const showReplyRate = campaign?.type && ['dm', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
+  const showConnectionRate = campaign?.type && ['connection', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
 
   // Stats from contacts
   const isSearch = campaign?.type === 'search';
   const isConnection = campaign?.type === 'connection';
-  const isConnectionDM = campaign?.type === 'connection_dm';
+  const isConnectionDM = campaign?.type === 'connection_dm' || campaign?.type === 'search_connection_dm';
   const statsFromContacts = {
     en_attente: contacts.filter(c => c.status === 'en_attente').length,
     envoye: contacts.filter(c => c.main_sent_at && !(c.status === 'perdu' && c.last_sequence_sent === 0)).length,
@@ -210,7 +210,7 @@ export default function CampaignDetailPage() {
               <Play size={16} /> Reprendre
             </button>
           )}
-          {['running', 'paused'].includes(campaign.status) && (campaign.type === 'dm' || campaign.type === 'connection_dm') && (
+          {['running', 'paused'].includes(campaign.status) && (campaign.type === 'dm' || campaign.type === 'connection_dm' || campaign.type === 'search_connection_dm') && (
             <button onClick={handleReconfigure} className="px-4 py-2 bg-purple-100 text-purple-700 font-medium rounded-lg text-sm hover:bg-purple-200 flex items-center gap-2">
               <Settings size={16} /> Reconfigurer
             </button>

@@ -9,6 +9,25 @@ import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import toast from 'react-hot-toast';
 
+const COUNTRIES = [
+  { id: '105015875', name: 'France' },
+  { id: '100565514', name: 'Belgique' },
+  { id: '106693272', name: 'Suisse' },
+  { id: '101174742', name: 'Canada' },
+  { id: '104042105', name: 'Luxembourg' },
+  { id: '100459367', name: 'Monaco' },
+  { id: '102787409', name: 'Maroc' },
+  { id: '102134353', name: 'Tunisie' },
+  { id: '104476498', name: 'Algerie' },
+  { id: '103644278', name: 'Etats-Unis' },
+  { id: '101165590', name: 'Royaume-Uni' },
+  { id: '101282230', name: 'Allemagne' },
+  { id: '105646813', name: 'Espagne' },
+  { id: '103350119', name: 'Italie' },
+  { id: '102890719', name: 'Pays-Bas' },
+  { id: '100364837', name: 'Portugal' },
+];
+
 const TABS = [
   { key: '', label: 'Tout' },
   { key: 'search', label: 'Recherche' },
@@ -23,7 +42,7 @@ export default function CampaignsPage() {
   const [showNew, setShowNew] = useState(null); // 'search' | 'dm' | 'connection' | null
   const [showDropdown, setShowDropdown] = useState(false);
   const [crms, setCrms] = useState([]);
-  const [form, setForm] = useState({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false });
+  const [form, setForm] = useState({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const navigate = useNavigate();
@@ -43,7 +62,7 @@ export default function CampaignsPage() {
 
   const openNew = async (type) => {
     setCrms(await getCRMs());
-    setForm({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false });
+    setForm({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
     setShowNew(type);
     setShowDropdown(false);
   };
@@ -162,7 +181,7 @@ export default function CampaignsPage() {
                 </span>
               </div>
               <div className="flex gap-6 mt-3 text-xs text-gray-500">
-                {(c.type === 'dm' || c.type === 'connection_dm') ? (
+                {(c.type === 'dm' || c.type === 'connection_dm' || c.type === 'search_connection_dm') ? (
                   <>
                     <span>Envoyes: {c.total_sent}</span>
                     <span>Relances: {c.total_relance}</span>
@@ -205,12 +224,44 @@ export default function CampaignsPage() {
           </div>
 
           {showNew === 'search' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Mots-clés de recherche</label>
-              <input value={form.keywords} onChange={(e) => set('keywords', e.target.value)}
-                className="input-glass"
-                placeholder="Ex: Marketing Manager Paris" />
-            </div>
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mots-cles de recherche</label>
+                <input value={form.keywords} onChange={(e) => set('keywords', e.target.value)}
+                  className="input-glass"
+                  placeholder="Ex: Marketing Manager Paris" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pays (optionnel)</label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value && !form.search_regions.includes(e.target.value)) {
+                      set('search_regions', [...form.search_regions, e.target.value]);
+                    }
+                  }}
+                  className="input-glass">
+                  <option value="">Tous les pays</option>
+                  {COUNTRIES.filter(c => !form.search_regions.includes(c.id)).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {form.search_regions.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {form.search_regions.map(id => {
+                      const country = COUNTRIES.find(c => c.id === id);
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                          {country?.name || id}
+                          <button type="button" onClick={() => set('search_regions', form.search_regions.filter(r => r !== id))}
+                            className="hover:text-red-500 ml-0.5">&times;</button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {showNew === 'connection' && (
@@ -266,13 +317,26 @@ export default function CampaignsPage() {
 
           {/* Recherche + Connexion toggle */}
           {showNew === 'search' && (
-            <label className="flex items-center gap-3 p-3 border border-blue-200 rounded-lg cursor-pointer" style={{ background: 'rgba(0,132,255,0.08)' }}>
-              <input type="checkbox" checked={form.autoConnect} onChange={(e) => set('autoConnect', e.target.checked)}
-                className="w-4 h-4 rounded" style={{ accentColor: 'var(--blue)' }} />
-              <UserPlus size={16} style={{ color: 'var(--blue)' }} />
+            <label className="flex items-center gap-3 p-3 border border-blue-200 rounded-lg cursor-pointer" style={{ background: form.autoConnectDM ? 'rgba(0,0,0,0.02)' : 'rgba(0,132,255,0.08)' }}>
+              <input type="checkbox" checked={form.autoConnect} onChange={(e) => { set('autoConnect', e.target.checked); if (e.target.checked) set('autoConnectDM', false); }}
+                className="w-4 h-4 rounded" style={{ accentColor: 'var(--blue)' }} disabled={form.autoConnectDM} />
+              <UserPlus size={16} style={{ color: form.autoConnectDM ? '#9ca3af' : 'var(--blue)' }} />
               <div>
-                <span className="text-sm font-medium text-blue-700">Recherche + Connexion</span>
-                <p className="text-xs text-blue-500">Envoyer automatiquement une demande de connexion aux contacts trouvés</p>
+                <span className={`text-sm font-medium ${form.autoConnectDM ? 'text-gray-400' : 'text-blue-700'}`}>Recherche + Connexion</span>
+                <p className={`text-xs ${form.autoConnectDM ? 'text-gray-400' : 'text-blue-500'}`}>Envoyer automatiquement une demande de connexion aux contacts trouvés</p>
+              </div>
+            </label>
+          )}
+
+          {/* Recherche + Connexion + DM toggle */}
+          {showNew === 'search' && (
+            <label className="flex items-center gap-3 p-3 border border-cyan-200 rounded-lg cursor-pointer" style={{ background: 'rgba(0,180,216,0.08)' }}>
+              <input type="checkbox" checked={form.autoConnectDM} onChange={(e) => { set('autoConnectDM', e.target.checked); if (e.target.checked) set('autoConnect', false); }}
+                className="w-4 h-4 rounded" style={{ accentColor: '#0891b2' }} />
+              <MessageCircle size={16} className="text-cyan-600" />
+              <div>
+                <span className="text-sm font-medium text-cyan-700">Recherche + Connexion + DM</span>
+                <p className="text-xs text-cyan-500">Rechercher, connecter, puis envoyer un DM après acceptation</p>
               </div>
             </label>
           )}
@@ -290,20 +354,35 @@ export default function CampaignsPage() {
             </label>
           )}
 
-          {showNew === 'connection' && form.withDM ? (
+          {(showNew === 'connection' && form.withDM) || (showNew === 'search' && form.autoConnectDM) ? (
             <button type="button" onClick={() => {
               if (!form.name.trim()) return toast.error('Donne un nom à la campagne');
               if (!form.crm_id) return toast.error('Sélectionne un CRM');
+              if (showNew === 'search' && !form.keywords?.trim()) return toast.error('Ajoute des mots-clés');
               setShowNew(null);
-              navigate('/dashboard/campaigns/new-dm', {
-                state: {
-                  connectionConfig: {
-                    name: form.name,
-                    keywords: form.keywords,
-                    crm_id: parseInt(form.crm_id),
+              if (showNew === 'search' && form.autoConnectDM) {
+                navigate('/dashboard/campaigns/new-dm', {
+                  state: {
+                    searchConnectionDMConfig: {
+                      name: form.name,
+                      keywords: form.keywords,
+                      crm_id: parseInt(form.crm_id),
+                      total_target: parseInt(form.total_target) || 100,
+                      search_regions: form.search_regions,
+                    },
                   },
-                },
-              });
+                });
+              } else {
+                navigate('/dashboard/campaigns/new-dm', {
+                  state: {
+                    connectionConfig: {
+                      name: form.name,
+                      keywords: form.keywords,
+                      crm_id: parseInt(form.crm_id),
+                    },
+                  },
+                });
+              }
             }}
               className="cta-btn w-full flex items-center justify-center gap-2">
               <MessageCircle size={16} /> Configurer les DMs

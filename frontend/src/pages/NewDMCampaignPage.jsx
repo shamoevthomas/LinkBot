@@ -11,20 +11,21 @@ export default function NewDMCampaignPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const connectionConfig = location.state?.connectionConfig || null;
+  const searchConnectionDMConfig = location.state?.searchConnectionDMConfig || null;
   const reconfigure = location.state?.reconfigure || null;
   const [crms, setCrms] = useState([]);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Config
-  const [name, setName] = useState(reconfigure?.name || connectionConfig?.name || '');
-  const [crmId, setCrmId] = useState(reconfigure?.crm_id?.toString() || connectionConfig?.crm_id?.toString() || '');
+  const [name, setName] = useState(reconfigure?.name || searchConnectionDMConfig?.name || connectionConfig?.name || '');
+  const [crmId, setCrmId] = useState(reconfigure?.crm_id?.toString() || searchConnectionDMConfig?.crm_id?.toString() || connectionConfig?.crm_id?.toString() || '');
   const [contextText, setContextText] = useState(reconfigure?.context_text || '');
   const [pdfName, setPdfName] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [useAi, setUseAi] = useState(reconfigure ? true : false);
   const [aiPrompt, setAiPrompt] = useState(reconfigure?.ai_prompt || '');
-  const [dmDelayHours, setDmDelayHours] = useState(connectionConfig ? 2 : 0);
+  const [dmDelayHours, setDmDelayHours] = useState((connectionConfig || searchConnectionDMConfig) ? 2 : 0);
   const [fallbackMessage, setFallbackMessage] = useState(reconfigure?.fallback_message || '');
 
   // Messages
@@ -205,7 +206,15 @@ export default function NewDMCampaignPage() {
         total_target: totalContacts,
         fallback_message: fallbackMessage.trim() || null,
       };
-      if (connectionConfig) {
+      if (searchConnectionDMConfig) {
+        payload.keywords = searchConnectionDMConfig.keywords || '';
+        payload.is_search_connection_dm = true;
+        payload.dm_delay_hours = dmDelayHours;
+        payload.total_target = searchConnectionDMConfig.total_target;
+        if (searchConnectionDMConfig.search_regions?.length) {
+          payload.search_regions = searchConnectionDMConfig.search_regions;
+        }
+      } else if (connectionConfig) {
         payload.keywords = connectionConfig.keywords || '';
         payload.is_connection_dm = true;
         payload.dm_delay_hours = dmDelayHours;
@@ -234,10 +243,10 @@ export default function NewDMCampaignPage() {
         </button>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900 f">
-            {reconfigure ? 'Reconfigurer la campagne' : connectionConfig ? 'Campagne Connexion + DM' : 'Campagne Message'}
+            {reconfigure ? 'Reconfigurer la campagne' : searchConnectionDMConfig ? 'Campagne Recherche + Connexion + DM' : connectionConfig ? 'Campagne Connexion + DM' : 'Campagne Message'}
           </h1>
           <p className="text-xs text-gray-500">
-            {reconfigure ? 'Modifiez les messages et ajoutez un message de secours' : connectionConfig ? 'Messages apres acceptation de la connexion' : 'Configurez et visualisez votre sequence de messages'}
+            {reconfigure ? 'Modifiez les messages et ajoutez un message de secours' : searchConnectionDMConfig ? 'Recherche + connexion + messages apres acceptation' : connectionConfig ? 'Messages apres acceptation de la connexion' : 'Configurez et visualisez votre sequence de messages'}
           </p>
         </div>
         <button onClick={handleLaunch} disabled={launching || !canLaunch}
@@ -270,7 +279,7 @@ export default function NewDMCampaignPage() {
                 {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count})</option>)}
               </select>
             </div>
-            {connectionConfig && (
+            {(connectionConfig || searchConnectionDMConfig) && (
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Delai avant DM (apres acceptation)</label>
                 <div className="flex items-center gap-2">

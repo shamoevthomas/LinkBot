@@ -103,6 +103,7 @@ class Campaign(Base):
     ai_prompt = Column(Text)
     context_pdf_path = Column(String)
     full_personalize = Column(Boolean, default=False)
+    search_regions = Column(Text)  # comma-separated geo URN IDs for LinkedIn search
     dm_delay_hours = Column(Integer, default=0)
     fallback_message = Column(Text)
 

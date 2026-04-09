@@ -101,6 +101,7 @@ class CampaignCreate(BaseModel):
     max_per_day: Optional[int] = None
     spread_over_days: Optional[int] = None
     auto_connect: bool = False
+    search_regions: Optional[List[str]] = None  # geo URN IDs for LinkedIn search
 
 class CampaignMessageSchema(BaseModel):
     sequence: int
@@ -120,7 +121,9 @@ class DMCampaignCreate(BaseModel):
     spread_over_days: Optional[int] = None
     delay_minutes: Optional[int] = 2  # minutes between each action
     is_connection_dm: bool = False  # connection + DM combo campaign
-    keywords: Optional[str] = None  # search keywords (for connection_dm)
+    is_search_connection_dm: bool = False  # search + connection + DM pipeline
+    keywords: Optional[str] = None  # search keywords (for connection_dm / search_connection_dm)
+    search_regions: Optional[List[str]] = None  # geo URN IDs for LinkedIn search
     dm_delay_hours: int = 0  # hours to wait after connection accepted before sending DM
     fallback_message: Optional[str] = None  # sent when AI fails after all retries
 

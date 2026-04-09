@@ -99,13 +99,13 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
     reply_rate = None
     connection_rate = None
 
-    if db and c.type in ("dm", "connection_dm"):
+    if db and c.type in ("dm", "connection_dm", "search_connection_dm"):
         messaged = stats["messaged"] - stats["failed_no_send"]
         replied = stats["reussi"]
         reply_rate = round(replied / messaged * 100, 1) if messaged > 0 else None
 
-    if db and c.type in ("connection", "connection_dm"):
-        if c.type == "connection_dm":
+    if db and c.type in ("connection", "connection_dm", "search_connection_dm"):
+        if c.type in ("connection_dm", "search_connection_dm"):
             total_requests = stats["not_pending"]
             accepted = stats["messaged"]
             connection_rate = round(accepted / total_requests * 100, 1) if total_requests > 0 else None
@@ -133,14 +133,14 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
             next_action_at = ns if ns else None
             paused_reason = "Hors de la fenetre horaire programmee"
         elif limit_info:
-            if c.type == "dm" and limit_info["dm_used"] >= limit_info["dm_limit"]:
+            if c.type in ("dm", "search_connection_dm") and limit_info["dm_used"] >= limit_info["dm_limit"]:
                 paused_reason = f"Limite quotidienne atteinte ({limit_info['dm_used']}/{limit_info['dm_limit']} DMs)"
-            elif c.type in ("connection", "connection_dm") and limit_info["conn_used"] >= limit_info["conn_limit"]:
+            elif c.type in ("connection", "connection_dm", "search_connection_dm") and limit_info["conn_used"] >= limit_info["conn_limit"]:
                 paused_reason = f"Limite quotidienne atteinte ({limit_info['conn_used']}/{limit_info['conn_limit']} connexions)"
 
     # Search campaigns use Campaign model counters (no CampaignContact rows)
     # DM/connection_dm/connection campaigns use CampaignContact-based stats
-    uses_campaign_contacts = c.type in ("dm", "connection_dm", "connection")
+    uses_campaign_contacts = c.type in ("dm", "connection_dm", "connection", "search_connection_dm")
 
     return CampaignResponse(
         id=c.id,
@@ -277,6 +277,7 @@ def create_campaign(
         message_template=body.message_template,
         use_ai=body.use_ai,
         total_target=total_target,
+        search_regions=",".join(body.search_regions) if body.search_regions else None,
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -356,15 +357,21 @@ def create_dm_campaign(
 
     total_target = body.total_target or 50
 
-    # For DM/connection_dm campaigns, use CRM contact count as target
-    if body.crm_id:
+    # For search_connection_dm, use specified target (search count)
+    # For DM/connection_dm, use CRM contact count as target
+    if not body.is_search_connection_dm and body.crm_id:
         crm_count = db.query(Contact).filter(Contact.crm_id == body.crm_id).count()
         if crm_count > 0:
             total_target = crm_count
 
     followup_count = len(body.messages) - 1 if body.messages else 0
 
-    campaign_type = "connection_dm" if body.is_connection_dm else "dm"
+    if body.is_search_connection_dm:
+        campaign_type = "search_connection_dm"
+    elif body.is_connection_dm:
+        campaign_type = "connection_dm"
+    else:
+        campaign_type = "dm"
 
     campaign = Campaign(
         name=body.name,
@@ -372,15 +379,16 @@ def create_dm_campaign(
         status="running",
         crm_id=body.crm_id,
         user_id=user.id,
-        keywords=body.keywords if body.is_connection_dm else None,
+        keywords=body.keywords if (body.is_connection_dm or body.is_search_connection_dm) else None,
         message_template=main_template,
         use_ai=body.use_ai,
         full_personalize=body.full_personalize,
         context_text=body.context_text,
         ai_prompt=body.ai_prompt,
         total_target=total_target,
-        dm_delay_hours=body.dm_delay_hours if body.is_connection_dm else 0,
+        dm_delay_hours=body.dm_delay_hours if (body.is_connection_dm or body.is_search_connection_dm) else 0,
         fallback_message=body.fallback_message,
+        search_regions=",".join(body.search_regions) if body.search_regions else None,
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -631,9 +639,9 @@ def diagnose_campaign(
     conn_limit = get_effective_daily_limit(int(conn_row.value) if conn_row else 25, db)
     conn_used = get_global_actions_today(conn_types, db)
 
-    if campaign.type in ("dm", "connection_dm") and dm_used >= dm_limit:
+    if campaign.type in ("dm", "connection_dm", "search_connection_dm") and dm_used >= dm_limit:
         issues.append(f"Limite DM quotidienne atteinte ({dm_used}/{dm_limit})")
-    if campaign.type in ("connection", "connection_dm") and conn_used >= conn_limit:
+    if campaign.type in ("connection", "connection_dm", "search_connection_dm") and conn_used >= conn_limit:
         issues.append(f"Limite connexions quotidienne atteinte ({conn_used}/{conn_limit})")
 
     # 5. Check CRM contacts
@@ -660,7 +668,7 @@ def diagnose_campaign(
 
     # 6. Check campaign messages (for DM types)
     msg_count = 0
-    if campaign.type in ("dm", "connection_dm"):
+    if campaign.type in ("dm", "connection_dm", "search_connection_dm"):
         msg_count = db.query(CampaignMessage).filter(CampaignMessage.campaign_id == campaign_id).count()
         if msg_count == 0 and not campaign.full_personalize:
             issues.append("Aucun message configure pour cette campagne")

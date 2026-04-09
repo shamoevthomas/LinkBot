@@ -71,6 +71,7 @@ async def search_people(
     keywords: str,
     limit: int = 10,
     offset: int = 0,
+    regions: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Search for people on LinkedIn.
 
@@ -78,11 +79,16 @@ async def search_people(
     ``name``, ``jobtitle``, ``location``, ``distance``, ``navigation_url``.
     """
     try:
-        results = await asyncio.to_thread(
-            client.search_people,
+        kwargs = dict(
             keywords=keywords,
             limit=limit,
             offset=offset,
+        )
+        if regions:
+            kwargs["regions"] = regions
+        results = await asyncio.to_thread(
+            client.search_people,
+            **kwargs,
         )
         return results or []
     except UnauthorizedException:

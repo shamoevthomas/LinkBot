@@ -52,7 +52,7 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
         ).scalar() or 0
 
     # --- global reply rate (dm + connection_dm campaigns) ---
-    dm_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type.in_(["dm", "connection_dm"])).all()]
+    dm_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type.in_(["dm", "connection_dm", "search_connection_dm"])).all()]
     global_reply_rate = 0.0
     if dm_campaign_ids:
         total_messaged = db.query(func.count(CampaignContact.id)).filter(
@@ -67,7 +67,7 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
 
     # --- global connection rate ---
     global_connection_rate = 0.0
-    conn_dm_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type == "connection_dm").all()]
+    conn_dm_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type.in_(["connection_dm", "search_connection_dm"])).all()]
     conn_only_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type == "connection").all()]
     all_conn_ids = conn_dm_ids + conn_only_ids
 
