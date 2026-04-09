@@ -254,7 +254,7 @@ class Linkedin(object):
         if data and "status" in data and data["status"] != 200:
             self.logger.info("request failed: {}".format(data["status"]))
             return [{}]
-        while data and data["metadata"]["paginationToken"] != "":
+        while data and data.get("metadata", {}).get("paginationToken", "") != "":
             if len(data["elements"]) >= comment_count:
                 break
             pagination_token = data["metadata"]["paginationToken"]
@@ -272,9 +272,9 @@ class Linkedin(object):
                 break
             if data["elements"] and len(res.json()["elements"]) == 0:
                 break
-            data["elements"] = data["elements"] + res.json()["elements"]
-            data["paging"] = res.json()["paging"]
-        return data["elements"]
+            data["elements"] = data["elements"] + res.json().get("elements", [])
+            data["paging"] = res.json().get("paging", {})
+        return data.get("elements", [])
 
     def search(self, params: Dict, limit=-1, offset=0) -> List:
         """Perform a LinkedIn search.
