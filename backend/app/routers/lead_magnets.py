@@ -22,6 +22,7 @@ from app.scheduler import (
     pause_campaign_job,
     resume_campaign_job,
     cancel_campaign_job,
+    trigger_campaign_now,
 )
 
 def _lm_key(lm_id: int) -> str:
@@ -232,6 +233,23 @@ def cancel_lead_magnet(
     lm.status = "cancelled"
     db.commit()
     cancel_campaign_job(_lm_key(lm.id))
+    return _to_response(lm)
+
+
+@router.post("/{lm_id}/trigger", response_model=LeadMagnetResponse)
+def trigger_lead_magnet(
+    lm_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    lm = db.query(LeadMagnet).filter(LeadMagnet.id == lm_id, LeadMagnet.user_id == user.id).first()
+    if not lm:
+        raise HTTPException(status_code=404, detail="Lead magnet introuvable")
+    if lm.status != "running":
+        raise HTTPException(status_code=400, detail="Le lead magnet doit être en cours")
+
+    if not trigger_campaign_now(_lm_key(lm.id)):
+        raise HTTPException(status_code=400, detail="Job non trouvé dans le scheduler")
     return _to_response(lm)
 
 

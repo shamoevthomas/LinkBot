@@ -18,6 +18,7 @@ from app.models import LeadMagnet, LeadMagnetContact, CampaignAction, User
 from app.linkedin_service import (
     get_linkedin_client, get_post_comments, like_comment, reply_to_comment,
     send_message, send_connection_request, get_profile, get_comment_replies,
+    get_invitations, accept_invitation,
 )
 from app.utils.template_engine import render_template
 from app.scheduler import cancel_campaign_job
@@ -258,13 +259,49 @@ async def _phase_detect_comments(db, lm, client):
 
 
 async def _phase_check_connections(db, lm, client):
-    """Check if pending connections have been accepted."""
+    """Check if pending connections have been accepted (also accept incoming invitations)."""
     pending = db.query(LeadMagnetContact).filter(
         LeadMagnetContact.lead_magnet_id == lm.id,
         LeadMagnetContact.status == "connection_sent",
     ).all()
 
+    if not pending:
+        return
+
+    # Fetch pending invitations once for all contacts
+    pending_urn_ids = {lmc.commenter_urn_id for lmc in pending}
+    invitations_by_urn = {}
+    try:
+        invitations = await get_invitations(client, limit=100)
+        for inv in invitations:
+            inv_from = inv.get("fromMember") or inv.get("*fromMember") or ""
+            inv_urn_id = inv_from.split(":")[-1] if ":" in str(inv_from) else str(inv_from)
+            if inv_urn_id in pending_urn_ids:
+                invitations_by_urn[inv_urn_id] = inv
+    except Exception:
+        pass
+
     for lmc in pending:
+        # Check if they sent us an invitation → accept it
+        inv = invitations_by_urn.get(lmc.commenter_urn_id)
+        if inv:
+            inv_entity_urn = inv.get("entityUrn") or ""
+            inv_secret = inv.get("sharedSecret") or ""
+            if inv_entity_urn and inv_secret:
+                try:
+                    ok = await accept_invitation(client, inv_entity_urn, inv_secret)
+                    if ok:
+                        lmc.status = "dm_pending"
+                        lmc.connection_accepted_at = datetime.utcnow()
+                        lmc.is_connected = True
+                        _log_action(db, lm.id, None, "lm_invitation_accepted", "success",
+                                    f"Accepted invitation from {lmc.commenter_name}")
+                        print(f"[LEAD MAGNET] #{lm.id}: accepted invitation from {lmc.commenter_name}", flush=True)
+                        continue
+                except Exception as exc:
+                    logger.warning("Failed to accept invitation from %s: %s", lmc.commenter_urn_id, exc)
+
+        # Otherwise check profile distance
         try:
             profile = await get_profile(client, urn_id=lmc.commenter_urn_id)
             distance = profile.get("distance")
@@ -361,7 +398,30 @@ async def _handle_connected(db, lm, lmc, client):
 
 
 async def _handle_not_connected(db, lm, lmc, client):
-    """Non-connected commenter: like comment + reply + send connection request."""
+    """Non-connected commenter: check for pending invitation, like, reply, connect/DM."""
+    # 0. Check if this person already sent US a connection request → accept it
+    invitation_accepted = False
+    try:
+        invitations = await get_invitations(client, limit=100)
+        for inv in invitations:
+            inv_from = inv.get("fromMember") or inv.get("*fromMember") or ""
+            inv_urn_id = inv_from.split(":")[-1] if ":" in str(inv_from) else str(inv_from)
+            if inv_urn_id == lmc.commenter_urn_id:
+                inv_entity_urn = inv.get("entityUrn") or ""
+                inv_secret = inv.get("sharedSecret") or ""
+                if inv_entity_urn and inv_secret:
+                    ok = await accept_invitation(client, inv_entity_urn, inv_secret)
+                    if ok:
+                        invitation_accepted = True
+                        lmc.is_connected = True
+                        lmc.connection_accepted_at = datetime.utcnow()
+                        _log_action(db, lm.id, None, "lm_invitation_accepted", "success",
+                                    f"Accepted invitation from {lmc.commenter_name}")
+                        print(f"[LEAD MAGNET] #{lm.id}: accepted invitation from {lmc.commenter_name}", flush=True)
+                break
+    except Exception as exc:
+        logger.warning("Failed to check/accept invitations for lead magnet %d: %s", lm.id, exc)
+
     # 1. Like comment
     if not lmc.liked_comment and lmc.comment_urn:
         try:
@@ -373,7 +433,36 @@ async def _handle_not_connected(db, lm, lmc, client):
         except Exception as exc:
             _log_action(db, lm.id, None, "lm_like_comment", "failed", str(exc)[:200])
 
-    # 2. Reply to comment
+    # If invitation accepted → treat as connected: reply with connected template + send DM
+    if invitation_accepted:
+        if not lmc.replied_to_comment and lm.reply_template_connected and lmc.comment_urn:
+            try:
+                reply_text = _render(lm.reply_template_connected, lmc.commenter_name)
+                ok = await reply_to_comment(client, lm.post_activity_urn, lmc.comment_urn, reply_text)
+                if ok:
+                    lmc.replied_to_comment = True
+                    lm.total_replies_sent = (lm.total_replies_sent or 0) + 1
+                    _log_action(db, lm.id, None, "lm_reply_comment", "success")
+            except Exception as exc:
+                _log_action(db, lm.id, None, "lm_reply_comment", "failed", str(exc)[:200])
+
+        if not lmc.dm_sent and lm.dm_template:
+            try:
+                dm_text = _render(lm.dm_template, lmc.commenter_name)
+                ok = await send_message(client, lmc.commenter_urn_id, dm_text)
+                if ok:
+                    lmc.dm_sent = True
+                    lmc.dm_sent_at = datetime.utcnow()
+                    lm.total_dm_sent = (lm.total_dm_sent or 0) + 1
+                    _log_action(db, lm.id, None, "lm_dm_send", "success")
+                    print(f"[LEAD MAGNET] #{lm.id}: DM sent to {lmc.commenter_name} (invitation accepted)", flush=True)
+            except Exception as exc:
+                _log_action(db, lm.id, None, "lm_dm_send", "failed", str(exc)[:200])
+
+        lmc.status = "completed"
+        return
+
+    # 2. Reply to comment (not connected template)
     if not lmc.replied_to_comment and lm.reply_template_not_connected and lmc.comment_urn:
         try:
             reply_text = _render(lm.reply_template_not_connected, lmc.commenter_name)

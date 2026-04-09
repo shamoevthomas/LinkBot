@@ -18,5 +18,7 @@ export const resumeLeadMagnet = (id) =>
   client.post(`/lead-magnets/${id}/resume`).then((r) => r.data);
 export const cancelLeadMagnet = (id) =>
   client.post(`/lead-magnets/${id}/cancel`).then((r) => r.data);
+export const triggerLeadMagnet = (id) =>
+  client.post(`/lead-magnets/${id}/trigger`).then((r) => r.data);
 export const getLeadMagnetContacts = (id) =>
   client.get(`/lead-magnets/${id}/contacts`).then((r) => r.data);

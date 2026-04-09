@@ -352,8 +352,8 @@ def schedule_campaign_job(
         db.close()
 
     now = datetime.utcnow()
-    # First run after a short random delay (10-30s) to stagger campaigns
-    first_delay = random.randint(10, 30)
+    # Lead magnets run immediately on start; campaigns stagger 10-30s
+    first_delay = 0 if campaign_type == "lead_magnet" else random.randint(10, 30)
 
     _campaigns[campaign_id] = {
         "type": campaign_type,
@@ -382,8 +382,17 @@ def resume_campaign_job(campaign_id) -> None:
     """Resume a paused campaign."""
     if campaign_id in _campaigns:
         _campaigns[campaign_id]["paused"] = False
-        _campaigns[campaign_id]["next_run"] = datetime.utcnow() + timedelta(seconds=10)
+        _campaigns[campaign_id]["next_run"] = datetime.utcnow()
         print(f"[SCHEDULER] Resumed campaign {campaign_id}", flush=True)
+
+
+def trigger_campaign_now(campaign_id) -> bool:
+    """Force next tick to run immediately. Returns True if campaign exists."""
+    if campaign_id in _campaigns and not _campaigns[campaign_id]["paused"]:
+        _campaigns[campaign_id]["next_run"] = datetime.utcnow()
+        print(f"[SCHEDULER] Triggered immediate run for {campaign_id}", flush=True)
+        return True
+    return False
 
 
 def cancel_campaign_job(campaign_id) -> None:

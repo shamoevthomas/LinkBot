@@ -464,6 +464,38 @@ async def get_comment_replies(
         return []
 
 
+async def get_invitations(
+    client: Linkedin,
+    limit: int = 100,
+) -> List[Dict[str, Any]]:
+    """Fetch pending connection invitations."""
+    try:
+        results = await asyncio.to_thread(client.get_invitations, 0, limit)
+        return results or []
+    except Exception:
+        logger.exception("Error in get_invitations")
+        return []
+
+
+async def accept_invitation(
+    client: Linkedin,
+    invitation_entity_urn: str,
+    invitation_shared_secret: str,
+) -> bool:
+    """Accept a connection invitation."""
+    try:
+        result = await asyncio.to_thread(
+            client.reply_invitation,
+            invitation_entity_urn,
+            invitation_shared_secret,
+            "accept",
+        )
+        return result
+    except Exception:
+        logger.exception("Error accepting invitation %s", invitation_entity_urn)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Connections list
 # ---------------------------------------------------------------------------

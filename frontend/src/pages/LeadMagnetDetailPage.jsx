@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Pause, Square, MessageSquare, UserPlus, ThumbsUp, Reply, Check, X, Clock } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Square, MessageSquare, UserPlus, ThumbsUp, Reply, Check, X, Clock, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageWrapper from '../components/layout/PageWrapper';
 import {
   getLeadMagnet, getLeadMagnetContacts,
-  startLeadMagnet, pauseLeadMagnet, resumeLeadMagnet, cancelLeadMagnet,
+  startLeadMagnet, pauseLeadMagnet, resumeLeadMagnet, cancelLeadMagnet, triggerLeadMagnet,
 } from '../api/leadMagnets';
 
 const STATUS_COLORS = {
@@ -71,6 +71,7 @@ export default function LeadMagnetDetailPage() {
       else if (action === 'pause') await pauseLeadMagnet(id);
       else if (action === 'resume') await resumeLeadMagnet(id);
       else if (action === 'cancel') await cancelLeadMagnet(id);
+      else if (action === 'trigger') { await triggerLeadMagnet(id); toast.success('Tick lance !'); }
       load();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
@@ -123,6 +124,9 @@ export default function LeadMagnetDetailPage() {
           )}
           {lm.status === 'running' && (
             <>
+              <button onClick={() => handleAction('trigger')} className="px-4 py-2 rounded-xl border border-blue-300 text-blue-700 hover:bg-blue-50 text-sm flex items-center gap-2">
+                <Zap size={14} /> Lancer maintenant
+              </button>
               <button onClick={() => handleAction('pause')} className="px-4 py-2 rounded-xl border border-yellow-300 text-yellow-700 hover:bg-yellow-50 text-sm flex items-center gap-2">
                 <Pause size={14} /> Pause
               </button>
