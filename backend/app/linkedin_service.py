@@ -441,6 +441,29 @@ async def reply_to_comment(
         raise
 
 
+async def get_comment_replies(
+    client: Linkedin,
+    activity_urn: str,
+    parent_comment_urn: str,
+    count: int = 50,
+) -> List[Dict[str, Any]]:
+    """Fetch replies to a specific comment."""
+    try:
+        results = await asyncio.to_thread(
+            client.get_comment_replies,
+            activity_urn,
+            parent_comment_urn,
+            count,
+        )
+        return results or []
+    except UnauthorizedException:
+        logger.warning("LinkedIn cookies expired during get_comment_replies")
+        raise
+    except Exception:
+        logger.exception("Error in get_comment_replies for comment_urn=%s", parent_comment_urn)
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Connections list
 # ---------------------------------------------------------------------------

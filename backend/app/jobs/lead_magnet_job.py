@@ -17,7 +17,7 @@ from app.database import SessionLocal
 from app.models import LeadMagnet, LeadMagnetContact, CampaignAction, User
 from app.linkedin_service import (
     get_linkedin_client, get_post_comments, like_comment, reply_to_comment,
-    send_message, send_connection_request, get_profile,
+    send_message, send_connection_request, get_profile, get_comment_replies,
 )
 from app.utils.template_engine import render_template
 from app.scheduler import cancel_campaign_job
@@ -122,6 +122,22 @@ async def _phase_detect_comments(db, lm, client):
         return
 
     processed_ids = set(json.loads(lm.processed_comment_ids or "[]"))
+
+    # ── Get current user's URN to check for existing replies ──
+    my_urn_id = None
+    try:
+        my_profile = await asyncio.to_thread(client.get_user_profile)
+        my_entity_urn = (
+            my_profile.get("miniProfile", {}).get("entityUrn")
+            or my_profile.get("miniProfile", {}).get("dashEntityUrn")
+            or my_profile.get("entityUrn")
+            or ""
+        )
+        if my_entity_urn:
+            my_urn_id = my_entity_urn.split(":")[-1]
+    except Exception:
+        logger.warning("Could not fetch own profile for reply check (lead magnet %d)", lm.id)
+
     keyword = (lm.keyword or "").lower()
     new_matches = 0
 
@@ -176,6 +192,10 @@ async def _phase_detect_comments(db, lm, client):
         if not commenter_urn_id:
             continue
 
+        # Skip if it's the user's own comment
+        if my_urn_id and commenter_urn_id == my_urn_id:
+            continue
+
         # Check if already tracked
         existing = db.query(LeadMagnetContact).filter(
             LeadMagnetContact.lead_magnet_id == lm.id,
@@ -195,6 +215,25 @@ async def _phase_detect_comments(db, lm, client):
         except Exception:
             pass
 
+        # ── Check if user already replied to this comment ──
+        already_replied = False
+        if my_urn_id and comment_urn:
+            try:
+                replies = await get_comment_replies(client, lm.post_activity_urn, comment_urn)
+                for reply in replies:
+                    rc = reply.get("commenter") or {}
+                    rc_entity = rc.get("com.linkedin.voyager.feed.MemberActor") or rc
+                    rc_urn = (
+                        rc_entity.get("urn")
+                        or rc_entity.get("miniProfile", {}).get("dashEntityUrn")
+                        or ""
+                    )
+                    if rc_urn and my_urn_id in rc_urn:
+                        already_replied = True
+                        break
+            except Exception:
+                pass  # If check fails, assume not replied
+
         lmc = LeadMagnetContact(
             lead_magnet_id=lm.id,
             commenter_urn_id=commenter_urn_id,
@@ -203,6 +242,7 @@ async def _phase_detect_comments(db, lm, client):
             comment_text=comment_text[:500] if comment_text else None,
             status="pending_actions",
             is_connected=is_connected,
+            replied_to_comment=already_replied,
         )
         db.add(lmc)
         lm.total_processed = (lm.total_processed or 0) + 1

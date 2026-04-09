@@ -2413,6 +2413,34 @@ class Linkedin(object):
         res = self._post(url, data=json.dumps(payload))
         return res.status_code in (200, 201)
 
+    def get_comment_replies(self, activity_urn: str, parent_comment_urn: str, count: int = 50) -> List:
+        """Fetch replies to a specific comment on a post.
+
+        :param activity_urn: Numeric activity ID (e.g. '1234567890')
+        :type activity_urn: str
+        :param parent_comment_urn: Full parent comment URN
+        :type parent_comment_urn: str
+        :param count: Max replies to fetch
+        :type count: int
+
+        :return: List of reply elements
+        :rtype: list
+        """
+        url = "/feed/comments"
+        url_params = {
+            "count": min(count, 50),
+            "start": 0,
+            "q": "comments",
+            "sortOrder": "RELEVANCE",
+            "updateId": f"activity:{activity_urn}",
+            "parentComment": parent_comment_urn,
+        }
+        res = self._fetch(url, params=url_params)
+        data = res.json()
+        if data and "status" in data and data["status"] != 200:
+            return []
+        return data.get("elements", [])
+
     def get_job_skills(self, job_id: str) -> Dict:
         """Fetch skills associated with a given job.
         :param job_id: LinkedIn job ID
