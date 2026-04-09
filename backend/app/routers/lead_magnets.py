@@ -216,7 +216,8 @@ def resume_lead_magnet(
     lm.status = "running"
     lm.error_message = None
     db.commit()
-    resume_campaign_job(_lm_key(lm.id))
+    # Always re-register (handles server restart where job was lost from memory)
+    schedule_campaign_job(_lm_key(lm.id), "lead_magnet")
     return _to_response(lm)
 
 
@@ -249,7 +250,8 @@ def trigger_lead_magnet(
         raise HTTPException(status_code=400, detail="Le lead magnet doit être en cours")
 
     if not trigger_campaign_now(_lm_key(lm.id)):
-        raise HTTPException(status_code=400, detail="Job non trouvé dans le scheduler")
+        # Job lost after server restart — re-register then trigger
+        schedule_campaign_job(_lm_key(lm.id), "lead_magnet")
     return _to_response(lm)
 
 
