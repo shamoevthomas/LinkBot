@@ -135,6 +135,7 @@ class CampaignMessage(Base):
     campaign_id = Column(Integer, ForeignKey("campaign.id", ondelete="CASCADE"), nullable=False)
     sequence = Column(Integer, nullable=False)  # 0=main, 1-7=follow-ups
     message_template = Column(Text, nullable=False)
+    fallback_template = Column(Text)  # fallback if AI fails
     delay_days = Column(Integer, default=0)  # days after previous message
 
     campaign = relationship("Campaign", back_populates="messages")

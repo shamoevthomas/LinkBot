@@ -73,7 +73,11 @@ async def run_dm_campaign(campaign_id: int) -> None:
 
         client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
 
-        # --- get follow-up config ---
+        # --- get message config ---
+        main_msg = db.query(CampaignMessage).filter(
+            CampaignMessage.campaign_id == campaign_id, CampaignMessage.sequence == 0
+        ).first()
+        main_fallback = (main_msg.fallback_template if main_msg and main_msg.fallback_template else None) or campaign.fallback_message
         followups = (
             db.query(CampaignMessage)
             .filter(CampaignMessage.campaign_id == campaign_id, CampaignMessage.sequence > 0)
@@ -269,14 +273,14 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     # For full_personalize with no template fallback, AI is likely down
                     if campaign.full_personalize and campaign.use_ai:
                         # If fallback message exists, use it instead of skipping
-                        if campaign.fallback_message and campaign.fallback_message.strip():
+                        if main_fallback and main_fallback.strip():
                             contact_data = {
                                 "first_name": contact.first_name,
                                 "last_name": contact.last_name,
                                 "headline": contact.headline,
                                 "location": contact.location,
                             }
-                            message_body = render_template(campaign.fallback_message, contact_data)
+                            message_body = render_template(main_fallback, contact_data)
                             print(f"[DM JOB] Campaign {campaign_id}: AI failed, using fallback message for contact {contact.id}", flush=True)
                             # Don't break — fall through to send the message below
                         else:

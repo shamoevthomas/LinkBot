@@ -400,6 +400,7 @@ def create_dm_campaign(
             campaign_id=campaign.id,
             sequence=msg.sequence,
             message_template=msg.message_template,
+            fallback_template=msg.fallback_template,
             delay_days=msg.delay_days,
         )
         db.add(cm)
@@ -902,6 +903,7 @@ def duplicate_campaign(
             campaign_id=new_campaign.id,
             sequence=msg.sequence,
             message_template=msg.message_template,
+            fallback_template=msg.fallback_template,
             delay_days=msg.delay_days,
         ))
 

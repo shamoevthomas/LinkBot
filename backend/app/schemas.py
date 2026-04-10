@@ -106,6 +106,7 @@ class CampaignCreate(BaseModel):
 class CampaignMessageSchema(BaseModel):
     sequence: int
     message_template: str
+    fallback_template: Optional[str] = None
     delay_days: int = 0
 
 class DMCampaignCreate(BaseModel):

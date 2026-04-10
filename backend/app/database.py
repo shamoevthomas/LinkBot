@@ -65,6 +65,12 @@ def _run_migrations():
             "DELETE FROM contact WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '5 minutes'"
         )) if is_pg else None
 
+        # Add fallback_template column to campaign_message
+        cm_columns = [c["name"] for c in inspector.get_columns("campaign_message")]
+        if "fallback_template" not in cm_columns:
+            conn.execute(text('ALTER TABLE "campaign_message" ADD COLUMN fallback_template TEXT'))
+            print("[MIGRATION] Added fallback_template to campaign_message", flush=True)
+
         # Add lead_magnet_id column to campaign_action for lead magnet action logging
         action_columns = [c["name"] for c in inspector.get_columns("campaign_action")]
         if "lead_magnet_id" not in action_columns:

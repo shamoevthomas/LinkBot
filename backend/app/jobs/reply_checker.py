@@ -74,7 +74,9 @@ async def _render_message(campaign, template, contact, client, api_key=""):
                 return msgs[0]["rendered"]
         except Exception as exc:
             logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
-        return render_template(template, contact_data)
+        if template and template.strip() != "__FULL_AI__":
+            return render_template(template, contact_data)
+        return None
 
     elif campaign.use_ai and api_key and "{compliment}" in template:
         profile_data = None
@@ -99,10 +101,14 @@ async def _render_message(campaign, template, contact, client, api_key=""):
             logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)
             compliment = ""
         contact_data["compliment"] = compliment
-        return render_template(template, contact_data)
+        if template and template.strip() != "__FULL_AI__":
+            return render_template(template, contact_data)
+        return None
 
     else:
-        return render_template(template, contact_data)
+        if template and template.strip() != "__FULL_AI__":
+            return render_template(template, contact_data)
+        return None
 
 
 async def _send_followup_with_retry(campaign, followup_msg, contact, client, cc, db, api_key=""):
@@ -124,11 +130,23 @@ async def _send_followup_with_retry(campaign, followup_msg, contact, client, cc,
 
         if not message_body or not message_body.strip():
             last_error = last_error or "Empty message"
-            if attempt < 3:
-                delay = random.randint(60, 180)
-                print(f"[FOLLOWUP] Campaign {campaign.id}: attempt {attempt}/3 failed for contact {contact.id}, retry in {delay}s", flush=True)
-                await asyncio.sleep(delay)
-            continue
+            # Use per-message fallback if available
+            fb = followup_msg.fallback_template if hasattr(followup_msg, 'fallback_template') else None
+            if fb and fb.strip():
+                contact_data = {
+                    "first_name": contact.first_name,
+                    "last_name": contact.last_name,
+                    "headline": contact.headline,
+                    "location": contact.location,
+                }
+                message_body = render_template(fb, contact_data)
+                print(f"[FOLLOWUP] Campaign {campaign.id}: AI failed, using fallback for contact {contact.id}", flush=True)
+            else:
+                if attempt < 3:
+                    delay = random.randint(60, 180)
+                    print(f"[FOLLOWUP] Campaign {campaign.id}: attempt {attempt}/3 failed for contact {contact.id}, retry in {delay}s", flush=True)
+                    await asyncio.sleep(delay)
+                continue
 
         try:
             success = await send_message(client, contact.urn_id, message_body)
