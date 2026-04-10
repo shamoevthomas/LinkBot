@@ -635,7 +635,10 @@ async def _render_message(campaign, template, contact, client, api_key=""):
                 return msgs[0]["rendered"]
         except Exception as exc:
             logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
-        return render_template(template, contact_data)
+        # Don't send the __FULL_AI__ placeholder as an actual message
+        if template and template.strip() != "__FULL_AI__":
+            return render_template(template, contact_data)
+        return None
 
     elif campaign.use_ai and api_key and "{compliment}" in template:
         profile_data = None
@@ -660,10 +663,14 @@ async def _render_message(campaign, template, contact, client, api_key=""):
             logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)
             compliment = ""
         contact_data["compliment"] = compliment
-        return render_template(template, contact_data)
+        if template and template.strip() != "__FULL_AI__":
+            return render_template(template, contact_data)
+        return None
 
     else:
-        return render_template(template, contact_data)
+        if template and template.strip() != "__FULL_AI__":
+            return render_template(template, contact_data)
+        return None
 
 
 def _log_action(db, campaign_id, contact_id, action_type, status, error_message=None):
