@@ -824,7 +824,12 @@ def resume_campaign(
     db.commit()
     db.refresh(campaign)
 
-    resume_campaign_job(campaign_id)
+    # Re-register job if lost after server restart (same fix as lead magnets)
+    from app.scheduler import _campaigns
+    if campaign_id not in _campaigns:
+        schedule_campaign_job(campaign_id, campaign.type)
+    else:
+        resume_campaign_job(campaign_id)
     return _campaign_to_response(campaign, db)
 
 
