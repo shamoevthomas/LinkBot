@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check, RotateCcw, Settings } from 'lucide-react';
-import { getCampaign, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus, retryFromAction } from '../api/campaigns';
+import { getCampaign, getCampaignMessages, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus, retryFromAction } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import toast from 'react-hot-toast';
@@ -140,8 +140,9 @@ export default function CampaignDetailPage() {
       if (campaign.status === 'running') {
         await pauseCampaign(id);
       }
+      const msgs = await getCampaignMessages(id);
       navigate(`/dashboard/campaigns/new-dm`, {
-        state: { reconfigure: { id: campaign.id, name: campaign.name, crm_id: campaign.crm_id, ai_prompt: campaign.ai_prompt, context_text: campaign.context_text, fallback_message: campaign.fallback_message, message_template: campaign.message_template } },
+        state: { reconfigure: { id: campaign.id, name: campaign.name, crm_id: campaign.crm_id, ai_prompt: campaign.ai_prompt, context_text: campaign.context_text, fallback_message: campaign.fallback_message, message_template: campaign.message_template, messages: msgs } },
       });
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
   };

@@ -588,6 +588,17 @@ def update_campaign(
         campaign.context_text = body["context_text"]
     if "message_template" in body:
         campaign.message_template = body["message_template"]
+    if "messages" in body and isinstance(body["messages"], list):
+        # Replace all CampaignMessage rows
+        db.query(CampaignMessage).filter(CampaignMessage.campaign_id == campaign_id).delete()
+        for msg in body["messages"]:
+            db.add(CampaignMessage(
+                campaign_id=campaign_id,
+                sequence=msg.get("sequence", 0),
+                message_template=msg.get("message_template", ""),
+                fallback_template=msg.get("fallback_template"),
+                delay_days=msg.get("delay_days", 0),
+            ))
     db.commit()
     db.refresh(campaign)
     return _campaign_to_response(campaign, db)
@@ -831,6 +842,33 @@ def resume_campaign(
     else:
         resume_campaign_job(campaign_id)
     return _campaign_to_response(campaign, db)
+
+
+@router.get("/{campaign_id}/messages")
+def get_campaign_messages(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Return all CampaignMessage rows for a campaign."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    msgs = (
+        db.query(CampaignMessage)
+        .filter(CampaignMessage.campaign_id == campaign_id)
+        .order_by(CampaignMessage.sequence)
+        .all()
+    )
+    return [
+        {
+            "sequence": m.sequence,
+            "message_template": m.message_template,
+            "fallback_template": m.fallback_template,
+            "delay_days": m.delay_days,
+        }
+        for m in msgs
+    ]
 
 
 @router.post("/{campaign_id}/cancel", response_model=CampaignResponse)

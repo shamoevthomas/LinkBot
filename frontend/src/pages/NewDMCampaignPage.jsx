@@ -27,18 +27,33 @@ export default function NewDMCampaignPage() {
   const [aiPrompt, setAiPrompt] = useState(reconfigure?.ai_prompt || '');
   const [dmDelayHours, setDmDelayHours] = useState((connectionConfig || searchConnectionDMConfig) ? 2 : 0);
   const [fallbackMessage, setFallbackMessage] = useState(reconfigure?.fallback_message || '');
-  const [fallbacks, setFallbacks] = useState({}); // { 0: "main fallback", 1: "relance 1 fallback", ... }
+  // Build initial fallbacks from reconfigure messages
+  const [fallbacks, setFallbacks] = useState(() => {
+    if (reconfigure?.messages) {
+      const fb = {};
+      reconfigure.messages.forEach(m => { if (m.fallback_template) fb[m.sequence] = m.fallback_template; });
+      return fb;
+    }
+    return {};
+  });
 
   // Messages
   const [mode, setMode] = useState(reconfigure ? 'full' : 'template');
-  const [messages, setMessages] = useState([
-    { sequence: 0, message_template: '', delay_days: 0 },
-  ]);
+  const [messages, setMessages] = useState(() => {
+    if (reconfigure?.messages?.length) return reconfigure.messages.map(m => ({ sequence: m.sequence, message_template: m.message_template || '', delay_days: m.delay_days || 0 }));
+    return [{ sequence: 0, message_template: '', delay_days: 0 }];
+  });
   const [generating, setGenerating] = useState(false);
   const [regeneratingIdx, setRegeneratingIdx] = useState(null);
   // Full mode
-  const [followupCount, setFollowupCount] = useState(0);
-  const [followupDelays, setFollowupDelays] = useState([]);
+  const [followupCount, setFollowupCount] = useState(() => {
+    if (reconfigure?.messages) { const fups = reconfigure.messages.filter(m => m.sequence > 0); return fups.length; }
+    return 0;
+  });
+  const [followupDelays, setFollowupDelays] = useState(() => {
+    if (reconfigure?.messages) return reconfigure.messages.filter(m => m.sequence > 0).map(m => m.delay_days || 1);
+    return [];
+  });
   const [previews, setPreviews] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [extraInstructions, setExtraInstructions] = useState('');
@@ -175,10 +190,20 @@ export default function NewDMCampaignPage() {
     try {
       // Reconfigure mode: update existing campaign and resume
       if (reconfigure) {
+        let msgPayload;
+        if (mode === 'full') {
+          msgPayload = [{ sequence: 0, message_template: '__FULL_AI__', fallback_template: fallbacks[0] || fallbackMessage || null, delay_days: 0 }];
+          for (let i = 0; i < followupCount; i++) {
+            msgPayload.push({ sequence: i + 1, message_template: '__FULL_AI__', fallback_template: fallbacks[i + 1] || null, delay_days: followupDelays[i] || 3 });
+          }
+        } else {
+          msgPayload = messages.map((m) => ({ sequence: m.sequence, message_template: m.message_template, fallback_template: fallbacks[m.sequence] || null, delay_days: m.delay_days }));
+        }
         await updateCampaign(reconfigure.id, {
           ai_prompt: [aiPrompt, extraInstructions].filter(Boolean).join('\n\nConsignes supplementaires:\n') || null,
           context_text: contextText || null,
           fallback_message: fallbackMessage.trim() || null,
+          messages: msgPayload,
         });
         await resumeCampaign(reconfigure.id);
         toast.success('Campagne reconfiguree et relancee');
