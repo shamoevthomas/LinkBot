@@ -325,8 +325,8 @@ export default function NewDMCampaignPage() {
             )}
           </div>
 
-          {/* Fallback message */}
-          {useAi && (
+          {/* Fallback message — only show here in template mode (in full mode it's in the workflow) */}
+          {useAi && mode !== 'full' && (
             <div className="g-card !p-4 space-y-3" style={{ borderColor: 'rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.02)' }}>
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 <AlertCircle size={14} className="text-amber-500" /> Message de secours
@@ -602,6 +602,47 @@ export default function NewDMCampaignPage() {
                     </div>
                   </div>
                 ))}
+
+                {/* Fallback message in workflow */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
+                  <div style={{ width: 2, height: 16, background: '#d1d5db' }} />
+                  <div style={{
+                    padding: '4px 12px', borderRadius: 99,
+                    background: '#fef3c7', border: '1px solid #fde68a',
+                  }}>
+                    <span style={{ fontSize: 11, color: '#92400e', fontWeight: 500 }}>si l'IA echoue</span>
+                  </div>
+                  <div style={{ width: 2, height: 16, background: '#d1d5db' }} />
+                </div>
+                <div style={{
+                  border: '1px solid #fde68a', borderRadius: 14, overflow: 'hidden',
+                  background: 'rgba(245,158,11,0.02)',
+                }}>
+                  <div style={{
+                    padding: '8px 14px', background: '#fffbeb', borderBottom: '1px solid #fde68a',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    <AlertCircle size={12} style={{ color: '#d97706' }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>Message de secours</span>
+                  </div>
+                  <div style={{ padding: 14 }}>
+                    <textarea value={fallbackMessage} onChange={(e) => setFallbackMessage(e.target.value)}
+                      rows={3} placeholder={`Bonjour {first_name},\n\nJ'aimerais echanger avec vous sur...`}
+                      style={{
+                        width: '100%', padding: '8px 12px', border: '1px solid #fde68a', borderRadius: 8,
+                        fontSize: 12, resize: 'none', background: '#fff',
+                        outline: 'none',
+                      }} />
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                      {['{first_name}', '{last_name}', '{headline}'].map((v) => (
+                        <span key={v} style={{
+                          fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                          background: '#fef3c7', color: '#92400e', fontFamily: 'monospace',
+                        }}>{v}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
                 {/* Add follow-up */}
                 {followupCount < 7 && (
