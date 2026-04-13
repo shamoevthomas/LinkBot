@@ -147,11 +147,12 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
         except Exception:
             pass
 
-    # Strategy 3: search by name — require secondary signal to avoid false positives
+    # Strategy 3: search by name — prefer secondary signal, fallback to name-only match
     name_query = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
     if name_query:
         try:
             results = await search_people(client, keywords=name_query, limit=5)
+            name_matches = []  # collect (urn, has_secondary) tuples
             for r in results:
                 r_urn = r.get("urn_id", "")
                 r_name = r.get("name", "").lower()
@@ -163,14 +164,13 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
                 )
                 if not name_ok:
                     continue
-                # Require at least one secondary signal (headline/jobtitle or location)
+                # Check secondary signal (headline/jobtitle or location)
                 secondary_match = False
                 r_jobtitle = (r.get("jobtitle") or "").lower()
                 r_location = (r.get("location") or "").lower()
                 c_headline = (contact.headline or "").lower()
                 c_location = (contact.location or "").lower()
                 if c_headline and r_jobtitle:
-                    # Check if jobtitle words overlap with headline
                     title_words = {w for w in r_jobtitle.split() if len(w) > 2}
                     headline_words = {w for w in c_headline.split() if len(w) > 2}
                     if title_words & headline_words:
@@ -178,12 +178,19 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
                 if not secondary_match and c_location and r_location:
                     if c_location in r_location or r_location in c_location:
                         secondary_match = True
-                if secondary_match:
+                name_matches.append((r_urn, secondary_match))
+
+            # Pick best match: prefer secondary-confirmed, else take first name match
+            for r_urn, has_secondary in name_matches:
+                if has_secondary:
                     logger.info("Resolved urn via search '%s' -> %s (confirmed by secondary signal)", name_query, r_urn)
                     contact.urn_id = r_urn
                     return r_urn
-                else:
-                    logger.info("Search match '%s' -> %s rejected: name matched but no secondary signal", name_query, r_urn)
+            if name_matches:
+                r_urn = name_matches[0][0]
+                logger.info("Resolved urn via search '%s' -> %s (name-only match, no secondary signal)", name_query, r_urn)
+                contact.urn_id = r_urn
+                return r_urn
         except Exception:
             pass
 
