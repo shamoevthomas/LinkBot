@@ -328,6 +328,10 @@ class Linkedin(object):
             )
             data = res.json()
 
+            # Debug: log response structure
+            included_count = len(data.get("included", []))
+            print(f"[SEARCH DEBUG] status={res.status_code}, included={included_count}, top_keys={list(data.keys())[:5]}", flush=True)
+
             # Build lookup from included entities (normalized JSON format)
             included_map = {}
             for inc in data.get("included", []):
@@ -342,6 +346,7 @@ class Linkedin(object):
             data_clusters = inner.get("searchDashClustersByAll", {})
 
             if not data_clusters:
+                print(f"[SEARCH DEBUG] No data_clusters found. inner keys={list(inner.keys()) if isinstance(inner, dict) else type(inner)}", flush=True)
                 break  # Don't wipe accumulated results — just stop paginating
 
             # Accept both _type and $type fields
@@ -520,6 +525,12 @@ class Linkedin(object):
             params["keywords"] = keywords
 
         data = self.search(params, **kwargs)
+
+        filtered_out = sum(
+            1 for item in data
+            if (item.get("entityCustomTrackingInfo") or {}).get("memberDistance") == "OUT_OF_NETWORK"
+        )
+        print(f"[SEARCH_PEOPLE] raw={len(data)}, out_of_network={filtered_out}", flush=True)
 
         results = []
         for item in data:
