@@ -367,8 +367,62 @@ def create_dm_campaign(
     followup_count = len(body.messages) - 1 if body.messages else 0
 
     if body.is_search_connection_dm:
-        campaign_type = "search_connection_dm"
-    elif body.is_connection_dm:
+        # --- Split into 2 separate campaigns: search + connection_dm ---
+
+        # 1. Create search campaign
+        search_campaign = Campaign(
+            name=f"{body.name} — Recherche",
+            type="search",
+            status="running",
+            crm_id=body.crm_id,
+            user_id=user.id,
+            keywords=body.keywords,
+            total_target=total_target,
+            search_regions=",".join(body.search_regions) if body.search_regions else None,
+            started_at=datetime.utcnow(),
+        )
+        db.add(search_campaign)
+        db.flush()
+        schedule_campaign_job(campaign_id=search_campaign.id, campaign_type="search")
+
+        # 2. Create connection_dm campaign (will pick up contacts as search adds them)
+        campaign = Campaign(
+            name=body.name,
+            type="connection_dm",
+            status="running",
+            crm_id=body.crm_id,
+            user_id=user.id,
+            keywords=body.keywords,
+            message_template=main_template,
+            use_ai=body.use_ai,
+            full_personalize=body.full_personalize,
+            context_text=body.context_text,
+            ai_prompt=body.ai_prompt,
+            total_target=total_target,
+            dm_delay_hours=body.dm_delay_hours,
+            fallback_message=body.fallback_message,
+            search_regions=",".join(body.search_regions) if body.search_regions else None,
+            started_at=datetime.utcnow(),
+        )
+        db.add(campaign)
+        db.flush()
+
+        for msg in body.messages:
+            db.add(CampaignMessage(
+                campaign_id=campaign.id,
+                sequence=msg.sequence,
+                message_template=msg.message_template,
+                fallback_template=msg.fallback_template,
+                delay_days=msg.delay_days,
+            ))
+
+        db.commit()
+        db.refresh(campaign)
+        schedule_campaign_job(campaign_id=campaign.id, campaign_type="connection_dm")
+
+        return _campaign_to_response(campaign, db)
+
+    if body.is_connection_dm:
         campaign_type = "connection_dm"
     else:
         campaign_type = "dm"
@@ -379,14 +433,14 @@ def create_dm_campaign(
         status="running",
         crm_id=body.crm_id,
         user_id=user.id,
-        keywords=body.keywords if (body.is_connection_dm or body.is_search_connection_dm) else None,
+        keywords=body.keywords if body.is_connection_dm else None,
         message_template=main_template,
         use_ai=body.use_ai,
         full_personalize=body.full_personalize,
         context_text=body.context_text,
         ai_prompt=body.ai_prompt,
         total_target=total_target,
-        dm_delay_hours=body.dm_delay_hours if (body.is_connection_dm or body.is_search_connection_dm) else 0,
+        dm_delay_hours=body.dm_delay_hours if body.is_connection_dm else 0,
         fallback_message=body.fallback_message,
         search_regions=",".join(body.search_regions) if body.search_regions else None,
         started_at=datetime.utcnow(),

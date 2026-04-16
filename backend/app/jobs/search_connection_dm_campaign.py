@@ -36,7 +36,10 @@ async def run_search_connection_dm_campaign(campaign_id: int) -> None:
         if campaign.status != "running":
             return
 
-        needs_search = (campaign.search_offset or 0) == 0 and campaign.keywords
+        search_offset_val = campaign.search_offset or 0
+        kw = campaign.keywords
+        needs_search = search_offset_val == 0 and kw
+        print(f"[SEARCH_CONN_DM JOB] Campaign {campaign_id}: search_offset={search_offset_val}, keywords={kw!r}, needs_search={needs_search}", flush=True)
     finally:
         db.close()
 
@@ -45,6 +48,7 @@ async def run_search_connection_dm_campaign(campaign_id: int) -> None:
         return
 
     # Search done -- delegate to connection_dm logic
+    print(f"[SEARCH_CONN_DM JOB] Campaign {campaign_id}: delegating to connection_dm", flush=True)
     from app.jobs.connection_dm_campaign import run_connection_dm_campaign
     await run_connection_dm_campaign(campaign_id)
 
