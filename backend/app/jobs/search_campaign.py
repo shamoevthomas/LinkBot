@@ -24,7 +24,7 @@ _PAGE_SIZE = 10
 
 async def run_search_campaign(campaign_id: int) -> None:
     """Search LinkedIn and import all results into the CRM at once."""
-    print(f"[SEARCH JOB] Campaign {campaign_id}: starting full search", flush=True)
+    print(f"[SEARCH JOB] Campaign {campaign_id}: starting full search (will log keywords after DB read)", flush=True)
     db = SessionLocal()
     try:
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
@@ -53,6 +53,8 @@ async def run_search_campaign(campaign_id: int) -> None:
         skipped = 0
         regions = campaign.search_regions.split(",") if campaign.search_regions else None
 
+        print(f"[SEARCH JOB] Campaign {campaign_id}: keywords={campaign.keywords!r}, target={target}, regions={regions}", flush=True)
+
         # Loop through pages until we reach target or exhaust results
         while added < target:
             batch = min(_PAGE_SIZE, target - added)
@@ -64,6 +66,7 @@ async def run_search_campaign(campaign_id: int) -> None:
                     offset=offset,
                     regions=regions,
                 )
+                print(f"[SEARCH JOB] Campaign {campaign_id}: offset={offset}, batch={batch}, got {len(results)} results", flush=True)
             except Exception as exc:
                 logger.exception("Search failed for campaign %d at offset %d", campaign_id, offset)
                 campaign.error_message = f"Search error at offset {offset}: {str(exc)[:300]}"
