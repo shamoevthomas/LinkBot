@@ -733,6 +733,9 @@ async def run_campaign_now(
         elif campaign.type == "connection_dm":
             from app.jobs.connection_dm_campaign import run_connection_dm_campaign
             await run_connection_dm_campaign(campaign_id)
+        elif campaign.type == "search_connection_dm":
+            from app.jobs.search_connection_dm_campaign import run_search_connection_dm_campaign
+            await run_search_connection_dm_campaign(campaign_id)
         elif campaign.type == "search":
             from app.jobs.search_campaign import run_search_campaign
             await run_search_campaign(campaign_id)
