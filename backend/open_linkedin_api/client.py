@@ -46,12 +46,25 @@ class Client(object):
         "Accept-Language": "en-us",
     }
 
+    # (connect_timeout, read_timeout) applied to every session request.
+    # Without this, a hung LinkedIn call locks the worker thread forever and
+    # eventually wedges the whole app (all sync endpoints, including /api/health,
+    # become unresponsive).
+    DEFAULT_TIMEOUT = (10, 30)
+
     def __init__(
         self, *, debug=False, refresh_cookies=False, proxies={}, cookies_dir: str = ""
     ):
         self.session = requests.session()
         self.session.proxies.update(proxies)
         self.session.headers.update(Client.REQUEST_HEADERS)
+
+        _orig_request = self.session.request
+        _default_timeout = Client.DEFAULT_TIMEOUT
+        def _request_with_timeout(method, url, **kwargs):
+            kwargs.setdefault("timeout", _default_timeout)
+            return _orig_request(method, url, **kwargs)
+        self.session.request = _request_with_timeout
         self.proxies = proxies
         self.logger = logger
         self.metadata = {}

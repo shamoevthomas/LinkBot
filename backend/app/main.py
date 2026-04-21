@@ -140,7 +140,7 @@ app.include_router(lead_magnets_router.router)
 
 
 @app.get("/api/health")
-def health():
+async def health():
     return {"status": "ok", "app": "LinkBot"}
 
 
