@@ -70,7 +70,15 @@ async def run_connection_campaign(campaign_id: int) -> None:
         client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
 
         # --- pick next contact (loop to skip already-processed contacts) ---
+        # Safety bound — no matter the data state, never spin forever here.
+        max_iter = 500
+        iter_count = 0
         while True:
+            iter_count += 1
+            if iter_count > max_iter:
+                logger.warning("Campaign %d: hit max_iter=%d, breaking to yield event loop", campaign_id, max_iter)
+                break
+
             # Check daily limit each iteration
             global_today = get_global_actions_today(["connection_request"], db)
             if global_today >= max_per_day:
@@ -85,13 +93,21 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 cancel_campaign_job(campaign_id)
                 break
 
-            already_requested_ids = (
+            # Exclude contacts already handled in this campaign — any CampaignAction
+            # (success, skipped, failed) or any CampaignContact row means "don't retry".
+            # Filtering only by success/skipped let failed contacts get re-picked forever,
+            # which combined with the CampaignContact race-guard caused an infinite loop.
+            handled_by_action = (
                 db.query(CampaignAction.contact_id)
                 .filter(
                     CampaignAction.campaign_id == campaign_id,
                     CampaignAction.action_type == "connection_request",
-                    CampaignAction.status.in_(["success", "skipped"]),
                 )
+                .subquery()
+            )
+            handled_by_contact = (
+                db.query(CampaignContact.contact_id)
+                .filter(CampaignContact.campaign_id == campaign_id)
                 .subquery()
             )
 
@@ -99,7 +115,8 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 db.query(Contact)
                 .filter(
                     Contact.crm_id == campaign.crm_id,
-                    ~Contact.id.in_(already_requested_ids),
+                    ~Contact.id.in_(handled_by_action),
+                    ~Contact.id.in_(handled_by_contact),
                 )
                 .order_by(Contact.added_at.asc())
                 .first()
@@ -112,11 +129,6 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 db.commit()
                 cancel_campaign_job(campaign_id)
                 break
-
-            # Race condition guard
-            from app.models import CampaignContact as _CC
-            if db.query(_CC).filter(_CC.campaign_id == campaign_id, _CC.contact_id == contact.id).first():
-                continue
 
             # --- blacklist check (skip and continue immediately) ---
             if db.query(Blacklist).filter(Blacklist.urn_id == contact.urn_id, Blacklist.user_id == campaign.user_id).first():
