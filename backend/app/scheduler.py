@@ -85,21 +85,12 @@ async def _run_reply_checks():
 
 async def _main_loop():
     """Background loop that checks and runs campaign jobs."""
-    global _shutdown, _last_sync_connections, _last_reply_check
+    global _shutdown, _last_reply_check
     print("[SCHEDULER] Main loop started", flush=True)
-
-    # Run sync_connections once at startup (after 30s delay)
-    await asyncio.sleep(30)
-    await _run_sync_connections()
 
     while not _shutdown:
         try:
             now = datetime.utcnow()
-
-            # Check sync_connections (every 6 hours)
-            if (_last_sync_connections is None or
-                    (now - _last_sync_connections).total_seconds() >= SYNC_CONNECTIONS_INTERVAL):
-                await _run_sync_connections()
 
             # Check replies (every 5 minutes)
             if (_last_reply_check is None or
