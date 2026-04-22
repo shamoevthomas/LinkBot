@@ -200,22 +200,61 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
         ],
     }
 
-def _extract_miniprofile(me: dict) -> dict:
-    """Extract picture_url + public name from LinkedIn /me payload."""
-    mini = me.get("miniProfile") or me
-    first = mini.get("firstName") or ""
-    last = mini.get("lastName") or ""
-    public_id = mini.get("publicIdentifier") or ""
-    picture_url = None
-    picture = mini.get("picture") or {}
-    vec = picture.get("com.linkedin.common.VectorImage") or picture.get("displayImageReference", {}).get("vectorImage") or {}
+def _text(val) -> str:
+    """Unwrap LinkedIn i18n wrappers (sometimes firstName is {'localized': {...}})."""
+    if val is None:
+        return ""
+    if isinstance(val, str):
+        return val
+    if isinstance(val, dict):
+        # Try localized shape
+        loc = val.get("localized")
+        if isinstance(loc, dict) and loc:
+            first = next(iter(loc.values()), "")
+            if isinstance(first, str):
+                return first
+        for key in ("text", "value", "defaultText"):
+            v = val.get(key)
+            if isinstance(v, str):
+                return v
+    return ""
+
+
+def _extract_picture(node: dict) -> str | None:
+    """Extract a usable picture URL from any of the known LinkedIn shapes."""
+    if not isinstance(node, dict):
+        return None
+    # Shape 1: miniProfile.picture = {"com.linkedin.common.VectorImage": {...}}
+    vec = node.get("com.linkedin.common.VectorImage")
+    # Shape 2: profilePicture.displayImageReference.vectorImage = {...}
+    if not vec:
+        vec = (node.get("displayImageReference") or {}).get("vectorImage")
+    # Shape 3: already the vectorImage itself
+    if not vec and ("rootUrl" in node or "artifacts" in node):
+        vec = node
+    if not isinstance(vec, dict):
+        return None
     root = vec.get("rootUrl")
     artifacts = vec.get("artifacts") or []
     if root and artifacts:
-        # pick the largest artifact
         seg = artifacts[-1].get("fileIdentifyingUrlPathSegment")
         if seg:
-            picture_url = f"{root}{seg}"
+            return f"{root}{seg}"
+    return None
+
+
+def _extract_miniprofile(me: dict) -> dict:
+    """Extract picture_url + name + public_id from a LinkedIn /me payload."""
+    mini = me.get("miniProfile") if isinstance(me.get("miniProfile"), dict) else me
+    first = _text(mini.get("firstName"))
+    last = _text(mini.get("lastName"))
+    public_id = _text(mini.get("publicIdentifier"))
+
+    picture_url = (
+        _extract_picture(mini.get("picture") or {})
+        or _extract_picture(mini.get("profilePicture") or {})
+        or _extract_picture(me.get("profilePicture") or {})
+    )
     return {
         "first_name": first,
         "last_name": last,
@@ -224,21 +263,56 @@ def _extract_miniprofile(me: dict) -> dict:
     }
 
 
+def _empty_profile() -> dict:
+    return {"valid": False, "picture_url": None, "first_name": None, "last_name": None, "public_id": None}
+
+
 @router.get("/linkedin-profile")
 async def linkedin_profile(user: User = Depends(get_current_user)):
     """Return the LinkedIn account owner (picture + name) for the current user's cookies."""
     if not user.li_at_cookie or not user.cookies_valid:
-        return {"valid": False, "picture_url": None, "first_name": None, "last_name": None, "public_id": None}
+        return _empty_profile()
     try:
         client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
-        me = await asyncio.to_thread(client.get_user_profile, True)
+        me = await asyncio.to_thread(client.get_user_profile, False)  # skip stale cache
         if not me:
-            return {"valid": False, "picture_url": None, "first_name": None, "last_name": None, "public_id": None}
+            logger.warning("LinkedIn /me returned empty payload")
+            return _empty_profile()
         profile = _extract_miniprofile(me)
+        logger.info(
+            "LinkedIn /me resolved: public_id=%r picture=%s first=%r",
+            profile["public_id"], bool(profile["picture_url"]), profile["first_name"],
+        )
+
+        # Fallback: if we still have no picture but we know the public_id, fetch full profile
+        if not profile["picture_url"] and profile["public_id"]:
+            try:
+                from app.linkedin_service import get_profile as _gp  # noqa: WPS433
+                full = await _gp(client, public_id=profile["public_id"])
+                if isinstance(full, dict):
+                    root = full.get("displayPictureUrl")
+                    # Pick the largest available artifact from the helper keys (img_W_H)
+                    artifact_keys = [k for k in full.keys() if k.startswith("img_")]
+                    if root and artifact_keys:
+                        # Sort by width (first number after "img_")
+                        def _w(k):
+                            try: return int(k.split("_")[1])
+                            except Exception: return 0
+                        artifact_keys.sort(key=_w, reverse=True)
+                        seg = full.get(artifact_keys[0])
+                        if seg:
+                            profile["picture_url"] = f"{root}{seg}"
+                    if not profile["first_name"]:
+                        profile["first_name"] = _text(full.get("firstName"))
+                    if not profile["last_name"]:
+                        profile["last_name"] = _text(full.get("lastName"))
+            except Exception:
+                logger.exception("LinkedIn profile fallback fetch failed")
+
         return {"valid": True, **profile}
     except Exception:
         logger.exception("Failed to fetch LinkedIn /me")
-        return {"valid": False, "picture_url": None, "first_name": None, "last_name": None, "public_id": None}
+        return _empty_profile()
 
 
 @router.get("/notifications")

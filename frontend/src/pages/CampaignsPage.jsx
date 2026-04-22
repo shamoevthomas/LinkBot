@@ -542,25 +542,25 @@ export default function CampaignsPage() {
         wide>
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Nom de la campagne</label>
+            <label className="form-label">Nom de la campagne</label>
             <input value={form.name} onChange={(e) => set('name', e.target.value)} required
-              className="input-glass" placeholder="Ex: Prospection Marketing Managers" />
+              className="input-sm" placeholder="Ex: Prospection Marketing Managers" />
           </div>
 
           {showNew === 'search' && (
             <>
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Mots-clés de recherche</label>
+                <label className="form-label">Mots-clés de recherche</label>
                 <input value={form.keywords} onChange={(e) => set('keywords', e.target.value)}
-                  className="input-glass" placeholder="Ex: Marketing Manager Paris" />
+                  className="input-sm" placeholder="Ex: Marketing Manager Paris" />
               </div>
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Pays (optionnel)</label>
+                <label className="form-label">Pays (optionnel)</label>
                 <select value="" onChange={(e) => {
                     if (e.target.value && !form.search_regions.includes(e.target.value)) {
                       set('search_regions', [...form.search_regions, e.target.value]);
                     }
-                  }} className="input-glass">
+                  }} className="input-sm">
                   <option value="">Tous les pays</option>
                   {COUNTRIES.filter((c) => !form.search_regions.includes(c.id)).map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -585,36 +585,36 @@ export default function CampaignsPage() {
           )}
 
           {showNew === 'connection' && (
-            <p className="text-[12.5px] p-3 rounded-lg" style={{ color: 'hsl(var(--muted))', background: 'hsl(220 20% 97%)' }}>
+            <p className="info-pill">
               Les demandes de connexion seront envoyées aux contacts du CRM sélectionné ci-dessous.
             </p>
           )}
 
           {showNew === 'export' && (
             <>
-              <p className="text-[12.5px] p-3 rounded-lg" style={{ color: 'hsl(var(--muted))', background: 'hsl(220 20% 97%)' }}>
+              <p className="info-pill">
                 Copie les contacts d'un CRM source vers un CRM de destination, filtrés par un mot-clé.
               </p>
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>CRM source</label>
+                <label className="form-label">CRM source</label>
                 <select value={form.source_crm_id} onChange={(e) => set('source_crm_id', e.target.value)}
-                  className="input-glass" required>
+                  className="input-sm" required>
                   <option value="">Sélectionner le CRM source...</option>
                   {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Mot-clé</label>
+                <label className="form-label">Mot-clé</label>
                 <input value={form.keywords} onChange={(e) => set('keywords', e.target.value)} required
-                  className="input-glass" placeholder="Ex: closer" />
+                  className="input-sm" placeholder="Ex: closer" />
               </div>
             </>
           )}
 
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>CRM de destination</label>
+            <label className="form-label">CRM de destination</label>
             <select value={form.crm_id} onChange={(e) => set('crm_id', e.target.value)}
-              className="input-glass" required>
+              className="input-sm" required>
               <option value="">Sélectionner un CRM...</option>
               {crms
                 .filter((c) => showNew !== 'export' || String(c.id) !== String(form.source_crm_id))
@@ -624,9 +624,9 @@ export default function CampaignsPage() {
 
           {showNew === 'dm' && (
             <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Template de message</label>
+              <label className="form-label">Template de message</label>
               <textarea value={form.message_template} onChange={(e) => set('message_template', e.target.value)}
-                rows={3} className="input-glass" placeholder="Bonjour {first_name}, ..." />
+                rows={3} className="input-sm" placeholder="Bonjour {first_name}, ..." />
               <p className="text-[11px] mt-1" style={{ color: 'hsl(var(--muted))' }}>
                 {form.use_ai ? "Décrivez le ton et le but. L'IA personnalise pour chaque contact."
                   : <>Variables : {'{first_name}'}, {'{last_name}'}, {'{headline}'}</>}
@@ -647,9 +647,9 @@ export default function CampaignsPage() {
 
           {showNew === 'search' && (
             <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Nombre de contacts à collecter</label>
+              <label className="form-label">Nombre de contacts à collecter</label>
               <input type="number" value={form.total_target} onChange={(e) => set('total_target', e.target.value)}
-                className="input-glass" min={1} />
+                className="input-sm" min={1} />
             </div>
           )}
 
@@ -695,35 +695,40 @@ export default function CampaignsPage() {
             </label>
           )}
 
-          {((showNew === 'connection' && form.withDM) || (showNew === 'search' && form.autoConnectDM)) ? (
-            <button type="button" onClick={() => {
-              if (!form.name.trim()) return toast.error('Donne un nom à la campagne');
-              if (!form.crm_id) return toast.error('Sélectionne un CRM');
-              if (showNew === 'search' && !form.keywords?.trim()) return toast.error('Ajoute des mots-clés');
-              setShowNew(null);
-              if (showNew === 'search' && form.autoConnectDM) {
-                navigate('/dashboard/campaigns/new-dm', {
-                  state: { searchConnectionDMConfig: {
-                    name: form.name, keywords: form.keywords,
-                    crm_id: parseInt(form.crm_id), total_target: parseInt(form.total_target) || 100,
-                    search_regions: form.search_regions,
-                  } },
-                });
-              } else {
-                navigate('/dashboard/campaigns/new-dm', {
-                  state: { connectionConfig: {
-                    name: form.name, keywords: form.keywords, crm_id: parseInt(form.crm_id),
-                  } },
-                });
-              }
-            }} className="cta-btn w-full">
-              <MessageCircle size={14} /> Configurer les DMs
+          <div className="flex items-center gap-2 pt-2">
+            <button type="button" onClick={() => setShowNew(null)} className="ghost-btn flex-1">
+              Annuler
             </button>
-          ) : (
-            <button type="submit" disabled={creating} className="cta-btn w-full">
-              {creating ? 'Lancement...' : 'Lancer la campagne'}
-            </button>
-          )}
+            {((showNew === 'connection' && form.withDM) || (showNew === 'search' && form.autoConnectDM)) ? (
+              <button type="button" onClick={() => {
+                if (!form.name.trim()) return toast.error('Donne un nom à la campagne');
+                if (!form.crm_id) return toast.error('Sélectionne un CRM');
+                if (showNew === 'search' && !form.keywords?.trim()) return toast.error('Ajoute des mots-clés');
+                setShowNew(null);
+                if (showNew === 'search' && form.autoConnectDM) {
+                  navigate('/dashboard/campaigns/new-dm', {
+                    state: { searchConnectionDMConfig: {
+                      name: form.name, keywords: form.keywords,
+                      crm_id: parseInt(form.crm_id), total_target: parseInt(form.total_target) || 100,
+                      search_regions: form.search_regions,
+                    } },
+                  });
+                } else {
+                  navigate('/dashboard/campaigns/new-dm', {
+                    state: { connectionConfig: {
+                      name: form.name, keywords: form.keywords, crm_id: parseInt(form.crm_id),
+                    } },
+                  });
+                }
+              }} className="cta-btn flex-1">
+                <MessageCircle size={14} /> Configurer les DMs
+              </button>
+            ) : (
+              <button type="submit" disabled={creating} className="cta-btn flex-1">
+                {creating ? 'Lancement...' : 'Lancer la campagne'}
+              </button>
+            )}
+          </div>
         </form>
       </Modal>
     </PageWrapper>
