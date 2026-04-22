@@ -3,15 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Users, Clock, Trash2, Search, Rocket, Loader2, X } from 'lucide-react';
 import { getCRMs, createCRM, deleteCRM } from '../api/crm';
 import PageWrapper from '../components/layout/PageWrapper';
-import { Chip, Progress, hueFromString } from '../components/ui/atoms';
+import { hueFromString } from '../components/ui/atoms';
 import toast from 'react-hot-toast';
 
 function CRMCard({ crm, onOpen, onDelete }) {
   const hue = hueFromString(crm.name || '');
   const varName = hue === 'blue' ? 'accent' : hue;
   const contactCount = crm.contact_count ?? crm.count ?? 0;
-  const contactedPct = crm.contacted_pct ?? 0;
-  const repliedPct = crm.replied_pct ?? 0;
   const campaigns = crm.campaign_count ?? 0;
   const createdAt = crm.created_at ? new Date(crm.created_at).toLocaleDateString('fr-FR') : '';
 
@@ -48,22 +46,7 @@ function CRMCard({ crm, onOpen, onDelete }) {
         {crm.description || 'Aucune description'}
       </p>
 
-      {contactCount > 0 && (
-        <div className="mt-4 mb-3">
-          <div className="flex items-baseline justify-between mb-1.5">
-            <span className="text-[11px]" style={{ color: 'hsl(var(--muted))' }}>Contactés</span>
-            <span className="mono text-[11px]" style={{ color: 'hsl(var(--muted))' }}>
-              <b style={{ color: 'hsl(var(--text))', fontWeight: 600 }}>{contactedPct}%</b>
-              {repliedPct > 0 && <> · <b style={{ color: 'hsl(var(--emerald))', fontWeight: 600 }}>{repliedPct}%</b> réponse</>}
-            </span>
-          </div>
-          <div className="pbar" style={{ height: 5 }}>
-            <span style={{ width: `${contactedPct}%` }} />
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'hsl(var(--border))' }}>
+      <div className="flex items-center justify-between mt-4 pt-3 border-t" style={{ borderColor: 'hsl(var(--border))' }}>
         <div className="flex items-center gap-3 text-[11px]" style={{ color: 'hsl(var(--muted))' }}>
           <span className="inline-flex items-center gap-1">
             <Clock size={11} />
