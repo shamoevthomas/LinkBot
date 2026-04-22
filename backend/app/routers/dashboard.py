@@ -269,49 +269,73 @@ def _empty_profile() -> dict:
 
 @router.get("/linkedin-profile")
 async def linkedin_profile(user: User = Depends(get_current_user)):
-    """Return the LinkedIn account owner (picture + name) for the current user's cookies."""
+    """Return the LinkedIn account owner (picture + name) for the current user's cookies.
+
+    Strategy: /me → public_id → same dash profile endpoint the network sync uses.
+    This mirrors how get_all_connections() extracts pictures for contacts.
+    """
     if not user.li_at_cookie or not user.cookies_valid:
         return _empty_profile()
     try:
         client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
-        me = await asyncio.to_thread(client.get_user_profile, False)  # skip stale cache
+
+        # Step 1: /me to get publicIdentifier
+        me = await asyncio.to_thread(client.get_user_profile, False)
         if not me:
             logger.warning("LinkedIn /me returned empty payload")
             return _empty_profile()
-        profile = _extract_miniprofile(me)
+
+        mini = me.get("miniProfile") if isinstance(me.get("miniProfile"), dict) else me
+        first_name = _text(mini.get("firstName"))
+        last_name = _text(mini.get("lastName"))
+        public_id = _text(mini.get("publicIdentifier"))
+        picture_url = (
+            _extract_picture(mini.get("picture") or {})
+            or _extract_picture(mini.get("profilePicture") or {})
+            or _extract_picture(me.get("profilePicture") or {})
+        )
         logger.info(
-            "LinkedIn /me resolved: public_id=%r picture=%s first=%r",
-            profile["public_id"], bool(profile["picture_url"]), profile["first_name"],
+            "linkedin /me: public_id=%r first=%r last=%r picture=%s keys=%s",
+            public_id, first_name, last_name, bool(picture_url),
+            list(me.keys())[:12] if isinstance(me, dict) else "?",
         )
 
-        # Fallback: if we still have no picture but we know the public_id, fetch full profile
-        if not profile["picture_url"] and profile["public_id"]:
+        # Step 2: full dash profile (same path as network contact extraction)
+        if public_id and (not picture_url or not first_name):
             try:
-                from app.linkedin_service import get_profile as _gp  # noqa: WPS433
-                full = await _gp(client, public_id=profile["public_id"])
-                if isinstance(full, dict):
+                full = await asyncio.to_thread(client.get_profile, public_id=public_id)
+                if isinstance(full, dict) and full:
+                    if not first_name:
+                        first_name = _text(full.get("firstName"))
+                    if not last_name:
+                        last_name = _text(full.get("lastName"))
+                    # get_profile's _extract_profile_images puts rootUrl at
+                    # `displayPictureUrl` and artifact segments at `img_W_H` keys.
                     root = full.get("displayPictureUrl")
-                    # Pick the largest available artifact from the helper keys (img_W_H)
                     artifact_keys = [k for k in full.keys() if k.startswith("img_")]
+                    def _w(k):
+                        try:
+                            return int(k.split("_")[1])
+                        except Exception:
+                            return 0
+                    artifact_keys.sort(key=_w, reverse=True)
                     if root and artifact_keys:
-                        # Sort by width (first number after "img_")
-                        def _w(k):
-                            try: return int(k.split("_")[1])
-                            except Exception: return 0
-                        artifact_keys.sort(key=_w, reverse=True)
                         seg = full.get(artifact_keys[0])
-                        if seg:
-                            profile["picture_url"] = f"{root}{seg}"
-                    if not profile["first_name"]:
-                        profile["first_name"] = _text(full.get("firstName"))
-                    if not profile["last_name"]:
-                        profile["last_name"] = _text(full.get("lastName"))
+                        if seg and not picture_url:
+                            picture_url = f"{root}{seg}"
+                    logger.info("linkedin dash profile: picture=%s first=%r", bool(picture_url), first_name)
             except Exception:
-                logger.exception("LinkedIn profile fallback fetch failed")
+                logger.exception("Failed to fetch full LinkedIn profile for %s", public_id)
 
-        return {"valid": True, **profile}
+        return {
+            "valid": True,
+            "first_name": first_name or None,
+            "last_name": last_name or None,
+            "public_id": public_id or None,
+            "picture_url": picture_url,
+        }
     except Exception:
-        logger.exception("Failed to fetch LinkedIn /me")
+        logger.exception("Failed to fetch LinkedIn profile")
         return _empty_profile()
 
 
