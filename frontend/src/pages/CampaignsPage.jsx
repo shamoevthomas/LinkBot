@@ -526,12 +526,20 @@ export default function CampaignsPage() {
       )}
 
       {/* Creation modal — preserves original behavior */}
-      <Modal open={!!showNew} onClose={() => setShowNew(null)} title={
-        showNew === 'search' ? 'Nouvelle campagne Recherche' :
-        showNew === 'dm' ? 'Nouvelle campagne Message' :
-        showNew === 'export' ? 'Nouvelle campagne Export' :
-        'Nouvelle campagne Connexion'
-      } wide>
+      <Modal open={!!showNew} onClose={() => setShowNew(null)}
+        title={
+          showNew === 'search' ? 'Nouvelle campagne Recherche' :
+          showNew === 'dm' ? 'Nouvelle campagne Message' :
+          showNew === 'export' ? 'Nouvelle campagne Export' :
+          'Nouvelle campagne Connexion'
+        }
+        subtitle={
+          showNew === 'search' ? 'Trouvez et collectez des profils depuis LinkedIn'
+          : showNew === 'dm' ? 'Envoyez un message séquencé à une liste existante'
+          : showNew === 'export' ? "Copiez des contacts d'un CRM vers un autre"
+          : 'Envoyez des invitations aux contacts du CRM sélectionné'
+        }
+        wide>
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="block text-[12px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Nom de la campagne</label>
