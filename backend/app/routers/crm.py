@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.dependencies import get_db, get_current_user
 from app.models import User, CRM, Contact, Tag, ContactTag
@@ -53,7 +53,11 @@ def list_all_contacts(
     """List all contacts across all CRMs with search, filter, sort, and pagination."""
     # Only show contacts from the current user's CRMs
     user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
-    q = db.query(Contact).filter(Contact.crm_id.in_(user_crm_ids), Contact.deleted_at.is_(None))
+    q = (
+        db.query(Contact)
+        .options(selectinload(Contact.tags))
+        .filter(Contact.crm_id.in_(user_crm_ids), Contact.deleted_at.is_(None))
+    )
 
     if crm_id:
         q = q.filter(Contact.crm_id == crm_id)
@@ -301,7 +305,11 @@ def list_contacts(
     if not crm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CRM not found")
 
-    q = db.query(Contact).filter(Contact.crm_id == crm_id, Contact.deleted_at.is_(None))
+    q = (
+        db.query(Contact)
+        .options(selectinload(Contact.tags))
+        .filter(Contact.crm_id == crm_id, Contact.deleted_at.is_(None))
+    )
 
     # Search filter
     if search:

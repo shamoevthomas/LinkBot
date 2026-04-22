@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, Search, MessageSquare, UserPlus, ChevronDown, Sparkles, MessageCircle, Trash2 } from 'lucide-react';
 import { getCampaigns, createCampaign, deleteCampaign } from '../api/campaigns';
 import { getCRMs } from '../api/crm';
@@ -36,8 +37,6 @@ const TABS = [
 ];
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('');
   const [showNew, setShowNew] = useState(null); // 'search' | 'dm' | 'connection' | null
   const [showDropdown, setShowDropdown] = useState(false);
@@ -46,19 +45,20 @@ export default function CampaignsPage() {
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     client.get('/ai/status').then((r) => setAiAvailable(r.data.available)).catch(() => {});
   }, []);
 
-  const load = async () => {
-    try {
-      const data = await getCampaigns({ type: tab || undefined });
-      setCampaigns(data);
-    } finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, [tab]);
+  const { data: campaigns = [], isFetching } = useQuery({
+    queryKey: ['campaigns', { type: tab || undefined }],
+    queryFn: () => getCampaigns({ type: tab || undefined }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 20_000,
+  });
+  const loading = isFetching && campaigns.length === 0;
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['campaigns'] });
 
   const openNew = async (type) => {
     setCrms(await getCRMs());
@@ -81,7 +81,7 @@ export default function CampaignsPage() {
       });
       toast.success('Campagne créée et lancée');
       setShowNew(null);
-      load();
+      invalidate();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
     } finally { setCreating(false); }
@@ -125,7 +125,7 @@ export default function CampaignsPage() {
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
         {TABS.map(({ key, label }) => (
-          <button key={key} onClick={() => { setTab(key); setLoading(true); }}
+          <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}>
@@ -166,7 +166,7 @@ export default function CampaignsPage() {
                   <button onClick={(e) => {
                     e.stopPropagation();
                     if (!confirm('Supprimer cette campagne ?')) return;
-                    deleteCampaign(c.id).then(() => { toast.success('Campagne supprimee'); load(); }).catch(() => toast.error('Erreur'));
+                    deleteCampaign(c.id).then(() => { toast.success('Campagne supprimee'); invalidate(); }).catch(() => toast.error('Erreur'));
                   }} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                     <Trash2 size={15} />
                   </button>

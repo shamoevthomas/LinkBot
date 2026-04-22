@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Search, ExternalLink, MapPin, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getAllContacts, getCRMs } from '../api/crm';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -7,35 +8,39 @@ import Badge from '../components/ui/Badge';
 
 export default function ContactsPage() {
   const navigate = useNavigate();
-  const [contacts, setContacts] = useState([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [crmFilter, setCrmFilter] = useState('');
-  const [crms, setCrms] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [perPage, setPerPage] = useState(() => parseInt(localStorage.getItem('linkbot_perPage')) || 25);
-
-  useEffect(() => { getCRMs().then(setCrms).catch(() => {}); }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = { page, per_page: perPage, search: debouncedSearch || undefined, connection_status: statusFilter || undefined, crm_id: crmFilter || undefined };
-      const data = await getAllContacts(params);
-      setContacts(data.contacts || []);
-      setTotal(data.total || 0);
-    } finally { setLoading(false); }
-  }, [page, perPage, debouncedSearch, statusFilter, crmFilter]);
+  const { data: crms = [] } = useQuery({
+    queryKey: ['crms'],
+    queryFn: getCRMs,
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const { data, isFetching } = useQuery({
+    queryKey: ['all-contacts', { page, perPage, debouncedSearch, statusFilter, crmFilter }],
+    queryFn: () => getAllContacts({
+      page,
+      per_page: perPage,
+      search: debouncedSearch || undefined,
+      connection_status: statusFilter || undefined,
+      crm_id: crmFilter || undefined,
+    }),
+    placeholderData: keepPreviousData,
+  });
+
+  const contacts = data?.contacts || [];
+  const total = data?.total || 0;
+  const loading = isFetching && !data;
 
   const totalPages = Math.ceil(total / perPage);
   const initials = (c) => `${(c.first_name?.[0] || '').toUpperCase()}${(c.last_name?.[0] || '').toUpperCase()}` || '?';
