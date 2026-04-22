@@ -7,11 +7,9 @@ export default function PageWrapper({ children }) {
   const { user } = useAuth();
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fff' }}>
-      <div style={{ paddingTop: 20 }}>
-        <Sidebar />
-      </div>
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px 64px' }}>
+    <div style={{ minHeight: '100vh', background: 'hsl(var(--bg))' }}>
+      <Sidebar />
+      <main className="mx-auto" style={{ maxWidth: 1280, padding: '28px 24px 64px' }}>
         <AlertBanner show={user && !user.cookies_valid} />
         <ImportBanner />
         {children}

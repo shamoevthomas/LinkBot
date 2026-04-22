@@ -1,31 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap, X, MapPin, Briefcase, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List, Columns3, Pencil, Check, RotateCcw, Settings } from 'lucide-react';
-import { getCampaign, getCampaignMessages, updateCampaign, startCampaign, pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign, runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus, retryFromAction } from '../api/campaigns';
+import {
+  ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap,
+  X, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List,
+  Columns3, Pencil, Check, RotateCcw, Settings, Eye, Send, Loader2,
+} from 'lucide-react';
+import {
+  getCampaign, getCampaignMessages, updateCampaign, startCampaign,
+  pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign,
+  runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus,
+  retryFromAction,
+} from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
-import Badge from '../components/ui/Badge';
+import { StatusChip, TypeTag, Avatar, Progress, Chip, getInitials, hueFromString } from '../components/ui/atoms';
 import toast from 'react-hot-toast';
-
-const STATUS_CONFIG = {
-  pending: { label: 'En attente', color: 'bg-gray-100 text-gray-600' },
-  en_attente: { label: 'Connexion en attente', color: 'bg-yellow-100 text-yellow-700' },
-  demande_envoyee: { label: 'Demande envoyee', color: 'bg-sky-100 text-sky-700' },
-  envoye: { label: 'Envoye', color: 'bg-blue-100 text-blue-700' },
-  relance_1: { label: 'Relance 1', color: 'bg-amber-100 text-amber-700' },
-  relance_2: { label: 'Relance 2', color: 'bg-amber-100 text-amber-700' },
-  relance_3: { label: 'Relance 3', color: 'bg-orange-100 text-orange-700' },
-  relance_4: { label: 'Relance 4', color: 'bg-orange-100 text-orange-700' },
-  relance_5: { label: 'Relance 5', color: 'bg-red-100 text-red-600' },
-  relance_6: { label: 'Relance 6', color: 'bg-red-100 text-red-600' },
-  relance_7: { label: 'Relance 7', color: 'bg-red-100 text-red-600' },
-  reussi: { label: 'Repondu', color: 'bg-emerald-100 text-emerald-700' },
-  perdu: { label: 'Perdu', color: 'bg-gray-200 text-gray-500' },
-};
-
-function ContactStatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, color: 'bg-gray-100 text-gray-600' };
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>;
-}
 
 function CountdownTimer({ nextActionAt, status }) {
   const [countdown, setCountdown] = useState(null);
@@ -44,17 +32,26 @@ function CountdownTimer({ nextActionAt, status }) {
   if (countdown <= 0) return <span>Imminent...</span>;
   const m = Math.floor(countdown / 60);
   const s = countdown % 60;
-  return <span>{m > 0 ? `${m} min ${s.toString().padStart(2, '0')} sec` : `${s} sec`}</span>;
-}
-
-function initials(c) {
-  return ((c.contact_first_name?.[0] || '') + (c.contact_last_name?.[0] || '')).toUpperCase() || '?';
+  return <span className="mono">{m > 0 ? `${m} min ${s.toString().padStart(2, '0')} sec` : `${s} sec`}</span>;
 }
 
 function fmtDate(d) {
-  if (!d) return '-';
+  if (!d) return '—';
   const s = typeof d === 'string' && !d.endsWith('Z') && !d.includes('+') ? d + 'Z' : d;
   return new Date(s).toLocaleString('fr-FR');
+}
+
+function StatTile({ icon: Ic, label, value, tone }) {
+  return (
+    <div className="g-card p-4">
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
+        style={{ background: `hsl(var(--${tone}) / .12)`, color: `hsl(var(--${tone}))` }}>
+        <Ic size={15} />
+      </div>
+      <div className="text-[24px] font-semibold tracking-tight" style={{ letterSpacing: '-0.02em' }}>{value}</div>
+      <div className="text-[11.5px] mt-0.5" style={{ color: 'hsl(var(--muted))' }}>{label}</div>
+    </div>
+  );
 }
 
 export default function CampaignDetailPage() {
@@ -64,8 +61,9 @@ export default function CampaignDetailPage() {
   const [actions, setActions] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('contacts'); // 'contacts' | 'actions'
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'kanban'
+  const [tab, setTab] = useState('contacts');
+  const [viewMode, setViewMode] = useState('table');
+  const [filter, setFilter] = useState('all');
   const [selectedContact, setSelectedContact] = useState(null);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
@@ -105,375 +103,377 @@ export default function CampaignDetailPage() {
     return () => clearInterval(interval);
   }, [campaign?.status, load]);
 
-  const handleStart = async () => { await startCampaign(id); toast.success('Campagne lancee'); load(); };
+  const handleStart = async () => { await startCampaign(id); toast.success('Campagne lancée'); load(); };
   const handleRunNow = async () => {
     try {
-      toast.loading('Execution manuelle...', { id: 'run-now' });
+      toast.loading('Exécution manuelle...', { id: 'run-now' });
       const result = await runCampaignNow(id);
       toast.dismiss('run-now');
-      if (result.ok) {
-        toast.success(`Tick execute — traites: ${result.total_processed}, erreur: ${result.error_message || 'aucune'}`);
-      } else {
-        toast.error(`Erreur: ${result.error}`);
-      }
+      if (result.ok) toast.success(`Tick exécuté — traités: ${result.total_processed}`);
+      else toast.error(`Erreur: ${result.error}`);
       load();
     } catch (err) {
       toast.dismiss('run-now');
-      toast.error(err.response?.data?.detail || 'Erreur execution');
+      toast.error(err.response?.data?.detail || 'Erreur');
     }
   };
   const handlePause = async () => { await pauseCampaign(id); toast.success('Campagne en pause'); load(); };
-  const handleResume = async () => { await resumeCampaign(id); toast.success('Campagne relancee'); load(); };
+  const handleResume = async () => { await resumeCampaign(id); toast.success('Campagne relancée'); load(); };
   const handleCancel = async () => {
     if (!confirm('Annuler cette campagne ?')) return;
-    await cancelCampaign(id); toast.success('Campagne annulee'); load();
+    await cancelCampaign(id); toast.success('Campagne annulée'); load();
   };
   const handleDuplicate = async () => {
     try {
       const dup = await duplicateCampaign(id);
-      toast.success('Campagne dupliquee');
+      toast.success('Campagne dupliquée');
       navigate(`/dashboard/campaigns/${dup.id}`);
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
   };
   const handleReconfigure = async () => {
     try {
-      if (campaign.status === 'running') {
-        await pauseCampaign(id);
-      }
+      if (campaign.status === 'running') await pauseCampaign(id);
       const msgs = await getCampaignMessages(id);
-      navigate(`/dashboard/campaigns/new-dm`, {
-        state: { reconfigure: { id: campaign.id, name: campaign.name, crm_id: campaign.crm_id, ai_prompt: campaign.ai_prompt, context_text: campaign.context_text, fallback_message: campaign.fallback_message, message_template: campaign.message_template, messages: msgs } },
+      navigate('/dashboard/campaigns/new-dm', {
+        state: { reconfigure: {
+          id: campaign.id, name: campaign.name, crm_id: campaign.crm_id,
+          ai_prompt: campaign.ai_prompt, context_text: campaign.context_text,
+          fallback_message: campaign.fallback_message, message_template: campaign.message_template,
+          messages: msgs,
+        } },
       });
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
   };
 
-  // Countdown extracted to <CountdownTimer /> component
+  if (loading || !campaign) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-20">
+          <Loader2 size={28} className="spin" style={{ color: 'hsl(var(--accent))' }} />
+        </div>
+      </PageWrapper>
+    );
+  }
 
-  const progress = campaign?.status === 'completed' ? 100 : (campaign?.total_target ? Math.round((campaign.total_processed / campaign.total_target) * 100) : 0);
+  const pct = campaign.status === 'completed' ? 100 : (campaign.total_target ? Math.round((campaign.total_processed / campaign.total_target) * 100) : 0);
 
-  const showReplyRate = campaign?.type && ['dm', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
-  const showConnectionRate = campaign?.type && ['connection', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
+  const isSearch = campaign.type === 'search';
+  const isConnection = campaign.type === 'connection';
+  const isConnectionDM = campaign.type === 'connection_dm' || campaign.type === 'search_connection_dm';
+  const showReplyRate = ['dm', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
+  const showConnectionRate = ['connection', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
 
-  // Stats from contacts
-  const isSearch = campaign?.type === 'search';
-  const isConnection = campaign?.type === 'connection';
-  const isConnectionDM = campaign?.type === 'connection_dm' || campaign?.type === 'search_connection_dm';
-  const statsFromContacts = {
-    en_attente: contacts.filter(c => c.status === 'en_attente').length,
-    envoye: contacts.filter(c => c.main_sent_at && !(c.status === 'perdu' && c.last_sequence_sent === 0)).length,
-    relance: contacts.filter(c => c.status.startsWith('relance_')).length,
-    reussi: contacts.filter(c => c.status === 'reussi').length,
-    perdu: contacts.filter(c => c.status === 'perdu').length,
+  const counts = {
+    en_attente: contacts.filter((c) => c.status === 'en_attente' || c.status === 'pending').length,
+    envoye: contacts.filter((c) => c.status === 'envoye' || c.status === 'demande_envoyee').length,
+    relance: contacts.filter((c) => c.status?.startsWith('relance_')).length,
+    reussi: contacts.filter((c) => c.status === 'reussi').length,
+    perdu: contacts.filter((c) => c.status === 'perdu').length,
   };
 
-  if (loading) return <PageWrapper><div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--blue)', borderTopColor: 'transparent' }} /></div></PageWrapper>;
+  const filteredContacts = filter === 'all' ? contacts :
+    filter === 'relance' ? contacts.filter((c) => c.status?.startsWith('relance_')) :
+    filter === 'envoye' ? contacts.filter((c) => c.status === 'envoye' || c.status === 'demande_envoyee') :
+    filter === 'en_attente' ? contacts.filter((c) => c.status === 'en_attente' || c.status === 'pending') :
+    contacts.filter((c) => c.status === filter);
+
+  // Dynamic stats
+  let STATS = [];
+  if (isSearch) {
+    STATS = [
+      { label: 'Contacts trouvés', value: campaign.total_succeeded ?? 0, icon: CheckCircle, tone: 'accent' },
+      { label: 'Ignorés', value: campaign.total_skipped ?? 0, icon: Clock, tone: 'slate' },
+      { label: 'Objectif', value: campaign.total_target ?? '—', icon: Zap, tone: 'emerald' },
+    ];
+  } else if (isConnection) {
+    STATS = [
+      { label: 'Demandes envoyées', value: contacts.filter((c) => c.status === 'demande_envoyee').length, icon: UserCheck, tone: 'accent' },
+      { label: 'Acceptées', value: contacts.filter((c) => c.status === 'reussi').length, icon: CheckCircle, tone: 'emerald' },
+      { label: 'Échouées', value: contacts.filter((c) => c.status === 'perdu').length, icon: AlertCircle, tone: 'rose' },
+      { label: 'En attente', value: contacts.filter((c) => c.status === 'pending').length, icon: Clock, tone: 'amber' },
+    ];
+  } else if (contacts.length > 0) {
+    STATS = [
+      ...(isConnectionDM ? [{ label: 'En attente', value: counts.en_attente, icon: Clock, tone: 'amber' }] : []),
+      { label: 'Envoyés', value: counts.envoye, icon: Send, tone: 'accent' },
+      { label: 'En relance', value: counts.relance, icon: Clock, tone: 'amber' },
+      { label: 'Répondu', value: counts.reussi, icon: UserCheck, tone: 'emerald' },
+      { label: 'Perdu', value: counts.perdu, icon: UserX, tone: 'slate' },
+    ];
+  } else {
+    STATS = [
+      { label: 'Traités', value: campaign.total_processed ?? 0, icon: Zap, tone: 'accent' },
+      { label: 'Réussis', value: campaign.total_succeeded ?? 0, icon: CheckCircle, tone: 'emerald' },
+      { label: 'Échoués', value: campaign.total_failed ?? 0, icon: AlertCircle, tone: 'rose' },
+      { label: 'Ignorés', value: campaign.total_skipped ?? 0, icon: Clock, tone: 'slate' },
+    ];
+  }
+
+  const contactFilters = [
+    { k: 'all', l: 'Tous', n: contacts.length },
+    { k: 'envoye', l: 'Envoyés', n: counts.envoye },
+    { k: 'relance', l: 'Relance', n: counts.relance },
+    { k: 'reussi', l: 'Répondu', n: counts.reussi },
+    { k: 'perdu', l: 'Perdu', n: counts.perdu },
+  ].filter((f) => f.k === 'all' || f.n > 0);
 
   return (
     <PageWrapper>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/dashboard/campaigns')} className="p-2 hover:bg-gray-200 rounded-lg">
-          <ArrowLeft size={20} className="text-gray-600" />
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
+        <button onClick={() => navigate('/dashboard/campaigns')}
+          className="p-2 rounded-lg transition-colors"
+          style={{ color: 'hsl(var(--muted))', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(220 20% 95%)'; e.currentTarget.style.color = 'hsl(var(--text))'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--muted))'; }}>
+          <ArrowLeft size={16} />
         </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            {editingName ? (
-              <form onSubmit={async (e) => { e.preventDefault(); if (nameValue.trim() && nameValue !== campaign.name) { await updateCampaign(id, { name: nameValue.trim() }); load(); } setEditingName(false); }} className="flex items-center gap-2">
-                <input autoFocus value={nameValue} onChange={e => setNameValue(e.target.value)}
-                  onKeyDown={e => e.key === 'Escape' && setEditingName(false)}
-                  className="text-2xl font-bold text-gray-900 border-b-2 border-blue-400 outline-none bg-transparent px-0 py-0" />
-                <button type="submit" className="p-1 hover:bg-emerald-50 rounded"><Check size={18} className="text-emerald-600" /></button>
-                <button type="button" onClick={() => setEditingName(false)} className="p-1 hover:bg-red-50 rounded"><X size={18} className="text-red-400" /></button>
-              </form>
-            ) : (
-              <h1 className="f text-2xl font-bold text-gray-900 cursor-pointer group flex items-center gap-2"
-                onClick={() => { setNameValue(campaign.name); setEditingName(true); }}>
-                {campaign.name}
-                <Pencil size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
-              </h1>
-            )}
-            <Badge status={campaign.type} />
-            <Badge status={campaign.status} />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {campaign.status === 'pending' && (
-            <button onClick={handleStart} className="px-4 py-2 text-white font-medium rounded-lg text-sm hover:opacity-90 flex items-center gap-2" style={{ background: 'var(--blue)' }}>
-              <Play size={16} /> Lancer
+
+        {editingName ? (
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (nameValue.trim() && nameValue !== campaign.name) {
+              await updateCampaign(id, { name: nameValue.trim() });
+              load();
+            }
+            setEditingName(false);
+          }} className="flex items-center gap-2">
+            <input autoFocus value={nameValue} onChange={(e) => setNameValue(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setEditingName(false)}
+              className="text-[22px] font-semibold tracking-tight outline-none bg-transparent"
+              style={{ letterSpacing: '-0.02em', borderBottom: '2px solid hsl(var(--accent))' }} />
+            <button type="submit" className="p-1 rounded" style={{ color: 'hsl(var(--emerald))', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+              <Check size={18} />
             </button>
+            <button type="button" onClick={() => setEditingName(false)}
+              className="p-1 rounded" style={{ color: 'hsl(var(--rose))', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+              <X size={18} />
+            </button>
+          </form>
+        ) : (
+          <h1 className="text-[22px] font-semibold tracking-tight cursor-pointer group flex items-center gap-2"
+            style={{ letterSpacing: '-0.02em' }}
+            onClick={() => { setNameValue(campaign.name); setEditingName(true); }}>
+            {campaign.name}
+            <Pencil size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'hsl(var(--muted))' }} />
+          </h1>
+        )}
+
+        <TypeTag type={campaign.type} />
+        <StatusChip status={campaign.status} />
+
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          {campaign.status === 'pending' && (
+            <button onClick={handleStart} className="cta-btn"><Play size={14} /> Lancer</button>
           )}
           {campaign.status === 'running' && (
-            <button onClick={handlePause} className="px-4 py-2 bg-amber-100 text-amber-700 font-medium rounded-lg text-sm hover:bg-amber-200 flex items-center gap-2">
-              <Pause size={16} /> Pause
+            <button onClick={handlePause} className="ghost-btn"
+              style={{ color: 'hsl(28 80% 38%)', background: 'hsl(38 100% 96%)', borderColor: 'hsl(38 85% 85%)' }}>
+              <Pause size={14} /> Pause
             </button>
           )}
           {campaign.status === 'paused' && (
-            <button onClick={handleResume} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-medium rounded-lg text-sm hover:bg-emerald-200 flex items-center gap-2">
-              <Play size={16} /> Reprendre
+            <button onClick={handleResume} className="ghost-btn"
+              style={{ color: 'hsl(158 60% 30%)', background: 'hsl(158 70% 95%)', borderColor: 'hsl(158 60% 80%)' }}>
+              <Play size={14} /> Reprendre
             </button>
           )}
-          {['running', 'paused'].includes(campaign.status) && (campaign.type === 'dm' || campaign.type === 'connection_dm' || campaign.type === 'search_connection_dm') && (
-            <button onClick={handleReconfigure} className="px-4 py-2 bg-purple-100 text-purple-700 font-medium rounded-lg text-sm hover:bg-purple-200 flex items-center gap-2">
-              <Settings size={16} /> Reconfigurer
-            </button>
+          {['running', 'paused'].includes(campaign.status) &&
+            ['dm', 'connection_dm', 'search_connection_dm'].includes(campaign.type) && (
+              <button onClick={handleReconfigure} className="ghost-btn"
+                style={{ color: 'hsl(262 60% 50%)', background: 'hsl(262 90% 97%)', borderColor: 'hsl(262 70% 88%)' }}>
+                <Settings size={14} /> Reconfigurer
+              </button>
           )}
           {['running', 'paused'].includes(campaign.status) && (
-            <button onClick={handleCancel} className="px-4 py-2 bg-red-100 text-red-700 font-medium rounded-lg text-sm hover:bg-red-200 flex items-center gap-2">
-              <XCircle size={16} /> Annuler
+            <button onClick={handleCancel} className="ghost-btn"
+              style={{ color: 'hsl(352 72% 48%)', background: 'hsl(352 90% 97%)', borderColor: 'hsl(352 85% 88%)' }}>
+              <XCircle size={14} /> Annuler
             </button>
           )}
-          <button onClick={handleDuplicate} className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
-            <Copy size={16} /> Dupliquer
+          <button onClick={handleDuplicate} className="ghost-btn">
+            <Copy size={14} /> Dupliquer
           </button>
         </div>
       </div>
 
-      {/* Progress */}
-      <div className="g-card p-6 mb-6">
+      {/* Progress card */}
+      <div className="g-card p-5 mb-5">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-medium text-gray-600">Progression</span>
-          <span className="text-2xl font-bold text-gray-900">{progress}%</span>
+          <span className="text-[12.5px] font-medium" style={{ color: 'hsl(var(--muted))' }}>Progression</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[26px] font-semibold tracking-tight" style={{ letterSpacing: '-0.02em' }}>{pct}%</span>
+            <span className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>
+              {campaign.total_processed ?? 0} / {campaign.total_target || '—'}
+            </span>
+          </div>
         </div>
-        <div className="w-full bg-gray-100 rounded-full h-3 mb-4">
-          <div className={`h-3 rounded-full transition-all ${
-            campaign.status === 'completed' ? 'bg-emerald-500' :
-            campaign.status === 'failed' ? 'bg-red-500' : ''
-          }`} style={campaign.status !== 'completed' && campaign.status !== 'failed' ? { background: 'var(--blue)', width: `${progress}%` } : { width: `${progress}%` }} />
-        </div>
+        <Progress value={pct} tone={campaign.status === 'completed' ? 'emerald' : ''} />
 
-        {/* Next action countdown or paused reason */}
-        {campaign.status === 'running' && !isSearch && campaign.paused_reason && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg w-fit">
-            <AlertCircle size={16} className="text-amber-500" />
-            <span className="text-sm text-amber-700">{campaign.paused_reason}</span>
+        {campaign.paused_reason && (
+          <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg w-fit"
+            style={{ background: 'hsl(38 100% 94%)', border: '1px solid hsl(38 85% 78%)', color: 'hsl(28 80% 38%)' }}>
+            <AlertCircle size={14} />
+            <span className="text-[12.5px]">{campaign.paused_reason}</span>
           </div>
         )}
-        {campaign.status === 'running' && !isSearch && !campaign.paused_reason && campaign.next_action_at && (
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-              <Timer size={16} className="text-indigo-500" />
-              <span className="text-sm text-indigo-700">
-                Prochaine action dans <span className="font-bold"><CountdownTimer nextActionAt={campaign.next_action_at} status={campaign.status} /></span>
-              </span>
-            </div>
-            <button onClick={handleRunNow} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors" style={{ background: 'var(--blue)' }}
-              onMouseOver={e => e.currentTarget.style.opacity = '0.85'} onMouseOut={e => e.currentTarget.style.opacity = '1'}>
-              <Zap size={14} />
-              Faire l'action maintenant
-            </button>
-          </div>
-        )}
-
-        {/* Error message from backend */}
         {campaign.error_message && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle size={16} className="text-red-500 shrink-0" />
-            <span className="text-sm text-red-700 font-mono flex-1">{campaign.error_message}</span>
-            <button
-              onClick={async () => {
-                try {
-                  await updateCampaign(id, { error_message: null });
-                  load();
-                } catch { toast.error('Erreur'); }
-              }}
-              className="p-1 hover:bg-red-100 rounded-full transition-colors shrink-0"
-              title="Retirer l'erreur"
-            >
-              <X size={16} className="text-red-400 hover:text-red-600" />
+          <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg"
+            style={{ background: 'hsl(352 90% 97%)', border: '1px solid hsl(352 85% 88%)', color: 'hsl(352 72% 48%)' }}>
+            <AlertCircle size={14} />
+            <span className="text-[12.5px] mono flex-1">{campaign.error_message}</span>
+            <button onClick={async () => { try { await updateCampaign(id, { error_message: null }); load(); } catch { toast.error('Erreur'); } }}
+              style={{ color: 'inherit', background: 'transparent', border: 'none', cursor: 'pointer', padding: 2 }}>
+              <X size={14} />
             </button>
           </div>
         )}
 
-
-        {/* Rates — only show when there's actual data */}
-        {((showConnectionRate && campaign.connection_rate != null) || (showReplyRate && campaign.reply_rate != null)) && (
-          <div className="flex gap-4 mb-6">
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          {campaign.status === 'running' && !isSearch && !campaign.paused_reason && campaign.next_action_at && (
+            <>
+              <div className="chip blue" style={{ padding: '7px 12px' }}>
+                <Timer size={12} />
+                Prochaine action dans <CountdownTimer nextActionAt={campaign.next_action_at} status={campaign.status} />
+              </div>
+              <button onClick={handleRunNow} className="cta-btn" style={{ padding: '7px 12px', fontSize: 12 }}>
+                <Zap size={12} /> Faire l'action maintenant
+              </button>
+            </>
+          )}
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
             {showConnectionRate && campaign.connection_rate != null && (
-              <div className="flex items-center gap-2 bg-sky-50 border border-sky-200 rounded-lg px-4 py-2.5">
-                <UserCheck size={18} className="text-sky-600" />
-                <div>
-                  <p className="text-xs text-sky-600 font-medium">Taux de connexion</p>
-                  <p className="text-xl font-bold text-sky-700">{campaign.connection_rate}%</p>
-                </div>
+              <div className="chip blue" style={{ padding: '6px 12px' }}>
+                <UserCheck size={12} />
+                <span style={{ fontWeight: 500 }}>Taux connexion</span>
+                <span className="mono" style={{ fontWeight: 700 }}>{campaign.connection_rate}%</span>
               </div>
             )}
             {showReplyRate && campaign.reply_rate != null && (
-              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
-                <MessageSquare size={18} className="text-emerald-600" />
-                <div>
-                  <p className="text-xs text-emerald-600 font-medium">Taux de reponse</p>
-                  <p className="text-xl font-bold text-emerald-700">{campaign.reply_rate}%</p>
-                </div>
+              <div className="chip emerald" style={{ padding: '6px 12px' }}>
+                <MessageSquare size={12} />
+                <span style={{ fontWeight: 500 }}>Taux réponse</span>
+                <span className="mono" style={{ fontWeight: 700 }}>{campaign.reply_rate}%</span>
               </div>
             )}
           </div>
-        )}
+        </div>
+      </div>
 
-        {isSearch ? (
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-2"><CheckCircle size={20} /></div>
-              <div className="text-2xl font-bold text-gray-900">{campaign.total_succeeded}</div>
-              <div className="text-xs text-gray-500">Contacts trouves</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center mb-2"><Clock size={20} /></div>
-              <div className="text-2xl font-bold text-gray-900">{campaign.total_skipped}</div>
-              <div className="text-xs text-gray-500">Ignores</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2"><Zap size={20} /></div>
-              <div className="text-2xl font-bold text-gray-900">{campaign.total_target || '-'}</div>
-              <div className="text-xs text-gray-500">Objectif</div>
-            </div>
-          </div>
-        ) : isConnection ? (
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center mb-2"><UserCheck size={20} /></div>
-              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'demande_envoyee').length}</div>
-              <div className="text-xs text-gray-500">Demandes envoyees</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2"><CheckCircle size={20} /></div>
-              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'reussi').length}</div>
-              <div className="text-xs text-gray-500">Acceptees</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center mb-2"><AlertCircle size={20} /></div>
-              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'perdu').length}</div>
-              <div className="text-xs text-gray-500">Echouees</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center mb-2"><Clock size={20} /></div>
-              <div className="text-2xl font-bold text-gray-900">{contacts.filter(c => c.status === 'pending').length}</div>
-              <div className="text-xs text-gray-500">En attente</div>
-            </div>
-          </div>
-        ) : contacts.length > 0 ? (
-          <div className={`grid gap-4 ${isConnectionDM ? 'grid-cols-5' : 'grid-cols-4'}`}>
-            {isConnectionDM && (
-              <div className="bg-white rounded-lg border border-gray-100 p-4">
-                <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center mb-2">
-                  <Clock size={20} />
-                </div>
-                <div className="text-2xl font-bold text-gray-900">{statsFromContacts.en_attente}</div>
-                <div className="text-xs text-gray-500">En attente</div>
-              </div>
-            )}
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-2">
-                <MessageSquare size={20} />
-              </div>
-              <div className="text-2xl font-bold text-gray-900">{statsFromContacts.envoye}</div>
-              <div className="text-xs text-gray-500">Envoyes</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center mb-2">
-                <Clock size={20} />
-              </div>
-              <div className="text-2xl font-bold text-gray-900">{statsFromContacts.relance}</div>
-              <div className="text-xs text-gray-500">En relance</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2">
-                <UserCheck size={20} />
-              </div>
-              <div className="text-2xl font-bold text-gray-900">{statsFromContacts.reussi}</div>
-              <div className="text-xs text-gray-500">Repondu</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center mb-2">
-                <UserX size={20} />
-              </div>
-              <div className="text-2xl font-bold text-gray-900">{statsFromContacts.perdu}</div>
-              <div className="text-xs text-gray-500">Perdu</div>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { icon: Zap, label: 'Traites', value: campaign.total_processed, color: 'text-blue-600 bg-blue-50' },
-              { icon: CheckCircle, label: 'Reussis', value: campaign.total_succeeded, color: 'text-emerald-600 bg-emerald-50' },
-              { icon: AlertCircle, label: 'Echoues', value: campaign.total_failed, color: 'text-red-600 bg-red-50' },
-              { icon: Clock, label: 'Ignores', value: campaign.total_skipped, color: 'text-gray-600 bg-gray-50' },
-            ].map(({ icon: Icon, label, value, color }) => (
-              <div key={label} className="bg-white rounded-lg border border-gray-100 p-4">
-                <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center mb-2`}><Icon size={20} /></div>
-                <div className="text-2xl font-bold text-gray-900">{value}</div>
-                <div className="text-xs text-gray-500">{label}</div>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Stats */}
+      <div className="grid gap-4 mb-5" style={{ gridTemplateColumns: `repeat(${STATS.length}, minmax(0, 1fr))` }}>
+        {STATS.map((s) => <StatTile key={s.label} {...s} />)}
       </div>
 
       {/* Tabs */}
       {(contacts.length > 0 || isSearch || isConnection) && (
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: 'hsl(220 20% 95%)' }}>
             <button onClick={() => setTab('contacts')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'contacts' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              Contacts ({contacts.length})
+              style={{
+                padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 500,
+                background: tab === 'contacts' ? 'white' : 'transparent',
+                color: tab === 'contacts' ? 'hsl(var(--text))' : 'hsl(var(--muted))',
+                boxShadow: tab === 'contacts' ? '0 1px 2px hsl(220 40% 20% / .08)' : 'none',
+                border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+              Contacts <span className="mono" style={{ fontSize: 10.5, opacity: 0.7 }}>{contacts.length}</span>
             </button>
             <button onClick={() => setTab('actions')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'actions' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              style={{
+                padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 500,
+                background: tab === 'actions' ? 'white' : 'transparent',
+                color: tab === 'actions' ? 'hsl(var(--text))' : 'hsl(var(--muted))',
+                boxShadow: tab === 'actions' ? '0 1px 2px hsl(220 40% 20% / .08)' : 'none',
+                border: 'none', cursor: 'pointer',
+              }}>
               Journal
             </button>
           </div>
-          {tab === 'contacts' && !isSearch && !isConnection && (
-            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-              <button onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-md ${viewMode === 'table' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}>
-                <List size={16} />
-              </button>
-              <button onClick={() => setViewMode('kanban')}
-                className={`p-1.5 rounded-md ${viewMode === 'kanban' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}>
-                <Columns3 size={16} />
-              </button>
+
+          {tab === 'contacts' && !isSearch && !isConnection && contacts.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: 'hsl(220 20% 95%)' }}>
+                {contactFilters.map((f) => (
+                  <button key={f.k} onClick={() => setFilter(f.k)}
+                    style={{
+                      padding: '5px 10px', borderRadius: 6, fontSize: 11.5, fontWeight: 500,
+                      background: filter === f.k ? 'white' : 'transparent',
+                      color: filter === f.k ? 'hsl(var(--text))' : 'hsl(var(--muted))',
+                      boxShadow: filter === f.k ? '0 1px 2px hsl(220 40% 20% / .08)' : 'none',
+                      border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}>
+                    {f.l} <span className="mono" style={{ fontSize: 10, opacity: 0.7 }}>{f.n}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: 'hsl(220 20% 95%)' }}>
+                <button onClick={() => setViewMode('table')}
+                  style={{
+                    padding: 6, borderRadius: 6,
+                    background: viewMode === 'table' ? 'white' : 'transparent',
+                    color: viewMode === 'table' ? 'hsl(var(--text))' : 'hsl(var(--muted))',
+                    boxShadow: viewMode === 'table' ? '0 1px 2px hsl(220 40% 20% / .08)' : 'none',
+                    border: 'none', cursor: 'pointer',
+                  }}>
+                  <List size={13} />
+                </button>
+                <button onClick={() => setViewMode('kanban')}
+                  style={{
+                    padding: 6, borderRadius: 6,
+                    background: viewMode === 'kanban' ? 'white' : 'transparent',
+                    color: viewMode === 'kanban' ? 'hsl(var(--text))' : 'hsl(var(--muted))',
+                    boxShadow: viewMode === 'kanban' ? '0 1px 2px hsl(220 40% 20% / .08)' : 'none',
+                    border: 'none', cursor: 'pointer',
+                  }}>
+                  <Columns3 size={13} />
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Kanban view */}
+      {/* Kanban */}
       {tab === 'contacts' && viewMode === 'kanban' && contacts.length > 0 && (() => {
         const columns = [
-          { key: 'en_attente', label: 'En attente', color: '#eab308', bg: '#fefce8', filter: c => c.status === 'en_attente' || c.status === 'pending' },
-          { key: 'envoye', label: 'Envoye', color: '#3b82f6', bg: '#eff6ff', filter: c => c.status === 'envoye' },
-          { key: 'relance', label: 'En relance', color: '#f59e0b', bg: '#fffbeb', filter: c => c.status?.startsWith('relance_') },
-          { key: 'reussi', label: 'Repondu', color: '#10b981', bg: '#ecfdf5', filter: c => c.status === 'reussi' },
-          { key: 'perdu', label: 'Perdu', color: '#6b7280', bg: '#f9fafb', filter: c => c.status === 'perdu' },
+          { key: 'en_attente', label: 'En attente', tone: 'amber', filter: (c) => c.status === 'en_attente' || c.status === 'pending' },
+          { key: 'envoye', label: 'Envoyé', tone: 'accent', filter: (c) => c.status === 'envoye' || c.status === 'demande_envoyee' },
+          { key: 'relance', label: 'En relance', tone: 'amber', filter: (c) => c.status?.startsWith('relance_') },
+          { key: 'reussi', label: 'Répondu', tone: 'emerald', filter: (c) => c.status === 'reussi' },
+          { key: 'perdu', label: 'Perdu', tone: 'slate', filter: (c) => c.status === 'perdu' },
         ];
         return (
-          <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 300 }}>
-            {columns.map(col => {
+          <div className="grid grid-cols-5 gap-3">
+            {columns.map((col) => {
               const items = contacts.filter(col.filter);
               return (
-                <div key={col.key} className="flex-1 min-w-[200px] max-w-[260px]">
-                  <div className="flex items-center gap-2 mb-2 px-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: col.color }} />
-                    <span className="text-xs font-semibold text-gray-700">{col.label}</span>
-                    <span className="text-xs text-gray-400 ml-auto">{items.length}</span>
+                <div key={col.key} className="g-card p-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span style={{ width: 6, height: 6, borderRadius: 999, background: `hsl(var(--${col.tone}))` }} />
+                    <span className="text-[12px] font-semibold">{col.label}</span>
+                    <span className="mono text-[10.5px] ml-auto" style={{ color: 'hsl(var(--muted))' }}>{items.length}</span>
                   </div>
                   <div className="space-y-2" style={{ maxHeight: 500, overflowY: 'auto' }}>
-                    {items.map(cc => (
-                      <div key={cc.id} onClick={() => setSelectedContact(cc)}
-                        className="p-3 rounded-xl border border-gray-200 bg-white hover:shadow-sm cursor-pointer transition-shadow">
-                        <div className="flex items-center gap-2 mb-1">
-                          {cc.contact_profile_picture_url ? (
-                            <img src={cc.contact_profile_picture_url} alt="" className="w-7 h-7 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
-                              {initials(cc)}
-                            </div>
-                          )}
-                          <span className="text-xs font-medium text-gray-900 truncate">{cc.contact_first_name} {cc.contact_last_name}</span>
+                    {items.map((cc) => {
+                      const name = `${cc.contact_first_name || ''} ${cc.contact_last_name || ''}`.trim();
+                      return (
+                        <div key={cc.id} onClick={() => setSelectedContact(cc)}
+                          className="p-2.5 rounded-lg cursor-pointer transition-all"
+                          style={{ border: '1px solid hsl(var(--border))', background: 'hsl(var(--panel))' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border-strong))'; e.currentTarget.style.boxShadow = '0 2px 8px -2px hsl(220 40% 20% / .08)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border))'; e.currentTarget.style.boxShadow = 'none'; }}>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Avatar src={cc.contact_profile_picture_url}
+                              initials={getInitials(cc.contact_first_name, cc.contact_last_name)}
+                              hue={hueFromString(name)} size={22} />
+                            <span className="text-[12px] font-medium truncate">{name || 'Sans nom'}</span>
+                          </div>
+                          {cc.contact_headline && <div className="text-[10.5px] truncate" style={{ color: 'hsl(var(--muted))' }}>{cc.contact_headline}</div>}
                         </div>
-                        {cc.contact_headline && <p className="text-[10px] text-gray-400 truncate">{cc.contact_headline}</p>}
-                        <div className="mt-1.5"><ContactStatusBadge status={cc.status} /></div>
-                      </div>
-                    ))}
-                    {items.length === 0 && <p className="text-xs text-gray-300 text-center py-4">Aucun contact</p>}
+                      );
+                    })}
+                    {items.length === 0 && <div className="text-center py-4 text-[11px]" style={{ color: 'hsl(var(--muted))' }}>—</div>}
                   </div>
                 </div>
               );
@@ -483,286 +483,273 @@ export default function CampaignDetailPage() {
       })()}
 
       {/* Contacts table */}
-      {tab === 'contacts' && viewMode === 'table' && contacts.length > 0 && (
+      {tab === 'contacts' && viewMode === 'table' && filteredContacts.length > 0 && (
         <div className="g-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Contact</th>
+          <div className="grid gap-3 px-4 py-2.5 text-[11px] uppercase tracking-wider"
+            style={{
+              gridTemplateColumns: isSearch ? 'minmax(240px,2fr) minmax(200px,1.5fr) 140px'
+                : isConnection ? 'minmax(240px,2fr) 140px 160px 140px'
+                : 'minmax(240px,2fr) 140px 150px 150px 150px',
+              color: 'hsl(var(--muted))', background: 'hsl(220 22% 98%)', fontWeight: 600,
+            }}>
+            <div>Contact</div>
+            {isSearch ? (
+              <><div>Titre</div><div>LinkedIn</div></>
+            ) : isConnection ? (
+              <><div>Statut</div><div>Demande envoyée le</div><div>LinkedIn</div></>
+            ) : (
+              <><div>Statut</div><div>Envoyé le</div><div>Dernier envoi</div><div>Répondu le</div></>
+            )}
+          </div>
+          {filteredContacts.map((cc) => {
+            const name = `${cc.contact_first_name || ''} ${cc.contact_last_name || ''}`.trim();
+            return (
+              <div key={cc.id} onClick={() => setSelectedContact(cc)}
+                className="grid gap-3 px-4 py-3 items-center cursor-pointer row-hover border-t"
+                style={{
+                  gridTemplateColumns: isSearch ? 'minmax(240px,2fr) minmax(200px,1.5fr) 140px'
+                    : isConnection ? 'minmax(240px,2fr) 140px 160px 140px'
+                    : 'minmax(240px,2fr) 140px 150px 150px 150px',
+                  borderColor: 'hsl(var(--border))',
+                }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar src={cc.contact_profile_picture_url}
+                    initials={getInitials(cc.contact_first_name, cc.contact_last_name)}
+                    hue={hueFromString(name)} size={30} />
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-medium truncate">{name || 'Sans nom'}</div>
+                    {!isSearch && cc.contact_headline && (
+                      <div className="text-[11px] truncate" style={{ color: 'hsl(var(--muted))' }}>{cc.contact_headline}</div>
+                    )}
+                  </div>
+                </div>
                 {isSearch ? (
                   <>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Titre</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">LinkedIn</th>
+                    <div className="text-[12px] truncate" style={{ color: 'hsl(var(--muted))' }}>{cc.contact_headline || '—'}</div>
+                    <div>
+                      {cc.contact_linkedin_url ? (
+                        <a href={cc.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()} className="chip blue" style={{ padding: '3px 9px', textDecoration: 'none' }}>
+                          <ExternalLink size={11} /> Profil
+                        </a>
+                      ) : '—'}
+                    </div>
                   </>
                 ) : isConnection ? (
                   <>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Demande envoyee le</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">LinkedIn</th>
+                    <div><StatusChip status={cc.status} /></div>
+                    <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.main_sent_at)}</div>
+                    <div>
+                      {cc.contact_linkedin_url ? (
+                        <a href={cc.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()} className="chip blue" style={{ padding: '3px 9px', textDecoration: 'none' }}>
+                          <ExternalLink size={11} /> Profil
+                        </a>
+                      ) : '—'}
+                    </div>
                   </>
                 ) : (
                   <>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Envoye le</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Dernier envoi</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Repondu le</th>
+                    <div><StatusChip status={cc.status} /></div>
+                    <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.main_sent_at)}</div>
+                    <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.last_sent_at)}</div>
+                    <div className="mono text-[11.5px]"
+                      style={{ color: cc.replied_at ? 'hsl(var(--emerald))' : 'hsl(var(--muted))', fontWeight: cc.replied_at ? 600 : 400 }}>
+                      {fmtDate(cc.replied_at)}
+                    </div>
                   </>
                 )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {contacts.map((cc) => (
-                <tr key={cc.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedContact(cc)}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {cc.contact_profile_picture_url ? (
-                        <img src={cc.contact_profile_picture_url} alt="" className="w-9 h-9 rounded-full object-cover border border-gray-200" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full text-xs font-bold flex items-center justify-center" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
-                          {initials(cc)}
-                        </div>
-                      )}
-                      <div>
-                        <p className="font-medium text-gray-900 text-sm">{cc.contact_first_name} {cc.contact_last_name}</p>
-                        {!isSearch && cc.contact_headline && <p className="text-xs text-gray-400 truncate max-w-[200px]">{cc.contact_headline}</p>}
-                      </div>
-                    </div>
-                  </td>
-                  {isSearch ? (
-                    <>
-                      <td className="px-4 py-3 text-xs text-gray-500 max-w-[250px] truncate">{cc.contact_headline || '-'}</td>
-                      <td className="px-4 py-3">
-                        {cc.contact_linkedin_url ? (
-                          <a href={cc.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-                            style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}
-                            onMouseOver={e => e.currentTarget.style.background = 'rgba(0,132,255,0.15)'}
-                            onMouseOut={e => e.currentTarget.style.background = 'rgba(0,132,255,0.08)'}>
-                            <ExternalLink size={13} /> Profil
-                          </a>
-                        ) : '-'}
-                      </td>
-                    </>
-                  ) : isConnection ? (
-                    <>
-                      <td className="px-4 py-3"><ContactStatusBadge status={cc.status} /></td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(cc.main_sent_at)}</td>
-                      <td className="px-4 py-3">
-                        {cc.contact_linkedin_url ? (
-                          <a href={cc.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-                            style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}
-                            onMouseOver={e => e.currentTarget.style.background = 'rgba(0,132,255,0.15)'}
-                            onMouseOut={e => e.currentTarget.style.background = 'rgba(0,132,255,0.08)'}>
-                            <ExternalLink size={13} /> Profil
-                          </a>
-                        ) : '-'}
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="px-4 py-3"><ContactStatusBadge status={cc.status} /></td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(cc.main_sent_at)}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(cc.last_sent_at)}</td>
-                      <td className="px-4 py-3 text-xs">
-                        {cc.replied_at ? (
-                          <span className="text-emerald-600 font-medium">{fmtDate(cc.replied_at)}</span>
-                        ) : '-'}
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Actions tab (or default for non-DM campaigns) */}
+      {tab === 'contacts' && viewMode === 'table' && filteredContacts.length === 0 && contacts.length > 0 && (
+        <div className="g-card p-10 text-center text-[13px]" style={{ color: 'hsl(var(--muted))' }}>
+          Aucun contact pour ce filtre
+        </div>
+      )}
+
+      {/* Journal tab */}
       {(tab === 'actions' || (!isSearch && !isConnection && contacts.length === 0)) && (
         <div className="g-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-200">
-            <h3 className="font-semibold text-gray-900">Journal d'actions</h3>
-          </div>
           {actions.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 text-sm">Aucune action enregistree</div>
+            <div className="text-center py-12 text-[13px]" style={{ color: 'hsl(var(--muted))' }}>
+              Aucune action enregistrée
+            </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Contact</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Action</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Details</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {actions.map((a) => (
-                  <tr key={a.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+            <>
+              <div className="grid gap-3 px-4 py-2.5 text-[11px] uppercase tracking-wider"
+                style={{
+                  gridTemplateColumns: 'minmax(220px,1.6fr) 150px 180px 110px minmax(180px,2fr) 120px',
+                  color: 'hsl(var(--muted))', background: 'hsl(220 22% 98%)', fontWeight: 600,
+                }}>
+                <div>Contact</div><div>Date</div><div>Action</div><div>Statut</div><div>Détails</div><div></div>
+              </div>
+              {actions.map((a) => {
+                const name = `${a.contact_first_name || ''} ${a.contact_last_name || ''}`.trim();
+                return (
+                  <div key={a.id} className="grid gap-3 px-4 py-3 items-center border-t row-hover"
+                    style={{
+                      gridTemplateColumns: 'minmax(220px,1.6fr) 150px 180px 110px minmax(180px,2fr) 120px',
+                      borderColor: 'hsl(var(--border))',
+                    }}>
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {a.contact_first_name ? (
-                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
-                          const cc = contacts.find(c => c.contact_id === a.contact_id);
+                        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => {
+                          const cc = contacts.find((c) => c.contact_id === a.contact_id);
                           if (cc) setSelectedContact(cc);
                         }}>
-                          {a.contact_profile_picture_url ? (
-                            <img src={a.contact_profile_picture_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
-                              {(a.contact_first_name?.[0] || '')}{(a.contact_last_name?.[0] || '')}
-                            </div>
-                          )}
-                          <span className="text-sm text-gray-900 hover:underline">{a.contact_first_name} {a.contact_last_name}</span>
+                          <Avatar src={a.contact_profile_picture_url}
+                            initials={getInitials(a.contact_first_name, a.contact_last_name)}
+                            hue={hueFromString(name)} size={26} />
+                          <span className="text-[13px] truncate">{name}</span>
                         </div>
-                      ) : <span className="text-xs text-gray-400">-</span>}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(a.created_at)}</td>
-                    <td className="px-4 py-3 text-gray-700">{a.action_type}</td>
-                    <td className="px-4 py-3"><Badge status={a.status} /></td>
-                    <td className="px-4 py-3 text-xs text-gray-500 max-w-xs whitespace-normal break-words">{a.error_message || '-'}</td>
-                    <td className="px-4 py-3">
+                      ) : (
+                        <span className="text-[12px]" style={{ color: 'hsl(var(--muted))' }}>—</span>
+                      )}
+                    </div>
+                    <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(a.created_at)}</div>
+                    <div className="text-[12.5px]">{a.action_type}</div>
+                    <div><StatusChip status={a.status} /></div>
+                    <div className="text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{a.error_message || '—'}</div>
+                    <div className="text-right">
                       {a.status === 'failed' && (
-                        <button
-                          onClick={async (e) => {
+                        <button onClick={async (e) => {
                             e.stopPropagation();
                             try {
                               const res = await retryFromAction(id, a.id);
-                              toast.success(`${res.reset} contact(s) remis en file d'attente`);
+                              toast.success(`${res.reset} contact(s) remis en file`);
                               load();
                             } catch { toast.error('Erreur'); }
                           }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
-                          style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}
-                          onMouseOver={e => e.currentTarget.style.background = 'rgba(0,132,255,0.15)'}
-                          onMouseOut={e => e.currentTarget.style.background = 'rgba(0,132,255,0.08)'}
-                          title="Reprendre la campagne a partir de ce contact"
-                        >
-                          <RotateCcw size={12} /> Reprendre d'ici
+                          className="chip blue" style={{ padding: '4px 10px', cursor: 'pointer', border: 'none' }}
+                          title="Reprendre la campagne à partir de ce contact">
+                          <RotateCcw size={11} /> Reprendre
                         </button>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
       )}
 
-      {/* Contact Profile Card Modal */}
+      {/* Contact modal */}
       {selectedContact && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedContact(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="relative rounded-t-2xl p-4 pb-14">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'hsl(222 22% 12% / .45)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setSelectedContact(null)}>
+          <div className="g-card w-full max-w-[440px] overflow-hidden" onClick={(e) => e.stopPropagation()}
+            style={{ boxShadow: '0 24px 60px -24px hsl(220 40% 10% / .35)' }}>
+
+            <div className="relative px-6 pt-6 pb-4">
               <button onClick={() => setSelectedContact(null)}
-                className="absolute top-4 right-4 p-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
-                <X size={18} className="text-gray-500" />
+                className="absolute top-4 right-4 w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ color: 'hsl(var(--muted))', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                <X size={14} />
               </button>
-            </div>
-            <div className="flex justify-center -mt-12">
-              {selectedContact.contact_profile_picture_url ? (
-                <img src={selectedContact.contact_profile_picture_url} alt=""
-                  className="w-24 h-24 rounded-full border-4 border-white object-cover shadow-lg" />
-              ) : (
-                <div className="w-24 h-24 rounded-full border-4 border-white text-2xl font-bold flex items-center justify-center shadow-lg" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
-                  {initials(selectedContact)}
-                </div>
-              )}
-            </div>
-            <div className="px-6 pt-3 pb-6">
-              <div className="text-center mb-4">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {selectedContact.contact_first_name} {selectedContact.contact_last_name}
-                </h2>
-                {selectedContact.contact_headline && (
-                  <p className="text-sm text-gray-500 mt-1">{selectedContact.contact_headline}</p>
-                )}
-                <div className="mt-2 flex items-center justify-center gap-2">
-                  <ContactStatusBadge status={selectedContact.status} />
-                  {selectedContact.contact_linkedin_url && (
-                    <a href={selectedContact.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full transition-colors"
-                      style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
-                      <ExternalLink size={12} /> LinkedIn
-                    </a>
+
+              <div className="flex items-center gap-3">
+                <Avatar src={selectedContact.contact_profile_picture_url}
+                  initials={getInitials(selectedContact.contact_first_name, selectedContact.contact_last_name)}
+                  hue={hueFromString(`${selectedContact.contact_first_name || ''}${selectedContact.contact_last_name || ''}`)}
+                  size={48} />
+                <div className="flex-1 min-w-0 pr-6">
+                  <h3 className="text-[16px] font-semibold truncate" style={{ letterSpacing: '-0.01em' }}>
+                    {selectedContact.contact_first_name} {selectedContact.contact_last_name}
+                  </h3>
+                  {selectedContact.contact_headline && (
+                    <p className="text-[12px] truncate" style={{ color: 'hsl(var(--muted))' }}>{selectedContact.contact_headline}</p>
                   )}
                 </div>
-                {selectedContact.status !== 'pending' && !isSearch && !isConnection && (
-                  <div className="mt-3 flex items-center justify-center gap-2">
-                    <select
-                      value={selectedContact.status}
-                      onChange={async (e) => {
-                        const newStatus = e.target.value;
-                        try {
-                          await updateContactStatus(id, selectedContact.contact_id, newStatus);
-                          setSelectedContact({ ...selectedContact, status: newStatus, replied_at: newStatus === 'reussi' ? (selectedContact.replied_at || new Date().toISOString()) : selectedContact.replied_at });
-                          load();
-                          toast.success('Statut mis a jour');
-                        } catch { toast.error('Erreur lors du changement de statut'); }
-                      }}
-                      className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    >
-                      <option value="envoye">Envoye</option>
-                      <option value="relance_1">Relance 1</option>
-                      <option value="relance_2">Relance 2</option>
-                      <option value="relance_3">Relance 3</option>
-                      <option value="reussi">Repondu</option>
-                      <option value="perdu">Perdu</option>
-                    </select>
-                  </div>
-                )}
               </div>
 
-              <div className="space-y-3">
-                {isConnection ? (
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <span className="text-gray-400">Demande envoyee le</span>
-                      <p className="font-medium text-gray-700 mt-0.5">
-                        {fmtDate(selectedContact.main_sent_at)}
-                      </p>
-                    </div>
-                    <div className={`rounded-lg p-3 ${selectedContact.status === 'reussi' ? 'bg-emerald-50' : 'bg-gray-50'}`}>
-                      <span className={selectedContact.status === 'reussi' ? 'text-emerald-500' : 'text-gray-400'}>Acceptee</span>
-                      <p className={`font-medium mt-0.5 ${selectedContact.status === 'reussi' ? 'text-emerald-700' : 'text-gray-700'}`}>
-                        {selectedContact.status === 'reussi' ? 'Oui' : 'Pas encore'}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <span className="text-gray-400">Message envoye</span>
-                      <p className="font-medium text-gray-700 mt-0.5">
-                        {fmtDate(selectedContact.main_sent_at)}
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <span className="text-gray-400">Dernier envoi</span>
-                      <p className="font-medium text-gray-700 mt-0.5">
-                        {fmtDate(selectedContact.last_sent_at)}
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <span className="text-gray-400">Relances envoyees</span>
-                      <p className="font-medium text-gray-700 mt-0.5">
-                        {selectedContact.last_sequence_sent > 0 ? selectedContact.last_sequence_sent : '0'}
-                      </p>
-                    </div>
-                    <div className={`rounded-lg p-3 ${selectedContact.replied_at ? 'bg-emerald-50' : 'bg-gray-50'}`}>
-                      <span className={selectedContact.replied_at ? 'text-emerald-500' : 'text-gray-400'}>Repondu le</span>
-                      <p className={`font-medium mt-0.5 ${selectedContact.replied_at ? 'text-emerald-700' : 'text-gray-700'}`}>
-                        {selectedContact.replied_at ? fmtDate(selectedContact.replied_at) : 'Pas encore'}
-                      </p>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                <StatusChip status={selectedContact.status} />
+                {selectedContact.contact_linkedin_url && (
+                  <a href={selectedContact.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
+                    className="chip blue" style={{ padding: '3px 9px', textDecoration: 'none' }}>
+                    <Eye size={11} /> Profil LinkedIn
+                  </a>
                 )}
               </div>
             </div>
+
+            <div className="px-6 pb-5">
+              <div className="pt-4 border-t" style={{ borderColor: 'hsl(var(--border))' }}>
+                <div className="eyebrow mb-3">Historique</div>
+                <div className="space-y-3 relative">
+                  <div style={{ position: 'absolute', left: 7, top: 8, bottom: 16, width: 1, background: 'hsl(var(--border))' }} />
+                  {[
+                    { l: 'Message initial envoyé', v: fmtDate(selectedContact.main_sent_at), done: !!selectedContact.main_sent_at, tone: 'accent' },
+                    { l: 'Dernier envoi', v: fmtDate(selectedContact.last_sent_at), done: !!selectedContact.last_sent_at, tone: 'accent' },
+                    {
+                      l: `${selectedContact.last_sequence_sent || 0} relance${(selectedContact.last_sequence_sent || 0) > 1 ? 's' : ''} envoyée${(selectedContact.last_sequence_sent || 0) > 1 ? 's' : ''}`,
+                      v: (selectedContact.last_sequence_sent || 0) > 0 ? 'Séquence active' : 'Aucune',
+                      done: (selectedContact.last_sequence_sent || 0) > 0, tone: 'amber',
+                    },
+                    { l: 'Réponse reçue', v: selectedContact.replied_at ? fmtDate(selectedContact.replied_at) : 'Pas encore', done: !!selectedContact.replied_at, tone: 'emerald' },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-3 relative">
+                      <div className="rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                        style={{
+                          width: 15, height: 15, zIndex: 2,
+                          background: item.done ? `hsl(var(--${item.tone}))` : 'white',
+                          border: item.done ? 'none' : '1.5px solid hsl(var(--border-strong))',
+                          boxShadow: item.done ? `0 0 0 3px hsl(var(--${item.tone}) / .15)` : 'none',
+                        }}>
+                        {item.done && <Check size={8} style={{ color: 'white' }} />}
+                      </div>
+                      <div className="flex-1 min-w-0 pb-1">
+                        <div className="text-[12px]" style={{ color: item.done ? 'hsl(var(--text))' : 'hsl(var(--muted))', fontWeight: item.done ? 500 : 400 }}>
+                          {item.l}
+                        </div>
+                        <div className="mono text-[11px] mt-0.5"
+                          style={{
+                            color: item.done ? `hsl(var(--${item.tone}))` : 'hsl(var(--muted))',
+                            fontWeight: item.done ? 500 : 400,
+                          }}>
+                          {item.v}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {!isSearch && !isConnection && selectedContact.status !== 'pending' && (
+              <div className="px-6 py-3 border-t flex items-center justify-between gap-2"
+                style={{ borderColor: 'hsl(var(--border))', background: 'hsl(220 22% 98%)' }}>
+                <select
+                  value={selectedContact.status}
+                  onChange={async (e) => {
+                    const newStatus = e.target.value;
+                    try {
+                      await updateContactStatus(id, selectedContact.contact_id, newStatus);
+                      setSelectedContact({ ...selectedContact, status: newStatus, replied_at: newStatus === 'reussi' ? (selectedContact.replied_at || new Date().toISOString()) : selectedContact.replied_at });
+                      load();
+                      toast.success('Statut mis à jour');
+                    } catch { toast.error('Erreur lors du changement de statut'); }
+                  }}
+                  className="ring-a cursor-pointer"
+                  style={{
+                    padding: '5px 10px', borderRadius: 8, fontSize: 11.5,
+                    border: '1px solid hsl(var(--border))', background: 'white',
+                  }}>
+                  <option value="envoye">Envoyé</option>
+                  <option value="relance_1">Relance 1</option>
+                  <option value="relance_2">Relance 2</option>
+                  <option value="relance_3">Relance 3</option>
+                  <option value="reussi">Répondu</option>
+                  <option value="perdu">Perdu</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
       )}

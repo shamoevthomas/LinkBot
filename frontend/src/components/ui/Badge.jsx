@@ -1,23 +1,33 @@
-const variants = {
-  connected: 'bg-emerald-100 text-emerald-700',
-  request_sent: 'bg-amber-100 text-amber-700',
-  not_connected: 'bg-gray-100 text-gray-600',
-  unknown: 'bg-gray-100 text-gray-500',
-  running: 'bg-blue-100 text-blue-700',
-  completed: 'bg-emerald-100 text-emerald-700',
-  paused: 'bg-amber-100 text-amber-700',
-  failed: 'bg-red-100 text-red-700',
-  cancelled: 'bg-gray-100 text-gray-600',
-  pending: 'bg-gray-100 text-gray-500',
-  search: 'bg-indigo-100 text-indigo-700',
-  dm: 'bg-purple-100 text-purple-700',
-  connection: 'bg-sky-100 text-sky-700',
-  connection_dm: 'bg-teal-100 text-teal-700',
-  search_connection_dm: 'bg-cyan-100 text-cyan-700',
-  export: 'bg-orange-100 text-orange-700',
+import { Chip } from './atoms';
+
+const TONES = {
+  connected: 'emerald',
+  request_sent: 'amber',
+  not_connected: 'slate',
+  unknown: 'slate',
+  running: 'emerald',
+  completed: 'blue',
+  paused: 'slate',
+  failed: 'rose',
+  cancelled: 'rose',
+  pending: 'amber',
+  scheduled: 'amber',
+  search: 'blue',
+  dm: 'emerald',
+  connection: 'blue',
+  connection_dm: 'violet',
+  search_connection_dm: 'amber',
+  export: 'slate',
+  success: 'emerald',
+  skipped: 'slate',
+  en_attente: 'amber',
+  envoye: 'blue',
+  demande_envoyee: 'blue',
+  reussi: 'emerald',
+  perdu: 'slate',
 };
 
-const labels = {
+const LABELS = {
   connected: 'Connecté',
   request_sent: 'Demande envoyée',
   not_connected: 'Non connecté',
@@ -28,20 +38,28 @@ const labels = {
   failed: 'Échouée',
   cancelled: 'Annulée',
   pending: 'En attente',
+  scheduled: 'Planifiée',
   search: 'Recherche',
   dm: 'Message',
   connection: 'Connexion',
   connection_dm: 'Connexion + DM',
   search_connection_dm: 'Recherche + Connexion + DM',
   export: 'Export',
+  success: 'Succès',
+  skipped: 'Ignoré',
+  en_attente: 'En attente',
+  envoye: 'Envoyé',
+  demande_envoyee: 'Demande envoyée',
+  reussi: 'Répondu',
+  perdu: 'Perdu',
 };
 
 export default function Badge({ status, label }) {
-  const cls = variants[status] || variants.unknown;
-  const text = label || labels[status] || status;
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cls}`}>
-      {text}
-    </span>
-  );
+  const key = String(status || 'unknown');
+  let tone = TONES[key];
+  if (!tone && key.startsWith('relance_')) tone = 'amber';
+  if (!tone) tone = 'slate';
+  const text = label || LABELS[key] || key;
+  const dot = key === 'running' || key === 'reussi';
+  return <Chip tone={tone} dot={dot}>{text}</Chip>;
 }
