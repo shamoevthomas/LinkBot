@@ -76,6 +76,7 @@ function AccountHealth({ stats, liProfile }) {
   const dmToday = stats?.dms_today ?? 0;
   const dmLimit = stats?.dms_limit ?? 50;
 
+  const loading = liProfile === null;
   const valid = liProfile?.valid === true;
   const name = [liProfile?.first_name, liProfile?.last_name].filter(Boolean).join(' ');
   const publicId = liProfile?.public_id || '';
@@ -90,29 +91,47 @@ function AccountHealth({ stats, liProfile }) {
     <div className="g-card p-4 mb-6 flex items-center gap-6 flex-wrap">
       <div className="flex items-center gap-2.5 pr-5 border-r" style={{ borderColor: 'hsl(var(--border))' }}>
         <div className="relative">
-          {valid && picture ? (
-            <Avatar src={picture} size={36} alt={name} />
+          {loading ? (
+            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: 'hsl(220 20% 96%)', color: 'hsl(var(--muted))' }}>
+              <Loader2 size={14} className="spin" />
+            </div>
+          ) : valid && picture ? (
+            <Avatar
+              src={picture}
+              initials={getInitials(liProfile?.first_name, liProfile?.last_name) || 'in'}
+              hue={hueFromString(name || 'linkedin')}
+              size={36}
+              alt={name}
+            />
+          ) : valid ? (
+            <Avatar
+              initials={getInitials(liProfile?.first_name, liProfile?.last_name) || 'in'}
+              hue={hueFromString(name || 'linkedin')}
+              size={36}
+            />
           ) : (
             <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-              style={{
-                background: valid ? 'hsl(var(--accent-soft))' : 'hsl(352 90% 96%)',
-                color: valid ? 'hsl(var(--accent))' : 'hsl(var(--rose))',
-              }}>
-              {valid ? <span className="mono" style={{ fontSize: 12, fontWeight: 700 }}>in</span> : <AlertCircle size={16} />}
+              style={{ background: 'hsl(352 90% 96%)', color: 'hsl(var(--rose))' }}>
+              <AlertCircle size={16} />
             </div>
           )}
           {valid && <span className="live-dot" style={{ position: 'absolute', bottom: -2, right: -2, border: '2px solid white' }} />}
         </div>
         <div>
           <div className="text-[13px] font-medium">
-            {valid
-              ? (name || 'Compte LinkedIn connecté')
-              : 'Cookies LinkedIn expirés'}
+            {loading
+              ? 'Vérification du compte…'
+              : valid
+                ? (name || 'Compte LinkedIn connecté')
+                : 'Cookies LinkedIn expirés'}
           </div>
           <div className="text-[11px] mono" style={{ color: 'hsl(var(--muted))' }}>
-            {valid
-              ? (publicId ? `@${publicId}` : 'Compte actif')
-              : 'Mettez à jour vos cookies'}
+            {loading
+              ? '…'
+              : valid
+                ? (publicId ? `@${publicId}` : 'Compte actif')
+                : 'Mettez à jour vos cookies'}
           </div>
         </div>
       </div>

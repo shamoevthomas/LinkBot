@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 export function Sparkline({ points = [], color = 'blue', width = 80, height = 24, showArea = true }) {
   if (!points || points.length === 0) return null;
   const max = Math.max(...points, 1);
@@ -99,10 +101,19 @@ const AVATAR_HUES = {
 };
 
 export function Avatar({ initials, hue = 'blue', size = 32, src, alt = '' }) {
-  if (src) {
+  const [broken, setBroken] = useState(false);
+  // Reset error state when src changes
+  useEffect(() => { setBroken(false); }, [src]);
+
+  if (src && !broken) {
     return (
-      <img src={src} alt={alt}
-        style={{ width: size, height: size, borderRadius: 999, objectFit: 'cover', flexShrink: 0 }} />
+      <img
+        src={src}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+        style={{ width: size, height: size, borderRadius: 999, objectFit: 'cover', flexShrink: 0 }}
+      />
     );
   }
   const bg = AVATAR_HUES[hue] || AVATAR_HUES.blue;

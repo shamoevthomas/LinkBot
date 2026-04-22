@@ -53,6 +53,21 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
             CampaignAction.status == "success",
         ).scalar() or 0
 
+    # Today's connection acceptances + replies (for the hero line)
+    today_accepted = 0
+    today_replies = 0
+    if user_campaign_ids:
+        today_accepted = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id.in_(user_campaign_ids),
+            CampaignContact.connection_accepted_at.isnot(None),
+            func.date(CampaignContact.connection_accepted_at) == today,
+        ).scalar() or 0
+        today_replies = db.query(func.count(CampaignContact.id)).filter(
+            CampaignContact.campaign_id.in_(user_campaign_ids),
+            CampaignContact.replied_at.isnot(None),
+            func.date(CampaignContact.replied_at) == today,
+        ).scalar() or 0
+
     # --- global reply rate (dm + connection_dm campaigns) ---
     dm_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type.in_(["dm", "connection_dm", "search_connection_dm"])).all()]
     global_reply_rate = 0.0
@@ -141,6 +156,8 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
         "connections_limit": max_conn,
         "dms_today": dm_today,
         "dms_limit": max_dm,
+        "today_accepted": today_accepted,
+        "today_replies": today_replies,
         "remaining_connections": max(0, max_conn - conn_today),
         "remaining_dms": max(0, max_dm - dm_today),
         "global_reply_rate": global_reply_rate,
