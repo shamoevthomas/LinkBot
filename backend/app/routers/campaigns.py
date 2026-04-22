@@ -148,6 +148,7 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
         type=c.type,
         status=c.status,
         crm_id=c.crm_id,
+        source_crm_id=c.source_crm_id,
         keywords=c.keywords,
         message_template=c.message_template,
         use_ai=c.use_ai or False,
@@ -210,10 +211,10 @@ def create_campaign(
 ):
     """Create a new campaign and start it immediately."""
     # Validate campaign type
-    if body.type not in ("search", "dm", "connection"):
+    if body.type not in ("search", "dm", "connection", "export"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Campaign type must be 'search', 'dm', or 'connection'.",
+            detail="Campaign type must be 'search', 'dm', 'connection', or 'export'.",
         )
 
     # DM and connection campaigns require a CRM
@@ -236,6 +237,35 @@ def create_campaign(
                 detail="A CRM is required for search campaigns to store results.",
             )
 
+    # Export campaigns require source + destination CRMs and a keyword
+    if body.type == "export":
+        if not body.source_crm_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A source CRM is required for export campaigns.",
+            )
+        if not body.crm_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A destination CRM is required for export campaigns.",
+            )
+        if body.source_crm_id == body.crm_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Source and destination CRMs must be different.",
+            )
+        if not body.keywords or not body.keywords.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A keyword is required for export campaigns.",
+            )
+        source_crm = db.query(CRM).filter(CRM.id == body.source_crm_id, CRM.user_id == user.id).first()
+        if not source_crm:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Source CRM not found.",
+            )
+
     # DM campaigns require a message template
     if body.type == "dm" and not body.message_template:
         raise HTTPException(
@@ -252,8 +282,8 @@ def create_campaign(
                 detail="CRM not found.",
             )
 
-    # Validate cookies
-    if not user.li_at_cookie or not user.cookies_valid:
+    # Validate cookies (skipped for export — no LinkedIn API calls needed)
+    if body.type != "export" and (not user.li_at_cookie or not user.cookies_valid):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Valid LinkedIn cookies are required to run campaigns.",
@@ -267,11 +297,16 @@ def create_campaign(
         if crm_count > 0:
             total_target = crm_count
 
+    # For export campaigns, pre-compute target from source CRM contact count
+    if body.type == "export" and body.source_crm_id:
+        total_target = db.query(Contact).filter(Contact.crm_id == body.source_crm_id).count()
+
     campaign = Campaign(
         name=body.name,
         type=body.type,
         status="running",
         crm_id=body.crm_id,
+        source_crm_id=body.source_crm_id,
         user_id=user.id,
         keywords=body.keywords,
         message_template=body.message_template,
@@ -793,6 +828,9 @@ async def run_campaign_now(
         elif campaign.type == "search":
             from app.jobs.search_campaign import run_search_campaign
             await run_search_campaign(campaign_id)
+        elif campaign.type == "export":
+            from app.jobs.export_campaign import run_export_campaign
+            await run_export_campaign(campaign_id)
         else:
             return {"ok": False, "error": f"Unknown type: {campaign.type}"}
 

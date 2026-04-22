@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { Plus, Search, MessageSquare, UserPlus, ChevronDown, Sparkles, MessageCircle, Trash2 } from 'lucide-react';
+import { Plus, Search, MessageSquare, UserPlus, ChevronDown, Sparkles, MessageCircle, Trash2, Download } from 'lucide-react';
 import { getCampaigns, createCampaign, deleteCampaign } from '../api/campaigns';
 import { getCRMs } from '../api/crm';
 import client from '../api/client';
@@ -34,6 +34,7 @@ const TABS = [
   { key: 'search', label: 'Recherche' },
   { key: 'dm', label: 'Messages' },
   { key: 'connection', label: 'Connexions' },
+  { key: 'export', label: 'Export' },
 ];
 
 export default function CampaignsPage() {
@@ -41,7 +42,7 @@ export default function CampaignsPage() {
   const [showNew, setShowNew] = useState(null); // 'search' | 'dm' | 'connection' | null
   const [showDropdown, setShowDropdown] = useState(false);
   const [crms, setCrms] = useState([]);
-  const [form, setForm] = useState({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
+  const [form, setForm] = useState({ name: '', crm_id: '', source_crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const navigate = useNavigate();
@@ -62,7 +63,7 @@ export default function CampaignsPage() {
 
   const openNew = async (type) => {
     setCrms(await getCRMs());
-    setForm({ name: '', crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
+    setForm({ name: '', crm_id: '', source_crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
     setShowNew(type);
     setShowDropdown(false);
   };
@@ -75,6 +76,7 @@ export default function CampaignsPage() {
         ...form,
         type: showNew,
         crm_id: form.crm_id ? parseInt(form.crm_id) : null,
+        source_crm_id: form.source_crm_id ? parseInt(form.source_crm_id) : null,
         total_target: parseInt(form.total_target) || 100,
         use_ai: form.use_ai,
         auto_connect: form.autoConnect,
@@ -116,6 +118,10 @@ export default function CampaignsPage() {
               <button onClick={() => openNew('connection')}
                 className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3">
                 <UserPlus size={16} className="text-gray-400" /> Campagne Connexion
+              </button>
+              <button onClick={() => openNew('export')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3">
+                <Download size={16} className="text-gray-400" /> Campagne Export
               </button>
             </div>
           )}
@@ -194,6 +200,11 @@ export default function CampaignsPage() {
                     <span className="text-emerald-600 font-medium">Acceptees: {c.total_sent}</span>
                     <span>Echouees: {c.total_failed}</span>
                   </>
+                ) : c.type === 'export' ? (
+                  <>
+                    <span className="text-emerald-600 font-medium">Copies: {c.total_succeeded}</span>
+                    <span>Ignores: {c.total_skipped}</span>
+                  </>
                 ) : (
                   <>
                     <span>Trouves: {c.total_succeeded}</span>
@@ -213,6 +224,7 @@ export default function CampaignsPage() {
       <Modal open={!!showNew} onClose={() => setShowNew(null)} title={
         showNew === 'search' ? 'Nouvelle campagne Recherche' :
         showNew === 'dm' ? 'Nouvelle campagne Message' :
+        showNew === 'export' ? 'Nouvelle campagne Export' :
         'Nouvelle campagne Connexion'
       } wide>
         <form onSubmit={handleCreate} className="space-y-4">
@@ -270,13 +282,45 @@ export default function CampaignsPage() {
             </p>
           )}
 
+          {showNew === 'export' && (
+            <>
+              <p className="text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
+                Copie les contacts d&apos;un CRM source vers un CRM de destination, filtres par un mot-cle (cherche dans le nom, le titre et la localisation).
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">CRM source</label>
+                <select value={form.source_crm_id} onChange={(e) => set('source_crm_id', e.target.value)}
+                  className="input-glass" required>
+                  <option value="">Sélectionner le CRM source...</option>
+                  {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mot-cle</label>
+                <input value={form.keywords} onChange={(e) => set('keywords', e.target.value)} required
+                  className="input-glass"
+                  placeholder="Ex: closer" />
+                <p className="text-xs text-gray-400 mt-1">
+                  Les contacts dont le nom, le titre ou la localisation contient ce mot-cle seront copies.
+                </p>
+              </div>
+            </>
+          )}
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">CRM de destination</label>
-            <select value={form.crm_id} onChange={(e) => set('crm_id', e.target.value)}
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {showNew === 'export' ? 'CRM de destination' : 'CRM de destination'}
+            </label>
+            <select
+              value={form.crm_id}
+              onChange={(e) => set('crm_id', e.target.value)}
               className="input-glass"
-              required={showNew === 'search' || showNew === 'dm' || showNew === 'connection'}>
+              required={showNew === 'search' || showNew === 'dm' || showNew === 'connection' || showNew === 'export'}
+            >
               <option value="">Sélectionner un CRM...</option>
-              {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
+              {crms
+                .filter((c) => showNew !== 'export' || String(c.id) !== String(form.source_crm_id))
+                .map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
             </select>
           </div>
 

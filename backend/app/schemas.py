@@ -92,8 +92,9 @@ class ContactNotesUpdate(BaseModel):
 # Campaigns
 class CampaignCreate(BaseModel):
     name: str
-    type: str  # search, dm, connection
-    crm_id: Optional[int] = None
+    type: str  # search, dm, connection, export
+    crm_id: Optional[int] = None  # destination CRM (for export: where contacts are copied TO)
+    source_crm_id: Optional[int] = None  # export only: source CRM to copy FROM
     keywords: Optional[str] = None
     message_template: Optional[str] = None
     use_ai: bool = False
@@ -147,6 +148,7 @@ class CampaignResponse(BaseModel):
     type: str
     status: str
     crm_id: Optional[int] = None
+    source_crm_id: Optional[int] = None
     keywords: Optional[str] = None
     message_template: Optional[str] = None
     use_ai: bool = False

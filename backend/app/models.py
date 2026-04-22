@@ -78,9 +78,10 @@ class Campaign(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
     name = Column(String, nullable=False)
-    type = Column(String, nullable=False)  # search, dm, connection
+    type = Column(String, nullable=False)  # search, dm, connection, export
     status = Column(String, default="pending")  # pending, running, paused, completed, failed, cancelled
     crm_id = Column(Integer, ForeignKey("crm.id"))
+    source_crm_id = Column(Integer, ForeignKey("crm.id"), nullable=True)  # export: source CRM to copy from
     keywords = Column(Text)
     message_template = Column(Text)
     use_ai = Column(Boolean, default=False)

@@ -14,6 +14,7 @@ const variants = {
   connection: 'bg-sky-100 text-sky-700',
   connection_dm: 'bg-teal-100 text-teal-700',
   search_connection_dm: 'bg-cyan-100 text-cyan-700',
+  export: 'bg-orange-100 text-orange-700',
 };
 
 const labels = {
@@ -32,6 +33,7 @@ const labels = {
   connection: 'Connexion',
   connection_dm: 'Connexion + DM',
   search_connection_dm: 'Recherche + Connexion + DM',
+  export: 'Export',
 };
 
 export default function Badge({ status, label }) {

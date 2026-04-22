@@ -51,6 +51,11 @@ def _run_migrations():
             conn.execute(text('ALTER TABLE "campaign" ADD COLUMN fallback_message TEXT'))
             print("[MIGRATION] Added fallback_message to campaign", flush=True)
 
+        # Add source_crm_id column to campaign (for export campaigns)
+        if "source_crm_id" not in campaign_columns:
+            conn.execute(text('ALTER TABLE "campaign" ADD COLUMN source_crm_id INTEGER REFERENCES "crm"(id)'))
+            print("[MIGRATION] Added source_crm_id to campaign", flush=True)
+
         # Add notes and deleted_at columns to contact
         contact_columns = [c["name"] for c in inspector.get_columns("contact")]
         if "notes" not in contact_columns:

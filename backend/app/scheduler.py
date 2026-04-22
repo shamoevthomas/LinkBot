@@ -49,6 +49,9 @@ async def _run_campaign_tick(campaign_id: int, campaign_type: str):
     elif campaign_type == "search_connection_dm":
         from app.jobs.search_connection_dm_campaign import run_search_connection_dm_campaign
         await run_search_connection_dm_campaign(campaign_id)
+    elif campaign_type == "export":
+        from app.jobs.export_campaign import run_export_campaign
+        await run_export_campaign(campaign_id)
     elif campaign_type == "lead_magnet":
         from app.jobs.lead_magnet_job import run_lead_magnet_tick
         await run_lead_magnet_tick(campaign_id)
