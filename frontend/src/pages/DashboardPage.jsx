@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Rocket, MessageSquare, UserPlus, Plus, ArrowRight, Loader2,
-  RefreshCw, Send, Flame, Clock, Check, X, Eye, MessageCircle,
+  RefreshCw, Send, Clock, Check, X, Eye, MessageCircle, AlertCircle,
 } from 'lucide-react';
-import { getDashboardStats } from '../api/dashboard';
+import { getDashboardStats, getLinkedInProfile } from '../api/dashboard';
 import { syncConnections } from '../api/config';
 import { useAuth } from '../context/AuthContext';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -70,34 +70,49 @@ function Hero({ user, stats, onRefresh, onNewCRM, onNewCampaign, syncing }) {
   );
 }
 
-function AccountHealth({ user, stats }) {
+function AccountHealth({ stats, liProfile }) {
   const connToday = stats?.connections_today ?? 0;
-  const connLimit = stats?.connections_limit ?? 20;
+  const connLimit = stats?.connections_limit ?? 25;
   const dmToday = stats?.dms_today ?? 0;
-  const dmLimit = stats?.dms_limit ?? 40;
-  const warmupDay = stats?.warmup_day ?? 1;
-  const warmupTotal = stats?.warmup_total ?? 14;
-  const healthy = user?.cookies_valid !== false;
+  const dmLimit = stats?.dms_limit ?? 50;
+
+  const valid = liProfile?.valid === true;
+  const name = [liProfile?.first_name, liProfile?.last_name].filter(Boolean).join(' ');
+  const publicId = liProfile?.public_id || '';
+  const picture = liProfile?.picture_url;
 
   const rows = [
-    { icon: UserPlus, label: "Invitations aujourd'hui", value: connToday, sub: connLimit, pct: (connToday / connLimit) * 100, tone: 'accent' },
-    { icon: Send,     label: 'Messages envoyés',       value: dmToday,   sub: dmLimit,    pct: (dmToday / dmLimit) * 100,     tone: 'emerald' },
-    { icon: Flame,    label: 'Warmup — jour',           value: `J${warmupDay}`, sub: `J${warmupTotal}`, pct: (warmupDay / warmupTotal) * 100, tone: 'amber' },
+    { icon: UserPlus, label: "Invitations aujourd'hui", value: connToday, sub: connLimit, pct: connLimit > 0 ? (connToday / connLimit) * 100 : 0, tone: 'accent' },
+    { icon: Send,     label: 'Messages envoyés',       value: dmToday,   sub: dmLimit,    pct: dmLimit > 0 ? (dmToday / dmLimit) * 100 : 0,     tone: 'emerald' },
   ];
 
   return (
     <div className="g-card p-4 mb-6 flex items-center gap-6 flex-wrap">
       <div className="flex items-center gap-2.5 pr-5 border-r" style={{ borderColor: 'hsl(var(--border))' }}>
         <div className="relative">
-          <Avatar initials="in" hue="blue" size={36} />
-          {healthy && <span className="live-dot" style={{ position: 'absolute', bottom: -2, right: -2, border: '2px solid white' }} />}
+          {valid && picture ? (
+            <Avatar src={picture} size={36} alt={name} />
+          ) : (
+            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+              style={{
+                background: valid ? 'hsl(var(--accent-soft))' : 'hsl(352 90% 96%)',
+                color: valid ? 'hsl(var(--accent))' : 'hsl(var(--rose))',
+              }}>
+              {valid ? <span className="mono" style={{ fontSize: 12, fontWeight: 700 }}>in</span> : <AlertCircle size={16} />}
+            </div>
+          )}
+          {valid && <span className="live-dot" style={{ position: 'absolute', bottom: -2, right: -2, border: '2px solid white' }} />}
         </div>
         <div>
           <div className="text-[13px] font-medium">
-            {healthy ? 'Compte LinkedIn connecté' : 'Cookies expirés'}
+            {valid
+              ? (name || 'Compte LinkedIn connecté')
+              : 'Cookies LinkedIn expirés'}
           </div>
           <div className="text-[11px] mono" style={{ color: 'hsl(var(--muted))' }}>
-            {user?.email || 'non connecté'}
+            {valid
+              ? (publicId ? `@${publicId}` : 'Compte actif')
+              : 'Mettez à jour vos cookies'}
           </div>
         </div>
       </div>
@@ -269,36 +284,48 @@ function CampaignsBlock({ campaigns, onOpen, onViewAll }) {
 const ACTION_ICON = {
   reply: MessageCircle,
   dm_sent: Send,
+  dm_followup: Send,
   connection_sent: UserPlus,
   connection_accepted: Check,
+  search_add: Users,
+  export_copy: ArrowRight,
   skipped: X,
 };
 
 const ACTION_HUE = {
   reply: 'emerald',
   dm_sent: 'blue',
+  dm_followup: 'violet',
   connection_sent: 'violet',
   connection_accepted: 'emerald',
+  search_add: 'blue',
+  export_copy: 'slate',
   skipped: 'slate',
 };
 
 const ACTION_LABEL = {
-  reply: 'Réponse',
+  reply: 'Réponse reçue',
   dm_sent: 'Message envoyé',
+  dm_followup: 'Relance envoyée',
   connection_sent: 'Invitation envoyée',
   connection_accepted: 'Invitation acceptée',
+  search_add: 'Contact ajouté',
+  export_copy: 'Contact copié',
   skipped: 'Ignoré',
 };
 
 function ActivityBlock({ actions, onViewAll }) {
   const [filter, setFilter] = useState('all');
   const normalize = (a) => {
-    const t = a.action_type || a.type || '';
-    if (t.includes('reply')) return 'reply';
-    if (t.includes('dm_sent') || t.includes('message_sent')) return 'dm_sent';
-    if (t.includes('connection_accepted')) return 'connection_accepted';
-    if (t.includes('connection')) return 'connection_sent';
+    const t = (a.action_type || '').toLowerCase();
     if (a.status === 'skipped') return 'skipped';
+    if (t === 'reply_detected' || t.includes('reply')) return 'reply';
+    if (t === 'connection_accepted') return 'connection_accepted';
+    if (t === 'connection_request' || t === 'connection_send') return 'connection_sent';
+    if (t === 'dm_followup') return 'dm_followup';
+    if (t === 'dm_send' || t === 'dm_sent' || t === 'message_sent') return 'dm_sent';
+    if (t === 'search_add') return 'search_add';
+    if (t === 'export_copy') return 'export_copy';
     return t || 'other';
   };
   const items = (actions || []).map((a) => ({ ...a, _kind: normalize(a) }));
@@ -306,7 +333,7 @@ function ActivityBlock({ actions, onViewAll }) {
   const filtered = filter === 'all' ? items : items.filter((a) => {
     if (filter === 'replies') return a._kind === 'reply';
     if (filter === 'conn') return a._kind.startsWith('connection');
-    if (filter === 'dm') return a._kind === 'dm_sent';
+    if (filter === 'dm') return a._kind === 'dm_sent' || a._kind === 'dm_followup';
     return true;
   });
 
@@ -314,7 +341,7 @@ function ActivityBlock({ actions, onViewAll }) {
     { key: 'all', label: 'Tout', count: items.length },
     { key: 'replies', label: 'Réponses', count: items.filter((a) => a._kind === 'reply').length },
     { key: 'conn', label: 'Connexions', count: items.filter((a) => a._kind.startsWith('connection')).length },
-    { key: 'dm', label: 'Messages', count: items.filter((a) => a._kind === 'dm_sent').length },
+    { key: 'dm', label: 'Messages', count: items.filter((a) => a._kind === 'dm_sent' || a._kind === 'dm_followup').length },
   ];
 
   const timeAgo = (iso) => {
@@ -363,8 +390,12 @@ function ActivityBlock({ actions, onViewAll }) {
           const Ic = ACTION_ICON[a._kind] || Eye;
           const hue = ACTION_HUE[a._kind] || 'slate';
           const varName = hue === 'blue' ? 'accent' : hue;
-          const name = a.contact_name || [a.contact_first_name, a.contact_last_name].filter(Boolean).join(' ') || 'Contact';
-          const initials = getInitials(a.contact_first_name, a.contact_last_name) || name.slice(0, 2).toUpperCase();
+          const name = [a.contact_first_name, a.contact_last_name].filter(Boolean).join(' ') || a.contact_name || 'Contact inconnu';
+          let initials = getInitials(a.contact_first_name, a.contact_last_name);
+          if (!initials || initials === '?') {
+            const parts = (a.contact_name || '').trim().split(/\s+/).filter(Boolean);
+            initials = ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
+          }
           return (
             <div key={a.id || i} className="flex items-center gap-3 px-2 py-2 rounded-lg row-hover transition-colors">
               <Avatar initials={initials} hue={hueFromString(name)} size={30} src={a.contact_profile_picture_url} />
@@ -377,7 +408,7 @@ function ActivityBlock({ actions, onViewAll }) {
                   </div>
                 </div>
                 <div className="text-[11.5px] truncate" style={{ color: 'hsl(var(--muted))' }}>
-                  {a.campaign_name || a.action_type}
+                  {a.campaign_name || '—'}
                 </div>
               </div>
               <div className="text-right shrink-0 min-w-[110px]">
@@ -396,13 +427,17 @@ function ActivityBlock({ actions, onViewAll }) {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
+  const [liProfile, setLiProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const load = () => getDashboardStats().then(setStats).finally(() => setLoading(false));
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    getLinkedInProfile().then(setLiProfile).catch(() => setLiProfile({ valid: false }));
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -440,7 +475,7 @@ export default function DashboardPage() {
         syncing={syncing}
       />
 
-      <AccountHealth user={user} stats={stats} />
+      <AccountHealth stats={stats} liProfile={liProfile} />
 
       <KPICards stats={stats} />
 

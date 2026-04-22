@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Rocket, Settings, Link as LinkIcon, Contact as ContactIcon, Bell, Magnet, Search } from 'lucide-react';
+import { LayoutDashboard, Users, Rocket, Settings, Link as LinkIcon, Contact as ContactIcon, Bell, Magnet } from 'lucide-react';
 import { getNotifications } from '../../api/dashboard';
 import { getNotificationsList, markNotificationRead, markAllNotificationsRead } from '../../api/notifications';
 import UserPopup from '../ui/UserPopup';
@@ -116,12 +116,6 @@ export default function Sidebar() {
 
         {/* Right zone */}
         <div className="ml-auto flex items-center gap-2">
-          <button className="ghost-btn hidden md:flex" style={{ padding: '7px 10px' }}>
-            <Search size={14} />
-            <span className="text-[12px]" style={{ color: 'hsl(var(--muted))' }}>Rechercher</span>
-            <span className="kbd">⌘K</span>
-          </button>
-
           <div ref={dropdownRef} style={{ position: 'relative' }}>
             <button onClick={() => setShowNotifs(!showNotifs)} className="ghost-btn relative" style={{ padding: '8px 10px' }}>
               <Bell size={15} />
