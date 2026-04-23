@@ -100,6 +100,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Linky", version="1.0.0", lifespan=lifespan)
 
+
+# Server-timing header + log for any request taking >200ms. Gives us the
+# real backend processing time (excludes client↔server network) so we can
+# tell if slow page loads come from the backend or the pipe.
+import time as _time
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as _Request
+
+class _TimingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: _Request, call_next):
+        start = _time.perf_counter()
+        response = await call_next(request)
+        dur_ms = (_time.perf_counter() - start) * 1000
+        response.headers["Server-Timing"] = f"app;dur={dur_ms:.0f}"
+        if dur_ms > 200 and request.url.path.startswith("/api"):
+            print(f"[TIMING] {request.method} {request.url.path} {dur_ms:.0f}ms", flush=True)
+        return response
+
+app.add_middleware(_TimingMiddleware)
+
 origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
