@@ -85,7 +85,7 @@ export default function Sidebar() {
               width: 32, height: 32, objectFit: 'contain',
               filter: 'drop-shadow(0 6px 18px hsl(var(--accent) / .35))',
             }} />
-          <span style={{ fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em', color: 'hsl(var(--text))' }}>LinkBot</span>
+          <span style={{ fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em', color: 'hsl(var(--text))' }}>Linky</span>
         </NavLink>
 
         {/* Navigation */}

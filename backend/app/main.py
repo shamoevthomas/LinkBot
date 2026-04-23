@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
     shutdown_scheduler()
 
 
-app = FastAPI(title="LinkBot", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Linky", version="1.0.0", lifespan=lifespan)
 
 origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
@@ -141,7 +141,7 @@ app.include_router(lead_magnets_router.router)
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "app": "LinkBot"}
+    return {"status": "ok", "app": "Linky"}
 
 
 @app.get("/api/ai/status")

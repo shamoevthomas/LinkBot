@@ -75,7 +75,7 @@ export default function RegisterPage() {
                 filter: 'drop-shadow(0 8px 20px hsl(var(--accent) / .4))',
               }} />
             <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'hsl(var(--text))' }}>
-              LinkBot
+              Linky
             </span>
           </RouterLink>
           <h1 className="text-[26px] font-semibold tracking-tight" style={{ letterSpacing: '-0.02em' }}>

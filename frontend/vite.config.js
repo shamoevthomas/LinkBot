@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'Linky.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'LinkBot — Automatisation LinkedIn',
-        short_name: 'LinkBot',
+        name: 'Linky — Automatisation LinkedIn',
+        short_name: 'Linky',
         description: 'CRM intelligent et campagnes automatiques pour LinkedIn',
         theme_color: '#0084FF',
         background_color: '#ffffff',

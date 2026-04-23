@@ -153,7 +153,7 @@ export default function LandingPage() {
                 width: 32, height: 32, objectFit: 'contain',
                 filter: 'drop-shadow(0 6px 16px hsl(var(--accent) / .35))',
               }} />
-            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>LinkBot</span>
+            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Linky</span>
           </RouterLink>
 
           <div className="hidden md:flex items-center gap-7">
@@ -227,7 +227,7 @@ export default function LandingPage() {
                 maxWidth: 500, marginTop: 24,
               }}>
               CRM intelligent, campagnes automatiques, messages personnalisés par IA.
-              LinkBot transforme votre réseau LinkedIn en machine de croissance,
+              Linky transforme votre réseau LinkedIn en machine de croissance,
               pendant que vous vous concentrez sur l'essentiel.
             </p>
             <div className="animate-fade-rise-delay-2 flex flex-wrap items-center gap-3" style={{ marginTop: 32 }}>
@@ -761,7 +761,7 @@ export default function LandingPage() {
                     color: 'hsl(var(--text))',
                   }}>
                   Bonjour Thomas,<br /><br />
-                  J'ai vu votre travail sur LinkBot — automatiser la prospection tout en gardant une vraie personnalisation est exactement ce qui manque au marché.<br /><br />
+                  J'ai vu votre travail sur Linky — automatiser la prospection tout en gardant une vraie personnalisation est exactement ce qui manque au marché.<br /><br />
                   J'aimerais échanger avec vous sur une idée complémentaire. Seriez-vous disponible cette semaine ?
                 </div>
                 <div className="flex items-center gap-2 text-[11px]" style={{ color: 'hsl(var(--muted))' }}>
@@ -796,7 +796,7 @@ export default function LandingPage() {
           <Step delay="reveal-delay-2" n="2" title="Importez ou cherchez"
             desc="Importez votre réseau existant en un clic, ou lancez une campagne de recherche par mots-clés." />
           <Step delay="reveal-delay-3" n="3" title="Automatisez"
-            desc="Créez vos campagnes. LinkBot gère envois, relances et détection de réponses, 24h/24." />
+            desc="Créez vos campagnes. Linky gère envois, relances et détection de réponses, 24h/24." />
         </div>
       </section>
 
@@ -861,7 +861,7 @@ export default function LandingPage() {
             <span style={{ color: 'hsl(var(--accent))' }}>votre prospection</span> ?
           </h2>
           <p className="mx-auto mb-8 text-[14.5px] leading-relaxed" style={{ color: 'hsl(var(--muted))', maxWidth: 520 }}>
-            Installez LinkBot, connectez votre compte, et lancez votre première campagne en moins de 5 minutes.
+            Installez Linky, connectez votre compte, et lancez votre première campagne en moins de 5 minutes.
           </p>
           <button onClick={() => navigate('/register')} className="cta-btn"
             style={{ padding: '16px 40px', fontSize: 15 }}>
@@ -877,7 +877,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <img src="/Linky.png" alt="Linky"
               style={{ width: 24, height: 24, objectFit: 'contain' }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--muted))' }}>LinkBot</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--muted))' }}>Linky</span>
           </div>
           <p className="text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>
             Outil local d'automatisation LinkedIn · Vos données restent sur votre machine.

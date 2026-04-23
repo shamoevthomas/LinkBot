@@ -78,7 +78,7 @@ export default function OnboardingWizard() {
             <img src="/Linky.png" alt="Linky"
               style={{ width: 40, height: 40, objectFit: 'contain' }} />
             <div>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Bienvenue sur LinkBot</h2>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Bienvenue sur Linky</h2>
               <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Configurez votre compte en 4 étapes</p>
             </div>
           </div>
@@ -160,7 +160,7 @@ export default function OnboardingWizard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Pourquoi utiliser LinkBot ?</label>
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Pourquoi utiliser Linky ?</label>
                 <select value={form.reason_for_using} onChange={(e) => set('reason_for_using', e.target.value)}
                   className="input-glass">
                   <option value="">Sélectionner...</option>
@@ -360,7 +360,7 @@ export default function OnboardingWizard() {
                   className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
                   style={{ padding: '12px 16px', fontSize: '14px', borderRadius: '14px' }}>
                   {loading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-                  {loading ? 'Import en cours...' : 'Lancer LinkBot'}
+                  {loading ? 'Import en cours...' : 'Lancer Linky'}
                 </button>
               </div>
             </div>
