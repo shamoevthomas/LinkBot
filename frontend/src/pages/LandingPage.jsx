@@ -314,19 +314,228 @@ export default function LandingPage() {
           <span style={{ color: 'hsl(var(--accent))' }}>dominer LinkedIn</span>.
         </SectionTitle>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <FeatureCard delay="reveal-delay-1" icon={Users}        tone="accent"  title="CRM intelligent"
-            desc="Organisez vos contacts dans des listes segmentées. Recherche, filtres, actions groupées, historique complet." />
-          <FeatureCard delay="reveal-delay-2" icon={Rocket}       tone="emerald" title="4 types de campagnes"
-            desc="Recherche, Connexion, DM, Connexion + DM. Tout tourne en arrière-plan avec des limites quotidiennes." />
-          <FeatureCard delay="reveal-delay-3" icon={Sparkles}     tone="violet"  title="IA Gemini intégrée"
-            desc="Chaque message est unique, généré à partir du profil, de l'expérience et des publications récentes." />
-          <FeatureCard delay="reveal-delay-1" icon={Repeat}       tone="amber"   title="Cycle de relances"
-            desc="Jusqu'à 7 relances avec délais configurables. Détection des réponses en temps réel, arrêt automatique." />
-          <FeatureCard delay="reveal-delay-2" icon={Activity}     tone="emerald" title="Suivi en temps réel"
-            desc="Dashboard live avec statut de chaque contact. Logs détaillés de chaque action pour un contrôle total." />
-          <FeatureCard delay="reveal-delay-3" icon={LinkIcon}     tone="accent"  title="Sync automatique"
-            desc="Importez vos connexions en un clic. Synchronisation automatique de votre réseau toutes les 6 heures." />
+        {/* Bento grid — 3 rows of 6 cells, cards span 2–4 cells */}
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 auto-rows-[minmax(0,auto)]">
+          {/* CRM intelligent — big card with a mini contact list preview */}
+          <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-4" style={{ borderRadius: 20 }}>
+            <div className="p-7">
+              <div className="eyebrow mb-3" style={{ color: 'hsl(var(--accent))' }}>CRM</div>
+              <h3 className="text-[22px] font-semibold tracking-tight mb-2" style={{ letterSpacing: '-0.02em' }}>
+                Un CRM conçu pour LinkedIn.
+              </h3>
+              <p className="text-[13.5px] max-w-md leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>
+                Listes segmentées, recherche instantanée, actions groupées, historique complet. Vos contacts enfin organisés.
+              </p>
+            </div>
+            {/* Mini contact list mockup */}
+            <div className="px-7 pb-7">
+              <div className="g-card-soft overflow-hidden"
+                style={{ background: 'hsl(220 22% 98%)' }}>
+                {[
+                  { n: 'Cédric Rasolo',      h: 'Closer · Inbound B2B',     hue: 'accent',  status: 'Répondu', statusTone: 'emerald' },
+                  { n: 'Aurélie Ouanessan',  h: 'Growth Marketing',          hue: 'violet',  status: 'Relance 1', statusTone: 'amber' },
+                  { n: 'Julien Marchetti',   h: 'Head of Sales · SaaS',      hue: 'emerald', status: 'Envoyé',   statusTone: 'blue' },
+                ].map((c, i) => (
+                  <div key={i} className={`flex items-center gap-3 px-4 py-3 ${i < 2 ? 'border-b' : ''}`}
+                    style={{ borderColor: 'hsl(var(--border))' }}>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold"
+                      style={{
+                        background: `linear-gradient(135deg, hsl(var(--${c.hue})), hsl(var(--${c.hue}) / .7))`,
+                        color: 'white',
+                      }}>
+                      {c.n.split(' ').map((p) => p[0]).join('').slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12.5px] font-medium truncate">{c.n}</div>
+                      <div className="text-[11px] truncate" style={{ color: 'hsl(var(--muted))' }}>{c.h}</div>
+                    </div>
+                    <span className={`chip ${c.statusTone}`} style={{ fontSize: 10 }}>{c.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* IA Gemini — tall narrow card with message preview */}
+          <div className="reveal reveal-delay-2 g-card overflow-hidden md:col-span-2"
+            style={{
+              borderRadius: 20,
+              background: 'linear-gradient(180deg, hsl(var(--panel)) 0%, hsl(262 60% 98%) 100%)',
+            }}>
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{ background: 'hsl(var(--violet) / .14)', color: 'hsl(var(--violet))' }}>
+                  <Sparkles size={16} />
+                </div>
+                <span className="chip violet" style={{ fontSize: 10.5 }}>IA</span>
+              </div>
+              <h3 className="text-[17px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>
+                Chaque message, unique.
+              </h3>
+              <p className="text-[12.5px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
+                Gemini personnalise chaque message à partir du profil, de l'expérience et des publications.
+              </p>
+              {/* Fake message bubbles */}
+              <div className="space-y-2">
+                {[
+                  'Bonjour Claire, j\'ai vu votre intervention...',
+                  'Salut Paul, votre parcours chez Alan...',
+                  'Hello Nora, votre post sur la RSE...',
+                ].map((t, i) => (
+                  <div key={i} className="rounded-lg px-3 py-2 text-[11px] leading-snug truncate"
+                    style={{
+                      background: 'hsl(var(--panel))',
+                      border: '1px solid hsl(var(--border))',
+                      color: 'hsl(var(--muted))',
+                    }}>{t}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 4 types de campagnes */}
+          <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-2" style={{ borderRadius: 20 }}>
+            <div className="p-6">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-4"
+                style={{ background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+                <Rocket size={16} />
+              </div>
+              <h3 className="text-[17px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>
+                4 types de campagnes.
+              </h3>
+              <p className="text-[12.5px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
+                Recherche, Connexion, DM, Connexion + DM. Tout tourne en arrière-plan.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  ['Recherche', 'blue'],
+                  ['Connexion', 'blue'],
+                  ['Message', 'emerald'],
+                  ['Combo', 'violet'],
+                ].map(([label, tone]) => (
+                  <span key={label} className={`chip ${tone}`} style={{ fontSize: 10.5 }}>{label}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Suivi en temps réel — big card with funnel mini */}
+          <div className="reveal reveal-delay-2 g-card overflow-hidden md:col-span-4" style={{ borderRadius: 20 }}>
+            <div className="p-7">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div className="eyebrow mb-2">Suivi</div>
+                  <h3 className="text-[20px] font-semibold tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+                    Dashboard temps réel.
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="live-dot" />
+                  <span className="mono text-[10.5px]" style={{ color: 'hsl(var(--emerald))' }}>LIVE</span>
+                </div>
+              </div>
+              <p className="text-[13px] leading-relaxed mb-5 max-w-md" style={{ color: 'hsl(var(--muted))' }}>
+                Statut de chaque contact, taux de réponse, logs d'actions. Vous voyez tout, vous contrôlez tout.
+              </p>
+              {/* Mini funnel */}
+              <div className="space-y-2">
+                {[
+                  { label: 'Invitations envoyées', value: 648, tone: 'accent',  pct: 100 },
+                  { label: 'Acceptées',             value: 412, tone: 'violet',  pct: 64 },
+                  { label: 'Réponses',              value: 143, tone: 'emerald', pct: 22 },
+                ].map((s) => (
+                  <div key={s.label} className="flex items-center gap-3">
+                    <div className="w-36 text-[11.5px] shrink-0" style={{ color: 'hsl(var(--muted))' }}>{s.label}</div>
+                    <div className="flex-1 h-6 rounded-lg overflow-hidden relative" style={{ background: 'hsl(220 22% 97%)' }}>
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-2 rounded-lg"
+                        style={{
+                          width: `${s.pct}%`,
+                          background: `linear-gradient(90deg, hsl(var(--${s.tone}) / .24), hsl(var(--${s.tone}) / .14))`,
+                          borderLeft: `3px solid hsl(var(--${s.tone}))`,
+                        }}>
+                        <span className="mono text-[10.5px] font-semibold" style={{ color: `hsl(var(--${s.tone}))` }}>
+                          {s.value}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Cycle de relances */}
+          <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-2" style={{ borderRadius: 20 }}>
+            <div className="p-6">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-4"
+                style={{ background: 'hsl(var(--amber) / .14)', color: 'hsl(var(--amber))' }}>
+                <Repeat size={16} />
+              </div>
+              <h3 className="text-[17px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>
+                Cycle de relances.
+              </h3>
+              <p className="text-[12.5px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
+                Jusqu'à 7 relances, délais configurables, arrêt automatique à la première réponse.
+              </p>
+              {/* Timeline dots */}
+              <div className="flex items-center gap-1">
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="flex items-center">
+                    <div className="rounded-full"
+                      style={{
+                        width: 8, height: 8,
+                        background: i === 0
+                          ? 'hsl(var(--accent))'
+                          : i < 4
+                            ? 'hsl(var(--amber))'
+                            : 'hsl(var(--border-strong))',
+                      }} />
+                    {i < 6 && <div style={{ width: 16, height: 1, background: 'hsl(var(--border-strong))' }} />}
+                  </div>
+                ))}
+              </div>
+              <div className="mono text-[10px] mt-2" style={{ color: 'hsl(var(--muted))' }}>
+                J+0 → J+3 → J+7 → J+14 →…
+              </div>
+            </div>
+          </div>
+
+          {/* Sync automatique — wide low card */}
+          <div className="reveal reveal-delay-2 g-card overflow-hidden md:col-span-3" style={{ borderRadius: 20 }}>
+            <div className="p-6 flex items-center gap-5">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+                <LinkIcon size={18} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[15px] font-semibold mb-1 tracking-tight" style={{ letterSpacing: '-0.01em' }}>
+                  Sync automatique toutes les 6h.
+                </h3>
+                <p className="text-[12.5px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>
+                  Votre réseau importé en un clic. Les nouvelles connexions rejoignent votre CRM en arrière-plan.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 100% local */}
+          <div className="reveal reveal-delay-3 g-card overflow-hidden md:col-span-3" style={{ borderRadius: 20 }}>
+            <div className="p-6 flex items-center gap-5">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'hsl(var(--emerald) / .14)', color: 'hsl(var(--emerald))' }}>
+                <Shield size={18} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[15px] font-semibold mb-1 tracking-tight" style={{ letterSpacing: '-0.01em' }}>
+                  Vos données restent chez vous.
+                </h3>
+                <p className="text-[12.5px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>
+                  Cookies LinkedIn stockés localement, aucun tiers. Vous gardez la main.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -465,34 +674,37 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── DETAILS ── */}
-      <section className="relative" style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 20px' }}>
+      {/* ── DETAILS ── editorial two-column list, not a cards grid */}
+      <section className="relative" style={{ maxWidth: 1100, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Détails">
           Pensé pour les{' '}
           <span style={{ color: 'hsl(var(--accent))' }}>professionnels exigeants</span>.
         </SectionTitle>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid md:grid-cols-2 gap-x-14 gap-y-7">
           {[
-            { icon: Shield,          tone: 'emerald', title: '100% local',       desc: 'Vos cookies ne quittent jamais votre serveur. Aucun tiers.' },
-            { icon: FileText,        tone: 'violet',  title: 'Import PDF',       desc: "Fournissez un PDF comme contexte IA — plaquette, offre, pitch." },
-            { icon: FileSpreadsheet, tone: 'emerald', title: 'Import CSV',       desc: 'Importez vos contacts avec mapping de colonnes flexible.' },
-            { icon: Target,          tone: 'amber',   title: 'Limites smart',    desc: 'Max par jour, étalement, total cible. Vous gardez le contrôle.' },
-            { icon: UserCircle,      tone: 'accent',  title: 'Profil card',      desc: 'Fiche contact détaillée : photo, headline, statut, historique.' },
-            { icon: Send,            tone: 'accent',  title: 'DM depuis le CRM', desc: 'Envoyez un message à un contact directement depuis sa fiche.' },
-            { icon: Zap,             tone: 'amber',   title: 'Connexion + DM',   desc: 'Demande → acceptation détectée → cycle DM automatique.' },
-            { icon: Calendar,        tone: 'slate',   title: 'Logs d\'activité', desc: 'Journal exhaustif, filtrable, paginé, avec détails d\'erreurs.' },
+            { icon: Shield,          tone: 'emerald', title: '100% local',       desc: 'Vos cookies LinkedIn restent sur votre serveur. Aucun tiers, aucun relais externe.' },
+            { icon: FileText,        tone: 'violet',  title: 'Import PDF',       desc: "Fournissez un PDF comme contexte IA — plaquette, offre, pitch — et nourrissez la génération de messages." },
+            { icon: FileSpreadsheet, tone: 'emerald', title: 'Import CSV',       desc: 'Chargez vos contacts depuis un fichier existant avec un mapping de colonnes flexible.' },
+            { icon: Target,          tone: 'amber',   title: 'Limites intelligentes', desc: 'Max par jour, étalement sur N jours, total cible. Le rythme reste sous votre contrôle.' },
+            { icon: UserCircle,      tone: 'accent',  title: 'Fiche contact complète', desc: 'Photo, headline, historique d\'envois, statut live, actions directes depuis le panel.' },
+            { icon: Send,            tone: 'accent',  title: 'Message depuis le CRM', desc: 'Envoyez un DM à n\'importe quel contact depuis sa fiche, avec ou sans IA.' },
+            { icon: Zap,             tone: 'amber',   title: 'Connexion + DM',   desc: 'Demande envoyée, acceptation détectée, puis cycle de DM déclenché automatiquement.' },
+            { icon: Calendar,        tone: 'slate',   title: "Journal d'activité", desc: 'Journal exhaustif de chaque action, filtrable et paginé, avec détails d\'erreurs.' },
           ].map((item, i) => {
             const Ic = item.icon;
             return (
-              <div key={item.title} className={`reveal reveal-delay-${(i % 4) + 1} g-card p-5`}
-                style={{ borderRadius: 16 }}>
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
-                  style={{ background: `hsl(var(--${item.tone}) / .12)`, color: `hsl(var(--${item.tone}))` }}>
-                  <Ic size={15} />
+              <div key={item.title} className={`reveal reveal-delay-${(i % 4) + 1} flex gap-4 group`}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                  style={{ background: `hsl(var(--${item.tone}) / .1)`, color: `hsl(var(--${item.tone}))` }}>
+                  <Ic size={16} />
                 </div>
-                <h4 className="text-[13.5px] font-semibold mb-1.5" style={{ color: 'hsl(var(--text))' }}>{item.title}</h4>
-                <p className="text-[12px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{item.desc}</p>
+                <div className="pt-0.5">
+                  <h4 className="text-[14.5px] font-semibold mb-1" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.01em' }}>
+                    {item.title}
+                  </h4>
+                  <p className="text-[13px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{item.desc}</p>
+                </div>
               </div>
             );
           })}
