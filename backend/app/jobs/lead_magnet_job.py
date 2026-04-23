@@ -220,16 +220,28 @@ async def _phase_detect_comments(db, lm, client):
         if existing:
             continue
 
-        # Check connection status
-        is_connected = False
-        try:
-            profile = await get_profile(client, urn_id=commenter_urn_id)
-            distance = profile.get("distance")
-            is_connected = distance in (1, "DISTANCE_1", "1")
-            if not commenter_name:
-                commenter_name = f"{profile.get('firstName', '')} {profile.get('lastName', '')}".strip()
-        except Exception:
-            pass
+        # Check connection status. Prefer the distance value already present
+        # in the comment envelope (MemberActor.distance) — it is reliable and
+        # avoids a separate /profile call that currently fails intermittently
+        # under the new GraphQL envelope.
+        inline_distance = (
+            element.get("distance")
+            or commenter_entity.get("distance")
+        )
+        if isinstance(inline_distance, dict):
+            inline_distance = inline_distance.get("value")
+        is_connected = inline_distance in (1, "DISTANCE_1", "1")
+
+        # Only call get_profile if we still don't have a name or distance info.
+        if not is_connected and not inline_distance:
+            try:
+                profile = await get_profile(client, urn_id=commenter_urn_id)
+                distance = profile.get("distance")
+                is_connected = distance in (1, "DISTANCE_1", "1")
+                if not commenter_name:
+                    commenter_name = f"{profile.get('firstName', '')} {profile.get('lastName', '')}".strip()
+            except Exception:
+                pass
 
         # ── Check if user already replied to this comment ──
         already_replied = False

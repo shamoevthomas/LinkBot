@@ -305,11 +305,21 @@ class Linkedin(object):
                 else:
                     mini = {}
 
+            # Extract the connection distance straight from MemberActor.
+            # MemberActor.distance can be a string ('DISTANCE_1') or a dict
+            # {'value': 'DISTANCE_1', ...}. Normalize to a plain string.
+            raw_distance = commenter_obj.get("distance") if isinstance(commenter_obj, dict) else None
+            if isinstance(raw_distance, dict):
+                distance_value = raw_distance.get("value")
+            else:
+                distance_value = raw_distance
+
             member_actor = {
                 "miniProfile": mini,
                 # Prefer the MiniProfile's ACoAA URN over MemberActor.urn
                 # so split(':')[-1] downstream yields the usable profile ID.
                 "urn": mini.get("entityUrn") or mini.get("dashEntityUrn") or commenter_obj.get("urn") or "",
+                "distance": distance_value,
             }
             self.logger.info(
                 f"[GET_POST_COMMENTS] comment={comment.get('entityUrn')!r} "
@@ -326,6 +336,9 @@ class Linkedin(object):
                 "urn": comment.get("entityUrn") or urn,
                 "commentary": {"text": text},
                 "commenter": {"com.linkedin.voyager.feed.MemberActor": member_actor},
+                # Surface distance at the top level too so the lead magnet job
+                # can skip the unreliable get_profile round-trip.
+                "distance": distance_value,
                 "_raw": comment,
             })
 
@@ -2134,8 +2147,28 @@ class Linkedin(object):
         if res.status_code != 200:
             return []
 
-        response_payload = res.json()
-        return [element["invitation"] for element in response_payload["elements"]]
+        try:
+            response_payload = res.json()
+        except Exception:
+            return []
+
+        # Legacy REST shape
+        if isinstance(response_payload, dict) and "elements" in response_payload:
+            return [element.get("invitation") for element in response_payload["elements"] if element.get("invitation")]
+
+        # New GraphQL-decorated envelope: look for Invitation objects in `included`
+        if isinstance(response_payload, dict) and "included" in response_payload:
+            included = response_payload.get("included") or []
+            invitations = []
+            for item in included:
+                if not isinstance(item, dict):
+                    continue
+                t = item.get("$type") or ""
+                if "Invitation" in t and "InvitationView" not in t:
+                    invitations.append(item)
+            return invitations
+
+        return []
 
     def reply_invitation(
         self, invitation_entity_urn: str, invitation_shared_secret: str, action="accept"
@@ -2525,6 +2558,20 @@ class Linkedin(object):
 
         return res.status_code != 201
 
+    @staticmethod
+    def _normalize_comment_urn(comment_urn: str) -> str:
+        """Convert new-style `urn:li:fs_objectComment:(commentId,activity:activityId)`
+        back to legacy `urn:li:comment:(activity:activityId,commentId)` that the
+        write endpoints (react, reply) still expect.
+        """
+        if not isinstance(comment_urn, str):
+            return comment_urn
+        m = re.match(r"urn:li:fs_objectComment:\((\d+),activity:(\d+)\)", comment_urn)
+        if m:
+            comment_id, activity_id = m.group(1), m.group(2)
+            return f"urn:li:comment:(activity:{activity_id},{comment_id})"
+        return comment_urn
+
     def react_to_comment(self, comment_urn, reaction_type="LIKE"):
         """React to a comment.
 
@@ -2536,7 +2583,7 @@ class Linkedin(object):
         :return: Error state. If True, an error occurred.
         :rtype: boolean
         """
-        params = {"threadUrn": comment_urn}
+        params = {"threadUrn": self._normalize_comment_urn(comment_urn)}
         payload = {"reactionType": reaction_type}
 
         res = self._post(
@@ -2563,7 +2610,7 @@ class Linkedin(object):
         url = "/feed/comments"
         payload = {
             "updateId": f"activity:{activity_urn}",
-            "parentComment": parent_comment_urn,
+            "parentComment": self._normalize_comment_urn(parent_comment_urn),
             "commentary": {"text": reply_text},
         }
 
@@ -2590,7 +2637,7 @@ class Linkedin(object):
             "q": "comments",
             "sortOrder": "RELEVANCE",
             "updateId": f"activity:{activity_urn}",
-            "parentComment": parent_comment_urn,
+            "parentComment": self._normalize_comment_urn(parent_comment_urn),
         }
         res = self._fetch(url, params=url_params)
         try:
