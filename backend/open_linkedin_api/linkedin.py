@@ -261,6 +261,27 @@ class Linkedin(object):
             f"elements={len(data.get('elements', [])) if isinstance(data, dict) else '?'} "
             f"paging={data.get('paging') if isinstance(data, dict) else '?'}"
         )
+        if isinstance(data, dict) and "data" in data and "elements" not in data:
+            inner = data.get("data")
+            if isinstance(inner, dict):
+                self.logger.info(f"[GET_POST_COMMENTS] inner data.data keys={list(inner.keys())}")
+                for k, v in inner.items():
+                    if isinstance(v, dict):
+                        self.logger.info(f"[GET_POST_COMMENTS]   data.data.{k} keys={list(v.keys())[:10]}")
+                    elif isinstance(v, list):
+                        self.logger.info(f"[GET_POST_COMMENTS]   data.data.{k} list len={len(v)} first_type={type(v[0]).__name__ if v else 'empty'}")
+                    else:
+                        self.logger.info(f"[GET_POST_COMMENTS]   data.data.{k}={v!r}")
+            included = data.get("included", [])
+            if isinstance(included, list):
+                type_counts = {}
+                for item in included:
+                    if isinstance(item, dict):
+                        t = item.get("$type") or item.get("type") or "unknown"
+                        type_counts[t] = type_counts.get(t, 0) + 1
+                self.logger.info(f"[GET_POST_COMMENTS] included total={len(included)} $type counts={type_counts}")
+                if included and isinstance(included[0], dict):
+                    self.logger.info(f"[GET_POST_COMMENTS] included[0] keys={list(included[0].keys())[:15]}")
         if data and "status" in data and data["status"] != 200:
             self.logger.info("request failed: {}".format(data["status"]))
             return [{}]
