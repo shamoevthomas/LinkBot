@@ -267,6 +267,57 @@ def _empty_profile() -> dict:
     return {"valid": False, "picture_url": None, "first_name": None, "last_name": None, "public_id": None}
 
 
+def _deep_find_public_id(node, depth=0):
+    """Walk the /me response and return the first publicIdentifier we find."""
+    if depth > 6:
+        return None
+    if isinstance(node, dict):
+        pid = node.get("publicIdentifier")
+        if isinstance(pid, str) and pid:
+            return pid
+        if isinstance(pid, dict):
+            txt = _text(pid)
+            if txt:
+                return txt
+        for v in node.values():
+            found = _deep_find_public_id(v, depth + 1)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for v in node:
+            found = _deep_find_public_id(v, depth + 1)
+            if found:
+                return found
+    return None
+
+
+def _deep_find_picture(node, depth=0):
+    """Walk any payload and try every picture/profilePicture dict we meet."""
+    if depth > 6:
+        return None
+    if isinstance(node, dict):
+        for key in ("picture", "profilePicture", "displayImageReference"):
+            if key in node:
+                url = _extract_picture(node[key] if isinstance(node[key], dict) else {key: node[key]})
+                if url:
+                    return url
+        # vectorImage directly
+        if "rootUrl" in node and "artifacts" in node:
+            url = _extract_picture(node)
+            if url:
+                return url
+        for v in node.values():
+            found = _deep_find_picture(v, depth + 1)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for v in node:
+            found = _deep_find_picture(v, depth + 1)
+            if found:
+                return found
+    return None
+
+
 @router.get("/linkedin-profile")
 async def linkedin_profile(user: User = Depends(get_current_user)):
     """Return the LinkedIn account owner (picture + name) for the current user's cookies.
@@ -279,28 +330,40 @@ async def linkedin_profile(user: User = Depends(get_current_user)):
     try:
         client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
 
-        # Step 1: /me to get publicIdentifier
+        # Step 1: /me — dump the shape so we can see what LinkedIn sent
         me = await asyncio.to_thread(client.get_user_profile, False)
         if not me:
             logger.warning("LinkedIn /me returned empty payload")
             return _empty_profile()
 
-        mini = me.get("miniProfile") if isinstance(me.get("miniProfile"), dict) else me
+        # Log the full top-level keys + 1st level of miniProfile if present
+        top_keys = list(me.keys()) if isinstance(me, dict) else []
+        mini_raw = me.get("miniProfile") if isinstance(me, dict) else None
+        mini_keys = list(mini_raw.keys()) if isinstance(mini_raw, dict) else []
+        logger.info("linkedin /me top_keys=%s mini_keys=%s", top_keys, mini_keys)
+
+        mini = mini_raw if isinstance(mini_raw, dict) else (me if isinstance(me, dict) else {})
         first_name = _text(mini.get("firstName"))
         last_name = _text(mini.get("lastName"))
-        public_id = _text(mini.get("publicIdentifier"))
-        picture_url = (
-            _extract_picture(mini.get("picture") or {})
-            or _extract_picture(mini.get("profilePicture") or {})
-            or _extract_picture(me.get("profilePicture") or {})
-        )
+        public_id = _text(mini.get("publicIdentifier")) or (_deep_find_public_id(me) or "")
+        picture_url = _deep_find_picture(me)
+
         logger.info(
-            "linkedin /me: public_id=%r first=%r last=%r picture=%s keys=%s",
+            "linkedin /me parse: public_id=%r first=%r last=%r picture=%s",
             public_id, first_name, last_name, bool(picture_url),
-            list(me.keys())[:12] if isinstance(me, dict) else "?",
         )
 
-        # Step 2: full dash profile (same path as network contact extraction)
+        # Step 2: user table sometimes has linkedin_profile_url = https://www.linkedin.com/in/<public_id>
+        if not public_id and user.linkedin_profile_url:
+            try:
+                tail = user.linkedin_profile_url.rstrip("/").split("/in/")[-1]
+                if tail and "/" not in tail and tail != user.linkedin_profile_url:
+                    public_id = tail
+                    logger.info("linkedin: recovered public_id from user.linkedin_profile_url=%r", public_id)
+            except Exception:
+                pass
+
+        # Step 3: full dash profile (same path as network contact extraction)
         if public_id and (not picture_url or not first_name):
             try:
                 full = await asyncio.to_thread(client.get_profile, public_id=public_id)
@@ -309,8 +372,8 @@ async def linkedin_profile(user: User = Depends(get_current_user)):
                         first_name = _text(full.get("firstName"))
                     if not last_name:
                         last_name = _text(full.get("lastName"))
-                    # get_profile's _extract_profile_images puts rootUrl at
-                    # `displayPictureUrl` and artifact segments at `img_W_H` keys.
+                    # _extract_profile_images puts the rootUrl at `displayPictureUrl`
+                    # and artifact segments at `img_W_H` keys.
                     root = full.get("displayPictureUrl")
                     artifact_keys = [k for k in full.keys() if k.startswith("img_")]
                     def _w(k):
@@ -319,11 +382,15 @@ async def linkedin_profile(user: User = Depends(get_current_user)):
                         except Exception:
                             return 0
                     artifact_keys.sort(key=_w, reverse=True)
-                    if root and artifact_keys:
+                    if root and artifact_keys and not picture_url:
                         seg = full.get(artifact_keys[0])
-                        if seg and not picture_url:
+                        if seg:
                             picture_url = f"{root}{seg}"
-                    logger.info("linkedin dash profile: picture=%s first=%r", bool(picture_url), first_name)
+                    logger.info(
+                        "linkedin dash profile: picture=%s first=%r full_keys=%s",
+                        bool(picture_url), first_name,
+                        [k for k in list(full.keys())[:20] if not k.startswith("img_")],
+                    )
             except Exception:
                 logger.exception("Failed to fetch full LinkedIn profile for %s", public_id)
 
