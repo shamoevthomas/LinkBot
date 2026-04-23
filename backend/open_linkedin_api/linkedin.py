@@ -2614,7 +2614,16 @@ class Linkedin(object):
             "commentary": {"text": reply_text},
         }
 
-        res = self._post(url, data=json.dumps(payload))
+        # LinkedIn moved the web comment-create path to SDUI and started
+        # returning 500 on /voyager/api/feed/comments for web clients. The
+        # mobile iOS app still hits this endpoint, so spoof the UA + x-li-track
+        # just for this call. Other endpoints keep the default web UA.
+        mobile_headers = {
+            "User-Agent": "LinkedIn/9.28.2123 CFNetwork/1474.0.4 Darwin/23.1.0",
+            "X-Li-User-Agent": "LIAuthLibrary:0.0.3 com.linkedin.LinkedIn:9.28.2123 iPhone:17.1.0",
+            "x-li-track": '{"clientVersion":"9.28.2123","mpVersion":"9.28.2123","osName":"iOS","osVersion":"17.1.0","deviceModel":"iPhone15,3","deviceType":"iphone","appId":"com.linkedin.LinkedIn"}',
+        }
+        res = self._post(url, data=json.dumps(payload), headers=mobile_headers)
         return res.status_code in (200, 201)
 
     def get_comment_replies(self, activity_urn: str, parent_comment_urn: str, count: int = 50) -> List:
