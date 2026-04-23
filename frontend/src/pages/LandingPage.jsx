@@ -546,31 +546,160 @@ export default function LandingPage() {
           <span style={{ color: 'hsl(var(--accent))' }}>une seule interface</span>.
         </SectionTitle>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          {[
-            { title: 'Recherche',      icon: Search,        tone: 'accent',  tag: 'Collecte',        desc: 'Trouvez des prospects par mots-clés et importez-les automatiquement. Pagination intelligente, dédoublonnage, limites quotidiennes.' },
-            { title: 'Connexion',      icon: UserPlus,      tone: 'emerald', tag: 'Réseau',          desc: "Envoyez des demandes aux contacts CRM. Notes personnalisées, skip des contacts déjà connectés, suivi du statut." },
-            { title: 'Message direct', icon: MessageSquare, tone: 'violet',  tag: 'Prospection',     desc: "Messages personnalisés avec variables et relances automatiques. Templates écrits par vous ou générés par l'IA." },
-            { title: 'Connexion + DM', icon: Zap,           tone: 'amber',   tag: 'Automatisation',  desc: "Le combo ultime. Envoi de connexion → détection d'acceptation → cycle DM complet avec relances." },
-          ].map((c, i) => {
-            const Ic = c.icon;
-            return (
-              <div key={c.title} className={`reveal reveal-delay-${(i % 2) + 1} g-card p-7 transition-all`}
-                style={{ borderRadius: 18 }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border-strong))'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border))'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                <div className="flex items-start justify-between mb-5">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-                    style={{ background: `hsl(var(--${c.tone}) / .12)`, color: `hsl(var(--${c.tone}))` }}>
-                    <Ic size={20} />
-                  </div>
-                  <span className="chip slate" style={{ fontSize: 10.5 }}>{c.tag}</span>
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 auto-rows-[minmax(0,auto)]">
+          {/* Recherche — card with search bar + result rows */}
+          <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-3" style={{ borderRadius: 20 }}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+                  <Search size={17} />
                 </div>
-                <h3 className="text-[17px] font-semibold mb-2" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.01em' }}>{c.title}</h3>
-                <p className="text-[13px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{c.desc}</p>
+                <span className="chip blue" style={{ fontSize: 10.5 }}>Collecte</span>
               </div>
-            );
-          })}
+              <h3 className="text-[18px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>Recherche</h3>
+              <p className="text-[13px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
+                Trouvez des prospects par mots-clés et importez-les automatiquement. Pagination intelligente, dédoublonnage.
+              </p>
+              <div className="g-card-soft p-3" style={{ background: 'hsl(220 22% 98%)' }}>
+                <div className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg"
+                  style={{ background: 'hsl(var(--panel))', border: '1px solid hsl(var(--border))' }}>
+                  <Search size={11} style={{ color: 'hsl(var(--muted))' }} />
+                  <span className="text-[11.5px]" style={{ color: 'hsl(var(--text))' }}>Head of Sales · Paris</span>
+                </div>
+                <div className="space-y-1 text-[11px]">
+                  {[
+                    ['Clara Dumont',   'VP Sales · SaaS'],
+                    ['Mathieu Lenoir', 'Head of Sales · Fintech'],
+                    ['Léa Ferreira',   'Head of Growth'],
+                  ].map(([n, h]) => (
+                    <div key={n} className="flex items-center justify-between px-2 py-1 rounded">
+                      <span className="font-medium">{n}</span>
+                      <span style={{ color: 'hsl(var(--muted))' }}>{h}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Connexion — card with invite preview */}
+          <div className="reveal reveal-delay-2 g-card overflow-hidden md:col-span-3" style={{ borderRadius: 20 }}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: 'hsl(var(--emerald) / .14)', color: 'hsl(var(--emerald))' }}>
+                  <UserPlus size={17} />
+                </div>
+                <span className="chip emerald" style={{ fontSize: 10.5 }}>Réseau</span>
+              </div>
+              <h3 className="text-[18px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>Connexion</h3>
+              <p className="text-[13px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
+                Envoyez des demandes avec notes personnalisées, skip des contacts déjà connectés, suivi du statut.
+              </p>
+              <div className="g-card-soft p-3 flex items-center gap-3" style={{ background: 'hsl(220 22% 98%)' }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: 'linear-gradient(135deg, hsl(var(--emerald)), hsl(var(--emerald) / .7))', color: 'white', fontSize: 11, fontWeight: 600 }}>
+                  CD
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-medium truncate">Clara Dumont</div>
+                  <div className="text-[10.5px]" style={{ color: 'hsl(var(--muted))' }}>« Salut Clara, ravi de découvrir… »</div>
+                </div>
+                <span className="chip emerald" style={{ fontSize: 10 }} dot>Acceptée</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Message direct — card with DM bubble + relance chips */}
+          <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-3"
+            style={{
+              borderRadius: 20,
+              background: 'linear-gradient(180deg, hsl(var(--panel)) 0%, hsl(262 60% 98%) 100%)',
+            }}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: 'hsl(var(--violet) / .14)', color: 'hsl(var(--violet))' }}>
+                  <MessageSquare size={17} />
+                </div>
+                <span className="chip violet" style={{ fontSize: 10.5 }}>Prospection</span>
+              </div>
+              <h3 className="text-[18px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>Message direct</h3>
+              <p className="text-[13px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
+                Messages personnalisés avec variables et relances. Templates écrits par vous ou générés par l'IA.
+              </p>
+              <div className="rounded-xl p-3 text-[11.5px] leading-snug mb-3"
+                style={{
+                  background: 'hsl(var(--panel))',
+                  borderLeft: '2.5px solid hsl(var(--violet) / .4)',
+                  border: '1px solid hsl(var(--border))',
+                  color: 'hsl(var(--text))',
+                }}>
+                « Bonjour Clara, votre post sur le pricing SaaS m'a interpellé… »
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  ['Principal',     'blue'],
+                  ['Relance J+3',   'slate'],
+                  ['Relance J+7',   'slate'],
+                  ['Relance J+14',  'slate'],
+                ].map(([label, tone]) => (
+                  <span key={label} className={`chip ${tone}`} style={{ fontSize: 10 }}>{label}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Connexion + DM — card with mini flow diagram */}
+          <div className="reveal reveal-delay-2 g-card overflow-hidden md:col-span-3"
+            style={{
+              borderRadius: 20,
+              background: 'linear-gradient(180deg, hsl(var(--panel)) 0%, hsl(38 100% 97%) 100%)',
+            }}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: 'hsl(var(--amber) / .16)', color: 'hsl(var(--amber))' }}>
+                  <Zap size={17} />
+                </div>
+                <span className="chip amber" style={{ fontSize: 10.5 }}>Automatisation</span>
+              </div>
+              <h3 className="text-[18px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>Connexion + DM</h3>
+              <p className="text-[13px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
+                Le combo ultime. Envoi d'invitation, détection d'acceptation, puis cycle DM complet avec relances.
+              </p>
+              {/* Mini flow */}
+              <div className="flex items-center gap-2">
+                {[
+                  { label: 'Invitation',  tone: 'accent',  icon: UserPlus },
+                  { label: 'Acceptation', tone: 'emerald', icon: ArrowRight, isArrow: true },
+                  { label: 'DM + relances', tone: 'violet', icon: MessageSquare },
+                ].map((s, i, arr) => {
+                  const Ic = s.icon;
+                  if (s.isArrow) {
+                    return (
+                      <div key={s.label} className="flex flex-col items-center shrink-0" style={{ minWidth: 20 }}>
+                        <ArrowRight size={14} style={{ color: 'hsl(var(--muted))' }} />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={s.label} className="flex-1">
+                      <div className="rounded-lg px-2.5 py-2 text-center"
+                        style={{
+                          background: `hsl(var(--${s.tone}) / .1)`,
+                          border: `1px solid hsl(var(--${s.tone}) / .25)`,
+                        }}>
+                        <Ic size={13} style={{ color: `hsl(var(--${s.tone}))`, margin: '0 auto', display: 'block', marginBottom: 2 }} />
+                        <div className="text-[10.5px] font-medium" style={{ color: `hsl(var(--${s.tone}))` }}>{s.label}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
