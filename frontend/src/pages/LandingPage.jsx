@@ -289,7 +289,7 @@ export default function LandingPage() {
                   background: 'radial-gradient(ellipse 50% 35% at 35% 25%, rgba(255,255,255,0.45), transparent 60%)',
                   pointerEvents: 'none',
                 }} />
-                <img src="/Linky.png" alt="Linky"
+                <img src="/linkedin.png" alt="LinkedIn"
                   style={{
                     position: 'relative', zIndex: 2,
                     width: 400, height: 400, objectFit: 'contain',

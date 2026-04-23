@@ -9,7 +9,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'Linky.png', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'Linky.png', 'linkedin.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Linky — Automatisation LinkedIn',
         short_name: 'Linky',
