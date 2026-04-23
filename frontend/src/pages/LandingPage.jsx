@@ -1,5 +1,10 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Users, Rocket, Sparkles, Repeat, Activity, Link as LinkIcon,
+  Search, UserPlus, MessageSquare, Zap, Shield, FileText, FileSpreadsheet,
+  Target, UserCircle, Send, Calendar, ArrowRight,
+} from 'lucide-react';
 
 const ORB_SRC = 'https://future.co/images/homepage/glassy-orb/orb-purple.webm';
 
@@ -20,31 +25,43 @@ function useReveal() {
 
 function SectionTitle({ sub, children }) {
   return (
-    <div className="reveal text-center mb-16 max-w-3xl mx-auto">
-      {sub && <span className="text-xs tracking-[0.3em] uppercase mb-4 block" style={{ color: 'var(--text3)' }}>{sub}</span>}
-      <h2 className="f text-4xl sm:text-5xl md:text-6xl font-bold" style={{ color: 'var(--text)', lineHeight: 1.05, letterSpacing: '-1.5px' }}>
+    <div className="reveal text-center mb-14 max-w-3xl mx-auto">
+      {sub && <div className="eyebrow mb-3">{sub}</div>}
+      <h2 className="text-[40px] sm:text-[52px] md:text-[60px] font-semibold tracking-tight"
+        style={{ color: 'hsl(var(--text))', lineHeight: 1.05, letterSpacing: '-0.03em' }}>
         {children}
       </h2>
     </div>
   );
 }
 
-function GlassCard({ icon, title, desc, delay = '' }) {
+function FeatureCard({ icon: Ic, title, desc, tone = 'accent', delay = '' }) {
   return (
-    <div className={`reveal ${delay} g-card rounded-2xl p-8 hover:scale-[1.02] transition-transform cursor-default`}>
-      <div className="text-3xl mb-5">{icon}</div>
-      <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--text)', fontFamily: "'Inter', sans-serif" }}>{title}</h3>
-      <p className="text-sm leading-relaxed" style={{ color: 'var(--text2)' }}>{desc}</p>
+    <div className={`reveal ${delay} g-card p-6 transition-all cursor-default`}
+      style={{ borderRadius: 18 }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border-strong))'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border))'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+        style={{ background: `hsl(var(--${tone}) / .12)`, color: `hsl(var(--${tone}))` }}>
+        <Ic size={18} />
+      </div>
+      <h3 className="text-[15px] font-semibold mb-2" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.01em' }}>{title}</h3>
+      <p className="text-[13px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{desc}</p>
     </div>
   );
 }
 
 function Step({ n, title, desc, delay = '' }) {
   return (
-    <div className={`reveal ${delay} flex flex-col items-center text-center`}>
-      <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold mb-5 f" style={{ background: 'rgba(0, 132, 255, 0.08)', color: 'var(--blue)', border: '1px solid rgba(0, 132, 255, 0.15)' }}>{n}</div>
-      <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>{title}</h3>
-      <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'var(--text2)' }}>{desc}</p>
+    <div className={`reveal ${delay} flex flex-col items-center text-center relative z-10`}>
+      <div className="w-14 h-14 rounded-full flex items-center justify-center text-[20px] font-semibold mb-4 mono"
+        style={{
+          background: 'hsl(var(--accent-soft))',
+          color: 'hsl(var(--accent))',
+          border: '1px solid hsl(var(--accent) / .2)',
+        }}>{n}</div>
+      <h3 className="text-[15px] font-semibold mb-2" style={{ color: 'hsl(var(--text))' }}>{title}</h3>
+      <p className="text-[13px] leading-relaxed max-w-[280px]" style={{ color: 'hsl(var(--muted))' }}>{desc}</p>
     </div>
   );
 }
@@ -52,8 +69,9 @@ function Step({ n, title, desc, delay = '' }) {
 function Stat({ value, label, delay = '' }) {
   return (
     <div className={`reveal ${delay} text-center`}>
-      <div className="f text-5xl sm:text-6xl font-bold mb-2" style={{ color: 'var(--blue)' }}>{value}</div>
-      <p className="text-sm" style={{ color: 'var(--text2)' }}>{label}</p>
+      <div className="text-[48px] sm:text-[56px] font-semibold tracking-tight mb-1 mono"
+        style={{ color: 'hsl(var(--accent))', letterSpacing: '-0.03em' }}>{value}</div>
+      <p className="text-[12.5px]" style={{ color: 'hsl(var(--muted))' }}>{label}</p>
     </div>
   );
 }
@@ -64,12 +82,10 @@ export default function LandingPage() {
   const [splash, setSplash] = useState(false);
   const [drops, setDrops] = useState([]);
   const splashTimer = useRef(null);
-  const orbRef = useRef(null);
 
   const triggerSplash = useCallback(() => {
     if (splash) return;
     setSplash(true);
-    // Generate water droplets that fly across the whole page
     const newDrops = Array.from({ length: 50 }).map((_, i) => {
       const angle = Math.random() * Math.PI * 2;
       const speed = 300 + Math.random() * 900;
@@ -79,10 +95,8 @@ export default function LandingPage() {
       return {
         id: i,
         tx: Math.cos(angle) * speed,
-        ty: Math.sin(angle) * speed - 100 * Math.random(), // slight upward bias
-        size,
-        duration,
-        delay,
+        ty: Math.sin(angle) * speed - 100 * Math.random(),
+        size, duration, delay,
         opacity: 0.4 + Math.random() * 0.5,
         blur: Math.random() > 0.6 ? 2 : 0,
       };
@@ -95,109 +109,141 @@ export default function LandingPage() {
 
   return (
     <div ref={page} style={{
-      '--blue': '#0084FF',
-      '--text': '#111827',
-      '--text2': '#6b7280',
-      '--text3': '#9ca3af',
-      background: '#fff',
-      color: 'var(--text)',
-      fontFamily: "'Inter', sans-serif",
+      background: 'hsl(var(--bg))',
+      color: 'hsl(var(--text))',
       position: 'relative',
       overflow: 'hidden',
     }}>
-
-      {/* ── Global decorative blobs ── */}
+      {/* Ambient blobs */}
       <div style={{
-        position: 'fixed', top: '-20%', left: '-10%', width: '600px', height: '600px',
-        background: 'radial-gradient(circle, rgba(0,132,255,0.06) 0%, transparent 70%)',
+        position: 'fixed', top: '-20%', left: '-10%', width: 600, height: 600,
+        background: 'radial-gradient(circle, hsl(var(--accent) / .06), transparent 70%)',
         filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0,
       }} />
       <div style={{
-        position: 'fixed', bottom: '-10%', right: '-10%', width: '500px', height: '500px',
-        background: 'radial-gradient(circle, rgba(0,132,255,0.05) 0%, transparent 70%)',
+        position: 'fixed', bottom: '-10%', right: '-10%', width: 500, height: 500,
+        background: 'radial-gradient(circle, hsl(var(--accent) / .05), transparent 70%)',
         filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0,
       }} />
 
       {/* ── HERO ── */}
-      <div className="relative overflow-hidden" style={{ background: '#fff', minHeight: '100vh' }}>
-
-        {/* Subtle blue watercolor wash at top */}
+      <div className="relative overflow-hidden" style={{ minHeight: '100vh' }}>
+        {/* Top wash */}
         <div style={{
           position: 'absolute', top: -100, left: '50%', transform: 'translateX(-50%)',
           width: 1200, height: 500,
-          background: 'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(96,177,255,0.12) 0%, rgba(49,154,255,0.04) 50%, transparent 100%)',
+          background: 'radial-gradient(ellipse 70% 60% at 50% 0%, hsl(var(--accent) / .12), hsl(var(--accent) / .04) 50%, transparent 100%)',
           pointerEvents: 'none', zIndex: 0,
         }} />
 
-        {/* Glass Navbar */}
-        <div style={{ position: 'relative', zIndex: 10, maxWidth: 900, margin: '0 auto', padding: '12px 16px 0' }}>
-          <nav className="glass-nav" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px' }}>
-            <span className="f" style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>
-              LinkBot<sup style={{ fontSize: 9, color: 'var(--text3)' }}>®</sup>
-            </span>
-            <div className="hidden md:flex items-center gap-8">
-              {[['Fonctionnalités', '#features'], ['Campagnes', '#campaigns'], ['IA', '#ai'], ['Comment ça marche', '#how']].map(([label, href]) => (
-                <a key={label} href={href} style={{ fontSize: 13, color: 'var(--text2)', textDecoration: 'none', transition: 'color 0.2s' }}
-                  onMouseEnter={e => e.target.style.color = 'var(--text)'}
-                  onMouseLeave={e => e.target.style.color = 'var(--text2)'}>{label}</a>
+        {/* Topbar */}
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '18px 20px 0' }}>
+          <nav className="flex items-center justify-between"
+            style={{
+              padding: '10px 18px',
+              background: 'hsl(var(--panel) / .75)',
+              backdropFilter: 'saturate(180%) blur(14px)',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 16,
+              boxShadow: '0 1px 2px -1px hsl(220 40% 20% / .04)',
+            }}>
+            <RouterLink to="/" className="flex items-center gap-2"
+              style={{ textDecoration: 'none', color: 'hsl(var(--text))' }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                style={{
+                  background: 'hsl(var(--accent))', color: 'white',
+                  boxShadow: '0 6px 16px -6px hsl(var(--accent) / .6)',
+                }}>
+                <LinkIcon size={14} />
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>LinkBot</span>
+            </RouterLink>
+
+            <div className="hidden md:flex items-center gap-7">
+              {[
+                ['Fonctionnalités', '#features'],
+                ['Campagnes', '#campaigns'],
+                ['IA', '#ai'],
+                ['Comment ça marche', '#how'],
+              ].map(([label, href]) => (
+                <a key={label} href={href}
+                  className="transition-colors"
+                  style={{ fontSize: 13, color: 'hsl(var(--muted))', textDecoration: 'none' }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
+                  {label}
+                </a>
               ))}
             </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => navigate('/login')} style={{ fontSize: 13, color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'none', transition: 'color 0.2s' }}
-                onMouseEnter={e => e.target.style.color = 'var(--text)'}
-                onMouseLeave={e => e.target.style.color = 'var(--text2)'}>
+
+            <div className="flex items-center gap-2">
+              <button onClick={() => navigate('/login')}
+                className="transition-colors"
+                style={{
+                  fontSize: 13, color: 'hsl(var(--muted))',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
                 Se connecter
               </button>
-              <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '10px 24px', fontSize: 13, borderRadius: 99 }}>
+              <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '8px 18px', fontSize: 13 }}>
                 S'inscrire
               </button>
             </div>
           </nav>
         </div>
 
-        {/* Hero content: text LEFT, orb RIGHT */}
-        <section className="relative z-10 flex flex-col md:flex-row items-center" style={{
-          maxWidth: 1200, margin: '0 auto', padding: '40px 20px 60px',
-          gap: 48, minHeight: 'calc(100vh - 100px)',
-        }}>
-          {/* Left: text */}
+        {/* Hero content */}
+        <section className="relative z-10 flex flex-col md:flex-row items-center"
+          style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 20px 60px', gap: 48, minHeight: 'calc(100vh - 120px)' }}>
           <div className="animate-fade-rise text-center md:text-left" style={{ flex: 1 }}>
-            <h1 className="f" style={{
-              fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 700,
-              lineHeight: 1, letterSpacing: '-2px', color: 'var(--text)',
+            <div className="chip blue mb-5" style={{ fontSize: 11, padding: '4px 12px' }}>
+              <Sparkles size={11} />
+              Propulsé par IA
+            </div>
+            <h1 style={{
+              fontSize: 'clamp(40px, 5.5vw, 68px)',
+              fontWeight: 600, lineHeight: 1.02,
+              letterSpacing: '-0.03em',
+              color: 'hsl(var(--text))',
             }}>
               Automatisez votre{' '}
-              <span style={{ color: 'var(--blue)' }}>prospection</span>{' '}
-              avec{' '}
-              <span style={{ color: 'var(--blue)' }}>élégance et précision.</span>
+              <span style={{ color: 'hsl(var(--accent))' }}>prospection</span>{' '}
+              avec élégance et{' '}
+              <span style={{ color: 'hsl(var(--accent))' }}>précision</span>.
             </h1>
-            <p className="animate-fade-rise-delay mx-auto md:mx-0" style={{
-              fontSize: 16, lineHeight: 1.7, color: 'var(--text2)',
-              maxWidth: 480, marginTop: 28,
-            }}>
+            <p className="animate-fade-rise-delay mx-auto md:mx-0"
+              style={{
+                fontSize: 15.5, lineHeight: 1.65,
+                color: 'hsl(var(--muted))',
+                maxWidth: 500, marginTop: 24,
+              }}>
               CRM intelligent, campagnes automatiques, messages personnalisés par IA.
               LinkBot transforme votre réseau LinkedIn en machine de croissance,
               pendant que vous vous concentrez sur l'essentiel.
             </p>
-            <button onClick={() => navigate('/register')} className="animate-fade-rise-delay-2 cta-btn" style={{
-              padding: '18px 44px', fontSize: 15, borderRadius: 16, marginTop: 36,
-            }}>
-              Commencer maintenant
-            </button>
+            <div className="animate-fade-rise-delay-2 flex flex-wrap items-center gap-3" style={{ marginTop: 32 }}>
+              <button onClick={() => navigate('/register')} className="cta-btn"
+                style={{ padding: '14px 28px', fontSize: 14 }}>
+                Commencer gratuitement <ArrowRight size={14} />
+              </button>
+              <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+                className="ghost-btn" style={{ padding: '13px 22px', fontSize: 13 }}>
+                Voir les fonctionnalités
+              </button>
+            </div>
           </div>
 
-          {/* Right: glass orb video + splash */}
+          {/* Orb */}
           <div
-            ref={orbRef}
             className="animate-fade-rise-delay hidden md:flex"
             onMouseEnter={triggerSplash}
             style={{
               flex: 1, justifyContent: 'center', alignItems: 'center',
               position: 'relative', overflow: 'visible', cursor: 'pointer',
               minHeight: 500,
-            }}
-          >
-            {/* The orb video — hides on splash */}
+            }}>
             <video
               autoPlay loop muted playsInline
               style={{
@@ -208,12 +254,10 @@ export default function LandingPage() {
                 pointerEvents: 'none',
                 transition: 'opacity 0.3s',
                 opacity: splash ? 0 : 1,
-              }}
-            >
+              }}>
               <source src={ORB_SRC} type="video/webm" />
             </video>
 
-            {/* LinkedIn logo with orb glass effect — shows on splash */}
             {splash && (
               <div style={{
                 position: 'absolute', top: '50%', left: '50%',
@@ -221,53 +265,42 @@ export default function LandingPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 animation: 'orbLogoIn 0.6s cubic-bezier(0.22,1,0.36,1) forwards',
               }}>
-                {/* Orb glow */}
                 <div style={{
                   position: 'absolute', width: 600, height: 600, borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(0,132,255,0.25) 0%, rgba(0,100,255,0.08) 50%, transparent 70%)',
+                  background: 'radial-gradient(circle, hsl(var(--accent) / .25), hsl(var(--accent) / .08) 50%, transparent 70%)',
                   filter: 'blur(40px)', pointerEvents: 'none',
                 }} />
-                {/* Glass orb shell */}
                 <div style={{
                   position: 'absolute', width: 480, height: 480, borderRadius: '50%',
-                  background: 'radial-gradient(circle at 35% 28%, rgba(120,190,255,0.4) 0%, rgba(0,132,255,0.12) 35%, rgba(0,80,200,0.08) 60%, transparent 80%)',
-                  border: '1.5px solid rgba(0,132,255,0.15)',
-                  boxShadow: 'inset 0 4px 30px rgba(255,255,255,0.2), inset 0 -15px 30px rgba(0,60,160,0.1), 0 0 60px rgba(0,132,255,0.15)',
+                  background: 'radial-gradient(circle at 35% 28%, rgba(120,190,255,0.4) 0%, hsl(var(--accent) / .12) 35%, rgba(0,80,200,0.08) 60%, transparent 80%)',
+                  border: '1.5px solid hsl(var(--accent) / .15)',
+                  boxShadow: 'inset 0 4px 30px rgba(255,255,255,0.2), inset 0 -15px 30px rgba(0,60,160,0.1), 0 0 60px hsl(var(--accent) / .15)',
                   backdropFilter: 'blur(8px)',
                 }} />
-                {/* Specular highlight */}
                 <div style={{
                   position: 'absolute', width: 480, height: 480, borderRadius: '50%',
-                  background: 'radial-gradient(ellipse 50% 35% at 35% 25%, rgba(255,255,255,0.45) 0%, transparent 60%)',
+                  background: 'radial-gradient(ellipse 50% 35% at 35% 25%, rgba(255,255,255,0.45), transparent 60%)',
                   pointerEvents: 'none',
                 }} />
-                {/* Logo */}
-                <img
-                  src="/linkedin.png" alt="LinkedIn"
+                <img src="/linkedin.png" alt="LinkedIn"
                   style={{
                     position: 'relative', zIndex: 2,
                     width: 400, height: 400, objectFit: 'contain',
-                    filter: 'drop-shadow(0 4px 20px rgba(0,132,255,0.4))',
-                  }}
-                />
+                    filter: 'drop-shadow(0 4px 20px hsl(var(--accent) / .4))',
+                  }} />
               </div>
             )}
 
-            {/* Water droplets explosion */}
-            {drops.map(d => (
+            {drops.map((d) => (
               <div key={d.id} style={{
                 position: 'absolute', top: '50%', left: '50%',
-                width: d.size, height: d.size,
-                borderRadius: '50%',
-                background: `radial-gradient(circle at 35% 30%, rgba(120,200,255,${d.opacity}), rgba(0,132,255,${d.opacity * 0.8}))`,
-                boxShadow: d.blur ? `0 0 ${d.blur * 3}px rgba(0,132,255,0.3)` : 'none',
+                width: d.size, height: d.size, borderRadius: '50%',
+                background: `radial-gradient(circle at 35% 30%, rgba(120,200,255,${d.opacity}), hsl(var(--accent) / ${d.opacity * 0.8}))`,
+                boxShadow: d.blur ? `0 0 ${d.blur * 3}px hsl(var(--accent) / .3)` : 'none',
                 filter: d.blur ? `blur(${d.blur}px)` : 'none',
                 animation: `dropFly ${d.duration}s ${d.delay}s cubic-bezier(0.2,0.8,0.3,1) forwards`,
-                opacity: 0,
-                pointerEvents: 'none',
-                zIndex: 50,
-                '--tx': `${d.tx}px`,
-                '--ty': `${d.ty}px`,
+                opacity: 0, pointerEvents: 'none', zIndex: 50,
+                '--tx': `${d.tx}px`, '--ty': `${d.ty}px`,
               }} />
             ))}
           </div>
@@ -275,237 +308,246 @@ export default function LandingPage() {
       </div>
 
       {/* ── FEATURES ── */}
-      <section id="features" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px' }}>
+      <section id="features" className="relative" style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Fonctionnalités">
           Tout ce qu'il faut pour{' '}
-          <em className="not-italic" style={{ color: 'var(--blue)' }}>dominer LinkedIn.</em>
+          <span style={{ color: 'hsl(var(--accent))' }}>dominer LinkedIn</span>.
         </SectionTitle>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          <GlassCard delay="reveal-delay-1" icon="👥" title="CRM intelligent"
-            desc="Organisez vos contacts dans des listes segmentées. Recherche en temps réel, filtres par statut de connexion, actions groupées, et historique d'interactions." />
-          <GlassCard delay="reveal-delay-2" icon="🚀" title="4 types de campagnes"
-            desc="Recherche, Connexion, DM, Connexion + DM. Chaque campagne tourne en arrière-plan avec des limites quotidiennes et un étalement configurable." />
-          <GlassCard delay="reveal-delay-3" icon="🤖" title="IA Gemini intégrée"
-            desc="Personnalisation complète des messages par l'IA. Chaque contact reçoit un message unique basé sur son profil, son expérience et ses publications." />
-          <GlassCard delay="reveal-delay-1" icon="🔄" title="Cycle de relances"
-            desc="Jusqu'à 7 relances automatiques avec délais configurables. Détection des réponses en temps réel. Le cycle s'arrête dès qu'un contact répond." />
-          <GlassCard delay="reveal-delay-2" icon="📊" title="Suivi en temps réel"
-            desc="Tableau de bord live avec statut de chaque contact : envoyé, en relance, répondu, perdu. Logs détaillés de chaque action pour un contrôle total." />
-          <GlassCard delay="reveal-delay-3" icon="🔗" title="Sync automatique"
-            desc="Importez vos connexions LinkedIn en un clic. Les nouvelles connexions sont synchronisées automatiquement toutes les 6 heures." />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <FeatureCard delay="reveal-delay-1" icon={Users}        tone="accent"  title="CRM intelligent"
+            desc="Organisez vos contacts dans des listes segmentées. Recherche, filtres, actions groupées, historique complet." />
+          <FeatureCard delay="reveal-delay-2" icon={Rocket}       tone="emerald" title="4 types de campagnes"
+            desc="Recherche, Connexion, DM, Connexion + DM. Tout tourne en arrière-plan avec des limites quotidiennes." />
+          <FeatureCard delay="reveal-delay-3" icon={Sparkles}     tone="violet"  title="IA Gemini intégrée"
+            desc="Chaque message est unique, généré à partir du profil, de l'expérience et des publications récentes." />
+          <FeatureCard delay="reveal-delay-1" icon={Repeat}       tone="amber"   title="Cycle de relances"
+            desc="Jusqu'à 7 relances avec délais configurables. Détection des réponses en temps réel, arrêt automatique." />
+          <FeatureCard delay="reveal-delay-2" icon={Activity}     tone="emerald" title="Suivi en temps réel"
+            desc="Dashboard live avec statut de chaque contact. Logs détaillés de chaque action pour un contrôle total." />
+          <FeatureCard delay="reveal-delay-3" icon={LinkIcon}     tone="accent"  title="Sync automatique"
+            desc="Importez vos connexions en un clic. Synchronisation automatique de votre réseau toutes les 6 heures." />
         </div>
       </section>
-
-      {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
-        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
-      </div>
 
       {/* ── CAMPAIGNS ── */}
-      <section id="campaigns" className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px' }}>
+      <section id="campaigns" className="relative" style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Campagnes">
           Quatre moteurs,{' '}
-          <em className="not-italic" style={{ color: 'var(--blue)' }}>une seule interface.</em>
+          <span style={{ color: 'hsl(var(--accent))' }}>une seule interface</span>.
         </SectionTitle>
 
-        <div className="grid sm:grid-cols-2 gap-5">
+        <div className="grid sm:grid-cols-2 gap-4">
           {[
-            { title: 'Recherche', icon: '🔍', desc: 'Trouvez automatiquement des prospects par mots-clés et importez-les dans votre CRM. Pagination intelligente, dédoublonnage, limites quotidiennes.', tag: 'Collecte' },
-            { title: 'Connexion', icon: '🤝', desc: 'Envoyez des demandes de connexion à vos contacts CRM. Notes personnalisées optionnelles, skip des contacts déjà connectés, suivi du statut.', tag: 'Réseau' },
-            { title: 'Message direct', icon: '💬', desc: 'Messages personnalisés avec variables dynamiques et relances automatiques. Templates écrits par vous ou générés entièrement par l\'IA.', tag: 'Prospection' },
-            { title: 'Connexion + DM', icon: '⚡', desc: 'Le combo ultime. Envoi de connexion → détection d\'acceptation → cycle DM complet avec relances. Tout automatisé, du premier contact à la réponse.', tag: 'Automatisation' },
-          ].map((c, i) => (
-            <div key={c.title} className={`reveal reveal-delay-${(i % 2) + 1} g-card rounded-2xl p-8 group hover:scale-[1.02] transition-transform`}>
-              <div className="flex items-start justify-between mb-5">
-                <span className="text-4xl">{c.icon}</span>
-                <span className="text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full" style={{ color: 'var(--text3)', border: '1px solid rgba(0,0,0,0.08)' }}>{c.tag}</span>
+            { title: 'Recherche',      icon: Search,        tone: 'accent',  tag: 'Collecte',        desc: 'Trouvez des prospects par mots-clés et importez-les automatiquement. Pagination intelligente, dédoublonnage, limites quotidiennes.' },
+            { title: 'Connexion',      icon: UserPlus,      tone: 'emerald', tag: 'Réseau',          desc: "Envoyez des demandes aux contacts CRM. Notes personnalisées, skip des contacts déjà connectés, suivi du statut." },
+            { title: 'Message direct', icon: MessageSquare, tone: 'violet',  tag: 'Prospection',     desc: "Messages personnalisés avec variables et relances automatiques. Templates écrits par vous ou générés par l'IA." },
+            { title: 'Connexion + DM', icon: Zap,           tone: 'amber',   tag: 'Automatisation',  desc: "Le combo ultime. Envoi de connexion → détection d'acceptation → cycle DM complet avec relances." },
+          ].map((c, i) => {
+            const Ic = c.icon;
+            return (
+              <div key={c.title} className={`reveal reveal-delay-${(i % 2) + 1} g-card p-7 transition-all`}
+                style={{ borderRadius: 18 }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border-strong))'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border))'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                <div className="flex items-start justify-between mb-5">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center"
+                    style={{ background: `hsl(var(--${c.tone}) / .12)`, color: `hsl(var(--${c.tone}))` }}>
+                    <Ic size={20} />
+                  </div>
+                  <span className="chip slate" style={{ fontSize: 10.5 }}>{c.tag}</span>
+                </div>
+                <h3 className="text-[17px] font-semibold mb-2" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.01em' }}>{c.title}</h3>
+                <p className="text-[13px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{c.desc}</p>
               </div>
-              <h3 className="f text-xl font-bold mb-3" style={{ color: 'var(--text)' }}>{c.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--text2)' }}>{c.desc}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
-      {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
-        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
-      </div>
-
       {/* ── AI SECTION ── */}
-      <section id="ai" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '64px 20px' }}>
+      <section id="ai" className="relative" style={{ maxWidth: 1100, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Intelligence artificielle">
           Chaque message{' '}
-          <em className="not-italic" style={{ color: 'var(--blue)' }}>est unique.</em>
+          <span style={{ color: 'hsl(var(--accent))' }}>est unique</span>.
         </SectionTitle>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Left: explanation */}
-          <div className="reveal space-y-8">
+        <div className="grid lg:grid-cols-2 gap-8 items-start">
+          <div className="reveal space-y-6">
             {[
-              { title: 'Template + variable {compliment}', desc: 'Vous écrivez le message, l\'IA génère une accroche personnalisée pour chaque contact en analysant son profil, son expérience et ses dernières publications.' },
-              { title: 'Message entier par l\'IA', desc: 'L\'IA rédige le message complet de A à Z. Chaque contact reçoit un texte unique adapté à son parcours. Aperçu disponible sur les 3 premiers contacts avant lancement.' },
-              { title: 'Relances intelligentes', desc: 'Les messages de relance sont aussi personnalisés. L\'IA adapte le ton et l\'angle à chaque étape du cycle pour maximiser les chances de réponse.' },
+              { title: 'Template + variable {compliment}', desc: "Vous écrivez la trame, l'IA génère une accroche personnalisée pour chaque contact en analysant son profil, son expérience et ses publications." },
+              { title: 'Message entier par l\'IA',          desc: "L'IA rédige le message complet de A à Z. Chaque contact reçoit un texte unique adapté à son parcours. Aperçu sur les 3 premiers avant lancement." },
+              { title: 'Relances intelligentes',            desc: "Les relances sont aussi personnalisées. L'IA adapte le ton et l'angle à chaque étape du cycle pour maximiser les réponses." },
             ].map((item, i) => (
               <div key={i} className="flex gap-4">
-                <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-sm font-bold f mt-0.5" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)', border: '1px solid rgba(0,132,255,0.15)' }}>{i + 1}</div>
+                <div className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center mono text-[13px] font-semibold mt-0.5"
+                  style={{
+                    background: 'hsl(var(--accent-soft))',
+                    color: 'hsl(var(--accent))',
+                    border: '1px solid hsl(var(--accent) / .2)',
+                  }}>{i + 1}</div>
                 <div>
-                  <h4 className="text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>{item.title}</h4>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text2)' }}>{item.desc}</p>
+                  <h4 className="text-[14px] font-semibold mb-1" style={{ color: 'hsl(var(--text))' }}>{item.title}</h4>
+                  <p className="text-[13px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{item.desc}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Right: mock message */}
           <div className="reveal reveal-delay-2">
-            <div className="g-card rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>TS</div>
-                <div>
-                  <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Thomas Shamoev</p>
-                  <p className="text-xs" style={{ color: 'var(--text3)' }}>Founder / CEO</p>
+            <div className="g-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4"
+                style={{ borderBottom: '1px solid hsl(var(--border))' }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-semibold"
+                  style={{ background: 'hsl(var(--accent-soft))', color: 'hsl(var(--accent))' }}>TS</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium" style={{ color: 'hsl(var(--text))' }}>Thomas Shamoev</div>
+                  <div className="text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>Founder / CEO</div>
                 </div>
-                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)', border: '1px solid rgba(0,132,255,0.15)' }}>IA</span>
+                <span className="chip violet" style={{ fontSize: 10 }}>
+                  <Sparkles size={10} /> IA
+                </span>
               </div>
-              <div className="p-6 space-y-4">
-                <div className="rounded-xl p-4 text-sm leading-relaxed" style={{ background: 'rgba(0, 132, 255, 0.04)', borderLeft: '3px solid rgba(0, 132, 255, 0.3)', color: 'var(--text)' }}>
+              <div className="p-5 space-y-3">
+                <div className="rounded-xl p-4 text-[13px] leading-relaxed"
+                  style={{
+                    background: 'hsl(var(--accent-soft))',
+                    borderLeft: '3px solid hsl(var(--accent) / .4)',
+                    color: 'hsl(var(--text))',
+                  }}>
                   Bonjour Thomas,<br /><br />
-                  J'ai vu votre travail sur LinkBot — l'approche d'automatiser la prospection tout en gardant une vraie personnalisation est exactement ce qui manque au marché.<br /><br />
+                  J'ai vu votre travail sur LinkBot — automatiser la prospection tout en gardant une vraie personnalisation est exactement ce qui manque au marché.<br /><br />
                   J'aimerais échanger avec vous sur une idée complémentaire. Seriez-vous disponible cette semaine ?
                 </div>
-                <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text3)' }}>
-                  <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--blue)' }} />
-                    Basé sur le profil + 3 publications récentes
-                  </span>
+                <div className="flex items-center gap-2 text-[11px]" style={{ color: 'hsl(var(--muted))' }}>
+                  <span className="live-dot" style={{ width: 5, height: 5 }} />
+                  Basé sur le profil + 3 publications récentes
                 </div>
               </div>
-              <div className="px-6 py-3" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                <div className="flex gap-2">
-                  {['Principal', 'Relance 1 (J+3)', 'Relance 2 (J+7)'].map((label, i) => (
-                    <span key={label} className="text-[10px] px-3 py-1 rounded-full" style={{
-                      background: i === 0 ? 'rgba(0,132,255,0.08)' : 'rgba(0,0,0,0.03)',
-                      color: i === 0 ? 'var(--blue)' : 'var(--text3)',
-                      border: '1px solid ' + (i === 0 ? 'rgba(0,132,255,0.2)' : 'rgba(0,0,0,0.06)'),
-                    }}>{label}</span>
-                  ))}
-                </div>
+              <div className="px-5 py-3 flex gap-1.5" style={{ borderTop: '1px solid hsl(var(--border))' }}>
+                {['Principal', 'Relance 1 (J+3)', 'Relance 2 (J+7)'].map((label, i) => (
+                  <span key={label} className={`chip ${i === 0 ? 'blue' : 'slate'}`} style={{ fontSize: 10.5 }}>
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
-        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
-      </div>
-
       {/* ── HOW IT WORKS ── */}
-      <section id="how" className="relative" style={{ maxWidth: '1100px', margin: '0 auto', padding: '64px 20px' }}>
+      <section id="how" className="relative" style={{ maxWidth: 1100, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Comment ça marche">
           Trois étapes,{' '}
-          <em className="not-italic" style={{ color: 'var(--blue)' }}>zéro friction.</em>
+          <span style={{ color: 'hsl(var(--accent))' }}>zéro friction</span>.
         </SectionTitle>
 
-        <div className="grid md:grid-cols-3 gap-12 relative">
-          {/* Connecting line */}
-          <div className="hidden md:block absolute top-7 left-[16.7%] right-[16.7%] h-px" style={{ background: 'linear-gradient(90deg, rgba(0,132,255,0.08), rgba(0,132,255,0.15), rgba(0,132,255,0.08))' }} />
-
-          <Step delay="reveal-delay-1" n="1" title="Connectez LinkedIn" desc="Collez vos cookies li_at et JSESSIONID. Vos identifiants restent stockés localement, jamais envoyés à un serveur externe." />
-          <Step delay="reveal-delay-2" n="2" title="Importez ou cherchez" desc="Importez votre réseau existant en un clic, ou lancez une campagne de recherche pour trouver de nouveaux prospects par mots-clés." />
-          <Step delay="reveal-delay-3" n="3" title="Automatisez" desc="Créez des campagnes de connexion et de messages. LinkBot s'occupe du reste : envois, relances, détection de réponses, 24h/24." />
+        <div className="grid md:grid-cols-3 gap-8 relative">
+          <div className="hidden md:block absolute top-7 left-[16.7%] right-[16.7%] h-px"
+            style={{ background: 'linear-gradient(90deg, hsl(var(--accent) / .1), hsl(var(--accent) / .25), hsl(var(--accent) / .1))' }} />
+          <Step delay="reveal-delay-1" n="1" title="Connectez LinkedIn"
+            desc="Collez vos cookies li_at et JSESSIONID. Stockés localement, jamais envoyés à un serveur externe." />
+          <Step delay="reveal-delay-2" n="2" title="Importez ou cherchez"
+            desc="Importez votre réseau existant en un clic, ou lancez une campagne de recherche par mots-clés." />
+          <Step delay="reveal-delay-3" n="3" title="Automatisez"
+            desc="Créez vos campagnes. LinkBot gère envois, relances et détection de réponses, 24h/24." />
         </div>
       </section>
-
-      {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
-        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
-      </div>
 
       {/* ── STATS ── */}
-      <section className="relative" style={{ maxWidth: '900px', margin: '0 auto', padding: '64px 20px' }}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
-          <Stat delay="reveal-delay-1" value="4" label="Types de campagnes" />
-          <Stat delay="reveal-delay-2" value="7" label="Relances automatiques" />
+      <section className="relative" style={{ maxWidth: 900, margin: '0 auto', padding: '56px 20px' }}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
+          <Stat delay="reveal-delay-1" value="4"  label="Types de campagnes" />
+          <Stat delay="reveal-delay-2" value="7"  label="Relances automatiques" />
           <Stat delay="reveal-delay-3" value="6h" label="Sync automatique" />
-          <Stat delay="reveal-delay-4" value="∞" label="Messages personnalisés" />
+          <Stat delay="reveal-delay-4" value="∞"  label="Messages personnalisés" />
         </div>
       </section>
 
-      {/* ── DIVIDER ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
-        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)' }} />
-      </div>
-
-      {/* ── DETAILS GRID ── */}
-      <section className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px' }}>
+      {/* ── DETAILS ── */}
+      <section className="relative" style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Détails">
           Pensé pour les{' '}
-          <em className="not-italic" style={{ color: 'var(--blue)' }}>professionnels exigeants.</em>
+          <span style={{ color: 'hsl(var(--accent))' }}>professionnels exigeants</span>.
         </SectionTitle>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { icon: '🔒', title: '100% local', desc: 'Aucune donnée envoyée à un serveur. Tout tourne sur votre machine.' },
-            { icon: '📄', title: 'Import PDF', desc: 'Importez un PDF comme contexte pour l\'IA. Plaquette, offre, pitch — tout est exploitable.' },
-            { icon: '📋', title: 'Import CSV', desc: 'Importez vos contacts depuis un fichier CSV avec mapping de colonnes flexible.' },
-            { icon: '🎯', title: 'Limites smart', desc: 'Max par jour, étalement sur X jours, ou total cible. Vous gardez le contrôle du rythme.' },
-            { icon: '👤', title: 'Profil card', desc: 'Fiche détaillée de chaque contact : photo, headline, statut, historique, actions directes.' },
-            { icon: '📨', title: 'DM depuis le CRM', desc: 'Envoyez un message à n\'importe quel contact directement depuis sa fiche, avec ou sans IA.' },
-            { icon: '🔁', title: 'Connexion + DM', desc: 'Demande de connexion → acceptation détectée → cycle de DM automatique. Le tunnel complet.' },
-            { icon: '📈', title: 'Logs d\'activité', desc: 'Journal exhaustif de chaque action exécutée. Filtrable, paginé, avec détails d\'erreurs.' },
-          ].map((item, i) => (
-            <div key={item.title} className={`reveal reveal-delay-${(i % 4) + 1} g-card rounded-2xl p-6`}>
-              <span className="text-2xl block mb-3">{item.icon}</span>
-              <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text)' }}>{item.title}</h4>
-              <p className="text-xs leading-relaxed" style={{ color: 'var(--text2)' }}>{item.desc}</p>
-            </div>
-          ))}
+            { icon: Shield,          tone: 'emerald', title: '100% local',       desc: 'Vos cookies ne quittent jamais votre serveur. Aucun tiers.' },
+            { icon: FileText,        tone: 'violet',  title: 'Import PDF',       desc: "Fournissez un PDF comme contexte IA — plaquette, offre, pitch." },
+            { icon: FileSpreadsheet, tone: 'emerald', title: 'Import CSV',       desc: 'Importez vos contacts avec mapping de colonnes flexible.' },
+            { icon: Target,          tone: 'amber',   title: 'Limites smart',    desc: 'Max par jour, étalement, total cible. Vous gardez le contrôle.' },
+            { icon: UserCircle,      tone: 'accent',  title: 'Profil card',      desc: 'Fiche contact détaillée : photo, headline, statut, historique.' },
+            { icon: Send,            tone: 'accent',  title: 'DM depuis le CRM', desc: 'Envoyez un message à un contact directement depuis sa fiche.' },
+            { icon: Zap,             tone: 'amber',   title: 'Connexion + DM',   desc: 'Demande → acceptation détectée → cycle DM automatique.' },
+            { icon: Calendar,        tone: 'slate',   title: 'Logs d\'activité', desc: 'Journal exhaustif, filtrable, paginé, avec détails d\'erreurs.' },
+          ].map((item, i) => {
+            const Ic = item.icon;
+            return (
+              <div key={item.title} className={`reveal reveal-delay-${(i % 4) + 1} g-card p-5`}
+                style={{ borderRadius: 16 }}>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
+                  style={{ background: `hsl(var(--${item.tone}) / .12)`, color: `hsl(var(--${item.tone}))` }}>
+                  <Ic size={15} />
+                </div>
+                <h4 className="text-[13.5px] font-semibold mb-1.5" style={{ color: 'hsl(var(--text))' }}>{item.title}</h4>
+                <p className="text-[12px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{item.desc}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       {/* ── CTA FINAL ── */}
-      <section className="relative" style={{ padding: '64px 20px' }}>
-        <div className="reveal text-center" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <h2 className="f text-4xl sm:text-6xl md:text-7xl font-bold mb-6" style={{ color: 'var(--text)', lineHeight: 1, letterSpacing: '-2px' }}>
+      <section className="relative" style={{ padding: '80px 20px' }}>
+        <div className="reveal text-center g-card"
+          style={{
+            maxWidth: 860, margin: '0 auto', padding: '56px 32px',
+            background: 'linear-gradient(135deg, hsl(var(--panel)) 0%, hsl(var(--accent-soft)) 100%)',
+            border: '1px solid hsl(var(--accent) / .2)',
+          }}>
+          <h2 className="text-[38px] sm:text-[52px] font-semibold tracking-tight mb-5"
+            style={{ color: 'hsl(var(--text))', lineHeight: 1.05, letterSpacing: '-0.03em' }}>
             Prêt à transformer{' '}
-            <em className="not-italic" style={{ color: 'var(--blue)' }}>votre prospection ?</em>
+            <span style={{ color: 'hsl(var(--accent))' }}>votre prospection</span> ?
           </h2>
-          <p className="text-base max-w-xl mx-auto mb-12 leading-relaxed" style={{ color: 'var(--text2)' }}>
-            Installez LinkBot, connectez votre compte LinkedIn, et lancez votre première campagne en moins de 5 minutes.
+          <p className="mx-auto mb-8 text-[14.5px] leading-relaxed" style={{ color: 'hsl(var(--muted))', maxWidth: 520 }}>
+            Installez LinkBot, connectez votre compte, et lancez votre première campagne en moins de 5 minutes.
           </p>
-          <button onClick={() => navigate('/register')} className="cta-btn rounded-full cursor-pointer hover:scale-[1.03] transition-transform" style={{ padding: '20px 56px', fontSize: '16px' }}>
-            Commencer gratuitement
+          <button onClick={() => navigate('/register')} className="cta-btn"
+            style={{ padding: '16px 40px', fontSize: 15 }}>
+            Commencer gratuitement <ArrowRight size={14} />
           </button>
         </div>
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="relative" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 32px' }}>
-        <div style={{ height: '1px', marginBottom: '32px', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.06), transparent)' }} />
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-0">
-          <span className="f text-xl tracking-tight" style={{ color: 'var(--text3)' }}>
-            LinkBot<sup className="text-[8px]">®</sup>
-          </span>
-          <p className="text-xs" style={{ color: 'var(--text3)' }}>
-            Outil local d'automatisation LinkedIn — Vos données restent sur votre machine.
+      <footer className="relative" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 40px' }}>
+        <div style={{ height: 1, marginBottom: 32, background: 'linear-gradient(90deg, transparent, hsl(var(--border-strong)), transparent)' }} />
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center"
+              style={{ background: 'hsl(var(--accent))', color: 'white' }}>
+              <LinkIcon size={11} />
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--muted))' }}>LinkBot</span>
+          </div>
+          <p className="text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>
+            Outil local d'automatisation LinkedIn · Vos données restent sur votre machine.
           </p>
         </div>
       </footer>
 
-      {/* Splash keyframes */}
       <style>{`
         @keyframes orbLogoIn {
-          0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); }
-          50% { opacity: 1; transform: translate(-50%,-50%) scale(1.1); }
+          0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.3); }
+          50%  { opacity: 1; transform: translate(-50%,-50%) scale(1.1); }
           100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
         }
         @keyframes dropFly {
-          0% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-          70% { opacity: 0.8; }
+          0%   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+          70%  { opacity: 0.8; }
           100% { opacity: 0; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.2); }
         }
       `}</style>
