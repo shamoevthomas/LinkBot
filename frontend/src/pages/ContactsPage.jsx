@@ -5,6 +5,7 @@ import { Search, ExternalLink, MapPin, Loader2, ChevronLeft, ChevronRight } from
 import { getAllContacts, getCRMs } from '../api/crm';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
+import { formatServerDate } from '../utils/date';
 
 export default function ContactsPage() {
   const navigate = useNavigate();
@@ -125,7 +126,7 @@ export default function ContactsPage() {
                     <Badge status={c.connection_status} />
                   </td>
                   <td className="px-3 py-3 hidden lg:table-cell text-gray-500 text-xs">
-                    {c.added_at ? new Date(c.added_at).toLocaleDateString('fr-FR') : '—'}
+                    {c.added_at ? formatServerDate(c.added_at) : '—'}
                   </td>
                   <td className="px-2 py-3">
                     {c.linkedin_url && (

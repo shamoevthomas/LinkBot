@@ -4,6 +4,7 @@ import { Plus, Users, Clock, Trash2, Search, Rocket, Loader2, X } from 'lucide-r
 import { getCRMs, createCRM, deleteCRM } from '../api/crm';
 import PageWrapper from '../components/layout/PageWrapper';
 import { hueFromString } from '../components/ui/atoms';
+import { formatServerDate } from '../utils/date';
 import toast from 'react-hot-toast';
 
 function CRMCard({ crm, onOpen, onDelete }) {
@@ -11,7 +12,7 @@ function CRMCard({ crm, onOpen, onDelete }) {
   const varName = hue === 'blue' ? 'accent' : hue;
   const contactCount = crm.contact_count ?? crm.count ?? 0;
   const campaigns = crm.campaign_count ?? 0;
-  const createdAt = crm.created_at ? new Date(crm.created_at).toLocaleDateString('fr-FR') : '';
+  const createdAt = formatServerDate(crm.created_at);
 
   return (
     <div className="g-card p-5 cursor-pointer group transition-all row-hover relative overflow-hidden"

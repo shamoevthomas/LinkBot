@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, X, AlertTriangle } from 'lucide-react';
 import { getImportStatus } from '../api/config';
+import { parseServerDate } from '../utils/date';
 
 export default function ImportBanner() {
   const [status, setStatus] = useState(null);
@@ -31,7 +32,7 @@ export default function ImportBanner() {
   if (dismissed || !status || status.status === 'none') return null;
   // Only show for recent imports (within last 5 minutes)
   if (status.status !== 'running') {
-    const created = status.created_at ? new Date(status.created_at) : null;
+    const created = parseServerDate(status.created_at);
     if (created && Date.now() - created.getTime() > 5 * 60 * 1000) return null;
   }
 

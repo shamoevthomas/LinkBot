@@ -11,6 +11,7 @@ import client from '../api/client';
 import PageWrapper from '../components/layout/PageWrapper';
 import Modal from '../components/ui/Modal';
 import { StatusChip, TypeTag, Progress } from '../components/ui/atoms';
+import { formatServerDate } from '../utils/date';
 import toast from 'react-hot-toast';
 
 const COUNTRIES = [
@@ -135,7 +136,7 @@ function CampaignCard({ c, onOpen, onDelete }) {
         style={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted))' }}>
         <div className="flex items-center gap-1.5">
           <Clock size={10} />
-          <span className="mono">{c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '—'}</span>
+          <span className="mono">{c.created_at ? formatServerDate(c.created_at) : '—'}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={(e) => { e.stopPropagation(); onDelete(c); }}

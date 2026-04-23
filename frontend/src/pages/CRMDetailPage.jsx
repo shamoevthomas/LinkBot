@@ -9,6 +9,7 @@ import client from '../api/client';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
+import { formatServerDate } from '../utils/date';
 import toast from 'react-hot-toast';
 
 export default function CRMDetailPage() {
@@ -582,10 +583,10 @@ export default function CRMDetailPage() {
                   <td className="px-2 py-3 text-gray-600 truncate text-xs">{c.headline || '-'}</td>
                   <td className="px-2 py-3 hidden md:table-cell"><Badge status={c.connection_status} /></td>
                   <td className="px-2 py-3 text-gray-500 text-xs hidden lg:table-cell">
-                    {c.last_interaction_at ? new Date(c.last_interaction_at).toLocaleDateString('fr-FR') : '-'}
+                    {c.last_interaction_at ? formatServerDate(c.last_interaction_at) : '-'}
                   </td>
                   <td className="px-2 py-3 text-gray-500 text-xs hidden lg:table-cell">
-                    {new Date(c.added_at).toLocaleDateString('fr-FR')}
+                    {formatServerDate(c.added_at)}
                   </td>
                 </tr>
               ))}
@@ -817,14 +818,14 @@ export default function CRMDetailPage() {
                 <div className="bg-gray-50 rounded-lg p-3">
                   <span className="text-gray-400">Ajoute le</span>
                   <p className="font-medium text-gray-700 mt-0.5">
-                    {new Date(selectedContact.added_at).toLocaleDateString('fr-FR')}
+                    {formatServerDate(selectedContact.added_at)}
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <span className="text-gray-400">Derniere interaction</span>
                   <p className="font-medium text-gray-700 mt-0.5">
                     {selectedContact.last_interaction_at
-                      ? new Date(selectedContact.last_interaction_at).toLocaleDateString('fr-FR')
+                      ? formatServerDate(selectedContact.last_interaction_at)
                       : 'Aucune'}
                   </p>
                 </div>

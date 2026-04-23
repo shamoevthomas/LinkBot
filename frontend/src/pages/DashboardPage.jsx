@@ -9,6 +9,7 @@ import { syncConnections } from '../api/config';
 import { useAuth } from '../context/AuthContext';
 import PageWrapper from '../components/layout/PageWrapper';
 import { StatusChip, TypeTag, Avatar, Progress, Sparkline, hueFromString, getInitials } from '../components/ui/atoms';
+import { formatServerTime } from '../utils/date';
 import toast from 'react-hot-toast';
 
 function greeting() {
@@ -363,11 +364,7 @@ function ActivityBlock({ actions, onViewAll }) {
     { key: 'dm', label: 'Messages', count: items.filter((a) => a._kind === 'dm_sent' || a._kind === 'dm_followup').length },
   ];
 
-  const timeAgo = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  };
+  const timeAgo = (iso) => formatServerTime(iso);
 
   return (
     <div className="g-card p-5 flex flex-col">

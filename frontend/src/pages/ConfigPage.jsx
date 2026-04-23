@@ -6,6 +6,7 @@ import { getCRMs } from '../api/crm';
 import { getBlacklist, addToBlacklist, removeFromBlacklist } from '../api/blacklist';
 import { useAuth } from '../context/AuthContext';
 import PageWrapper from '../components/layout/PageWrapper';
+import { formatServerDate, formatServerDateTime } from '../utils/date';
 import toast from 'react-hot-toast';
 
 const TABS = [
@@ -656,7 +657,7 @@ export default function ConfigPage() {
                       <td className="px-4 py-3 text-gray-900 font-medium">{b.name || '-'}</td>
                       <td className="px-4 py-3 text-gray-500 font-mono text-xs">{b.urn_id}</td>
                       <td className="px-4 py-3 text-gray-500">{b.reason || '-'}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{new Date(b.created_at).toLocaleDateString('fr-FR')}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{formatServerDate(b.created_at)}</td>
                       <td className="px-4 py-3">
                         <button onClick={() => handleRemoveBlacklist(b.id)} className="text-gray-400 hover:text-red-500">
                           <Trash2 size={14} />
@@ -700,7 +701,7 @@ export default function ConfigPage() {
                 <tbody className="divide-y divide-gray-100">
                   {logs.map((log, i) => (
                     <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-xs text-gray-500">{new Date(log.created_at).toLocaleString('fr-FR')}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{formatServerDateTime(log.created_at)}</td>
                       <td className="px-4 py-3 text-gray-700">{log.action_type}</td>
                       <td className="px-4 py-3 text-gray-600">{log.status || '-'}</td>
                       <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">{log.error_message || '-'}</td>

@@ -4,6 +4,7 @@ import { LayoutDashboard, Users, Rocket, Settings, Link as LinkIcon, Contact as 
 import { getNotifications } from '../../api/dashboard';
 import { getNotificationsList, markNotificationRead, markAllNotificationsRead } from '../../api/notifications';
 import UserPopup from '../ui/UserPopup';
+import { parseServerDate } from '../../utils/date';
 
 const links = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', end: true },
@@ -66,7 +67,7 @@ export default function Sidebar() {
 
   const timeAgo = (iso) => {
     if (!iso) return '';
-    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    const diff = (Date.now() - parseServerDate(iso).getTime()) / 1000;
     if (diff < 60) return "à l'instant";
     if (diff < 3600) return `${Math.floor(diff / 60)}min`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h`;

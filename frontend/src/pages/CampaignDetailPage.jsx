@@ -13,6 +13,7 @@ import {
 } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import { StatusChip, TypeTag, Avatar, Progress, Chip, getInitials, hueFromString } from '../components/ui/atoms';
+import { parseServerDate, formatServerDateTime } from '../utils/date';
 import toast from 'react-hot-toast';
 
 function CountdownTimer({ nextActionAt, status }) {
@@ -20,7 +21,7 @@ function CountdownTimer({ nextActionAt, status }) {
   useEffect(() => {
     if (!nextActionAt || status !== 'running') { setCountdown(null); return; }
     const update = () => {
-      const target = new Date(nextActionAt);
+      const target = parseServerDate(nextActionAt);
       const diff = Math.max(0, Math.floor((target - new Date()) / 1000));
       setCountdown(diff);
     };
@@ -36,9 +37,7 @@ function CountdownTimer({ nextActionAt, status }) {
 }
 
 function fmtDate(d) {
-  if (!d) return '—';
-  const s = typeof d === 'string' && !d.endsWith('Z') && !d.includes('+') ? d + 'Z' : d;
-  return new Date(s).toLocaleString('fr-FR');
+  return formatServerDateTime(d) || '—';
 }
 
 function StatTile({ icon: Ic, label, value, tone }) {
