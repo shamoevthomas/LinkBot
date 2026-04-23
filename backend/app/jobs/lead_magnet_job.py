@@ -245,9 +245,12 @@ async def _phase_detect_comments(db, lm, client):
 
         # ── Check if user already replied to this comment ──
         already_replied = False
+        replies_count = 0
+        reply_urns_sample = []
         if my_urn_id and comment_urn:
             try:
                 replies = await get_comment_replies(client, lm.post_activity_urn, comment_urn)
+                replies_count = len(replies)
                 for reply in replies:
                     rc = reply.get("commenter") or {}
                     rc_entity = rc.get("com.linkedin.voyager.feed.MemberActor") or rc
@@ -256,11 +259,21 @@ async def _phase_detect_comments(db, lm, client):
                         or rc_entity.get("miniProfile", {}).get("dashEntityUrn")
                         or ""
                     )
+                    if rc_urn and len(reply_urns_sample) < 3:
+                        reply_urns_sample.append(rc_urn)
                     if rc_urn and my_urn_id in rc_urn:
                         already_replied = True
                         break
-            except Exception:
-                pass  # If check fails, assume not replied
+            except Exception as exc:
+                logger.warning("get_comment_replies failed for %s: %s", comment_urn, exc)
+
+        print(
+            f"[LEAD MAGNET] #{lm.id}: anti-dup check for {commenter_name!r} — "
+            f"my_urn_id={my_urn_id!r} comment_urn={comment_urn!r} "
+            f"replies={replies_count} reply_urns={reply_urns_sample} "
+            f"manually_replied={already_replied}",
+            flush=True,
+        )
 
         lmc = LeadMagnetContact(
             lead_magnet_id=lm.id,
