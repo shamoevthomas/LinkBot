@@ -267,6 +267,11 @@ class LeadMagnetContact(Base):
     is_connected = Column(Boolean, default=False)
     liked_comment = Column(Boolean, default=False)
     replied_to_comment = Column(Boolean, default=False)
+    # True when the detection phase saw that the user had already replied to
+    # this comment manually. Signals that the user has likely already handled
+    # this lead (sent the resource, replied), so the bot should back off all
+    # write actions except liking.
+    manually_replied = Column(Boolean, default=False)
     dm_sent = Column(Boolean, default=False)
     connection_sent_at = Column(DateTime)
     connection_accepted_at = Column(DateTime)

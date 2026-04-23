@@ -271,6 +271,10 @@ async def _phase_detect_comments(db, lm, client):
             status="pending_actions",
             is_connected=is_connected,
             replied_to_comment=already_replied,
+            # manually_replied is sticky — it records the state at detection
+            # time so the handler can tell "user handled this" from "bot
+            # already replied during a retry". Drives the skip-DM short-circuit.
+            manually_replied=already_replied,
         )
         db.add(lmc)
         lm.total_processed = (lm.total_processed or 0) + 1
@@ -395,6 +399,16 @@ async def _handle_connected(db, lm, lmc, client):
         except Exception as exc:
             _log_action(db, lm.id, None, "lm_like_comment", "failed", str(exc)[:200])
 
+    # Short-circuit when the user already replied manually. They have almost
+    # certainly already sent the resource themselves, so skip reply + DM to
+    # avoid a duplicate send.
+    if lmc.manually_replied:
+        _log_action(db, lm.id, None, "lm_skip_manual", "success",
+                    f"Manual reply detected, skipping DM for {lmc.commenter_name}")
+        print(f"[LEAD MAGNET] #{lm.id}: skip {lmc.commenter_name} — manually replied", flush=True)
+        lmc.status = "completed"
+        return
+
     # 2. Reply to comment
     if not lmc.replied_to_comment and lm.reply_template_connected and lmc.comment_urn:
         try:
@@ -461,6 +475,15 @@ async def _handle_not_connected(db, lm, lmc, client):
                 _log_action(db, lm.id, None, "lm_like_comment", "success")
         except Exception as exc:
             _log_action(db, lm.id, None, "lm_like_comment", "failed", str(exc)[:200])
+
+    # Short-circuit when the user already replied manually. No reply, no
+    # connection request, no DM — the user has handled this lead by hand.
+    if lmc.manually_replied:
+        _log_action(db, lm.id, None, "lm_skip_manual", "success",
+                    f"Manual reply detected, skipping bot actions for {lmc.commenter_name}")
+        print(f"[LEAD MAGNET] #{lm.id}: skip {lmc.commenter_name} — manually replied", flush=True)
+        lmc.status = "completed"
+        return
 
     # If invitation accepted → treat as connected: reply with connected template + send DM
     if invitation_accepted:

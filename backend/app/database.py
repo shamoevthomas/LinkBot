@@ -82,6 +82,18 @@ def _run_migrations():
             conn.execute(text('ALTER TABLE "campaign_action" ADD COLUMN lead_magnet_id INTEGER'))
             print("[MIGRATION] Added lead_magnet_id to campaign_action", flush=True)
 
+        # Add manually_replied column to lead_magnet_contact so the bot can
+        # back off completely on leads the user has already replied to by hand.
+        try:
+            lmc_columns = [c["name"] for c in inspector.get_columns("lead_magnet_contact")]
+            if "manually_replied" not in lmc_columns:
+                conn.execute(text(
+                    'ALTER TABLE "lead_magnet_contact" ADD COLUMN manually_replied BOOLEAN DEFAULT FALSE'
+                ))
+                print("[MIGRATION] Added manually_replied to lead_magnet_contact", flush=True)
+        except Exception:
+            pass  # table may not exist on very fresh installs; create_all will handle it
+
         # Make campaign_action.campaign_id nullable (lead magnet actions don't have a campaign)
         if is_pg:
             try:
