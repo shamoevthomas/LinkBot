@@ -1,6 +1,7 @@
 import client from './client';
 
 export const getCRMs = () => client.get('/crms').then((r) => r.data);
+export const getCRMsSummary = () => client.get('/crms/summary').then((r) => r.data);
 export const createCRM = (data) => client.post('/crms', data).then((r) => r.data);
 export const getCRM = (id) => client.get(`/crms/${id}`).then((r) => r.data);
 export const updateCRM = (id, data) => client.put(`/crms/${id}`, data).then((r) => r.data);

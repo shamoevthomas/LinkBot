@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Upload, Loader2, Key, Download, Settings, Activity, Copy, Check, ShieldOff, Trash2, Plus, Search, AlertTriangle, ChevronDown } from 'lucide-react';
+import {
+  CheckCircle, XCircle, Upload, Loader2, Key, Download, Settings, Activity,
+  Copy, Check, ShieldOff, Trash2, Plus, Search, AlertTriangle, ChevronDown,
+  Sparkles, Clock, TrendingUp,
+} from 'lucide-react';
 import { updateCookies, getCookiesStatus, updateGeminiKey } from '../api/user';
 import { getSettings, updateSettings, importConnections, importCSV, getLogs, getImportStatus } from '../api/config';
 import { getCRMs } from '../api/crm';
@@ -10,11 +14,11 @@ import { formatServerDate, formatServerDateTime } from '../utils/date';
 import toast from 'react-hot-toast';
 
 const TABS = [
-  { key: 'credentials', icon: Key, label: 'Identifiants' },
-  { key: 'import', icon: Download, label: 'Import' },
-  { key: 'settings', icon: Settings, label: 'Parametres' },
-  { key: 'blacklist', icon: ShieldOff, label: 'Blacklist' },
-  { key: 'logs', icon: Activity, label: 'Activite' },
+  { key: 'credentials', icon: Key,       label: 'Identifiants' },
+  { key: 'import',      icon: Download,  label: 'Import' },
+  { key: 'settings',    icon: Settings,  label: 'Paramètres' },
+  { key: 'blacklist',   icon: ShieldOff, label: 'Blacklist' },
+  { key: 'logs',        icon: Activity,  label: 'Activité' },
 ];
 
 const CSV_PROMPT = `J'ai un fichier CSV avec des contacts LinkedIn. Transforme-le en un CSV compatible avec les colonnes suivantes (garde exactement ces noms de colonnes) :
@@ -32,8 +36,46 @@ Règles :
 - La colonne linkedin_url est obligatoire pour chaque contact
 - Retourne uniquement le CSV brut, sans explication`;
 
+function SectionHeader({ eyebrow, title, desc, right }) {
+  return (
+    <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+      <div>
+        {eyebrow && <div className="eyebrow mb-1.5">{eyebrow}</div>}
+        <h3 className="text-[16px] font-semibold tracking-tight" style={{ letterSpacing: '-0.01em', color: 'hsl(var(--text))' }}>{title}</h3>
+        {desc && <p className="text-[12.5px] mt-1" style={{ color: 'hsl(var(--muted))' }}>{desc}</p>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function Toggle({ on, onChange }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      role="switch"
+      aria-checked={on}
+      style={{
+        width: 40, height: 22, borderRadius: 999, position: 'relative',
+        background: on ? 'hsl(var(--accent))' : 'hsl(220 20% 88%)',
+        border: '1px solid transparent',
+        transition: 'background .2s',
+        cursor: 'pointer',
+      }}>
+      <span style={{
+        position: 'absolute', top: 2, left: on ? 20 : 2,
+        width: 16, height: 16, borderRadius: '50%', background: 'white',
+        boxShadow: '0 1px 2px hsl(220 40% 20% / .2)',
+        transition: 'left .2s',
+      }} />
+    </button>
+  );
+}
+
 function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, loading, handleImportCSV }) {
   const [copied, setCopied] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(CSV_PROMPT);
@@ -43,38 +85,79 @@ function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, lo
 
   return (
     <div>
-      <h3 className="font-semibold text-gray-900 mb-3">Importer un fichier CSV</h3>
-      <p className="text-sm text-gray-500 mb-3">Importez des contacts depuis un fichier CSV</p>
+      <SectionHeader
+        eyebrow="CSV"
+        title="Importer un fichier CSV"
+        desc="Chargez vos contacts depuis un fichier existant. Mapping de colonnes flexible." />
 
-      <details className="mb-4 group">
-        <summary className="text-xs cursor-pointer hover:underline font-medium flex items-center gap-1" style={{ color: 'var(--blue)' }}>
-          Prompt IA pour formater votre CSV
+      <details className="mb-4">
+        <summary className="text-[12px] cursor-pointer font-medium inline-flex items-center gap-1"
+          style={{ color: 'hsl(var(--accent))' }}>
+          <Sparkles size={12} /> Prompt IA pour formater votre CSV
         </summary>
-        <div className="mt-2 relative">
-          <pre className="bg-gray-50 border border-gray-200 rounded-lg p-4 pr-12 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed overflow-x-auto">{CSV_PROMPT}</pre>
+        <div className="mt-3 relative">
+          <pre className="p-4 pr-12 text-[11.5px] whitespace-pre-wrap leading-relaxed overflow-x-auto"
+            style={{
+              background: 'hsl(220 22% 98%)',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 12,
+              color: 'hsl(var(--muted))',
+            }}>{CSV_PROMPT}</pre>
           <button onClick={handleCopy}
-            className="absolute top-3 right-3 p-1.5 rounded-md bg-white border border-gray-200 hover:bg-gray-100 transition-colors">
-            {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} className="text-gray-400" />}
+            className="absolute top-3 right-3 p-1.5 rounded-md transition-colors"
+            style={{
+              background: 'hsl(var(--panel))',
+              border: '1px solid hsl(var(--border))',
+            }}>
+            {copied ? <Check size={13} style={{ color: 'hsl(var(--emerald))' }} /> : <Copy size={13} style={{ color: 'hsl(var(--muted))' }} />}
           </button>
-          <p className="text-[11px] text-gray-400 mt-2">Copiez ce prompt et collez-le dans ChatGPT, Claude ou Gemini avec votre fichier CSV.</p>
+          <p className="text-[11px] mt-2" style={{ color: 'hsl(var(--muted))' }}>
+            Copiez ce prompt et collez-le dans ChatGPT, Claude ou Gemini avec votre fichier CSV.
+          </p>
         </div>
       </details>
 
       <div className="space-y-3">
-        <select value={csvCrmId} onChange={(e) => setCsvCrmId(e.target.value)}
-          className="input-glass w-full">
-          <option value="">Sélectionner un CRM...</option>
-          {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <label className="flex items-center justify-center gap-2 px-4 py-8 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-300 transition-colors">
-          <Upload size={20} className="text-gray-400" />
-          <span className="text-sm text-gray-500">{csvFile ? csvFile.name : 'Cliquez pour sélectionner un fichier CSV'}</span>
+        <div>
+          <label className="form-label">CRM destination</label>
+          <select value={csvCrmId} onChange={(e) => setCsvCrmId(e.target.value)} className="input-sm">
+            <option value="">Sélectionner un CRM…</option>
+            {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <label
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault(); setDragOver(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f && f.name.endsWith('.csv')) setCsvFile(f);
+          }}
+          className="flex flex-col items-center justify-center gap-2 cursor-pointer transition-all"
+          style={{
+            padding: '28px 16px',
+            border: `1.5px dashed ${dragOver ? 'hsl(var(--accent))' : 'hsl(var(--border-strong))'}`,
+            borderRadius: 14,
+            background: dragOver ? 'hsl(var(--accent-soft))' : 'hsl(220 22% 98%)',
+          }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+            <Upload size={16} />
+          </div>
+          <div className="text-[13px] font-medium" style={{ color: 'hsl(var(--text))' }}>
+            {csvFile ? csvFile.name : 'Glissez votre CSV ou cliquez pour choisir'}
+          </div>
+          <div className="text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>
+            Format .csv uniquement
+          </div>
           <input type="file" accept=".csv" className="hidden" onChange={(e) => setCsvFile(e.target.files?.[0])} />
         </label>
-        <button onClick={handleImportCSV} disabled={loading || !csvFile || !csvCrmId}
-          className="cta-btn px-6 py-2.5 rounded-lg text-sm disabled:opacity-40">
-          {loading ? 'Import...' : 'Importer le CSV'}
-        </button>
+        <div className="flex justify-end">
+          <button onClick={handleImportCSV} disabled={loading || !csvFile || !csvCrmId} className="cta-btn">
+            {loading ? <Loader2 size={14} className="spin" /> : <Upload size={14} />}
+            {loading ? 'Import…' : 'Importer le CSV'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -85,41 +168,34 @@ export default function ConfigPage() {
   const [tab, setTab] = useState('credentials');
   const [loading, setLoading] = useState(false);
 
-  // Credentials
   const [liAt, setLiAt] = useState('');
   const [jsessionid, setJsessionid] = useState('');
   const [cookieStatus, setCookieStatus] = useState(null);
 
-  // Settings
   const [settings, setSettings] = useState({});
 
-  // Gemini API key
   const [geminiKey, setGeminiKey] = useState('');
   const [geminiSaving, setGeminiSaving] = useState(false);
 
-  // Import
   const [crms, setCrms] = useState([]);
   const [importCrmId, setImportCrmId] = useState('');
   const [importStatus, setImportStatus] = useState(null);
   const [csvCrmId, setCsvCrmId] = useState('');
   const [csvFile, setCsvFile] = useState(null);
 
-  // Blacklist
   const [blacklistItems, setBlacklistItems] = useState([]);
   const [blacklistTotal, setBlacklistTotal] = useState(0);
   const [blacklistPage, setBlacklistPage] = useState(1);
   const [blacklistSearch, setBlacklistSearch] = useState('');
   const [newBlacklist, setNewBlacklist] = useState({ urn_id: '', name: '', reason: '' });
 
-  // Skipped details toggle
   const [showSkipped, setShowSkipped] = useState(false);
 
-  // Logs
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
     if (tab === 'credentials') getCookiesStatus().then(setCookieStatus).catch(() => toast.error('Erreur chargement cookies'));
-    if (tab === 'settings') getSettings().then(setSettings).catch(() => toast.error('Erreur chargement parametres'));
+    if (tab === 'settings') getSettings().then(setSettings).catch(() => toast.error('Erreur chargement paramètres'));
     if (tab === 'import') {
       getCRMs().then(setCrms).catch(() => toast.error('Erreur chargement CRMs'));
       getImportStatus().then(setImportStatus).catch(() => {});
@@ -138,7 +214,6 @@ export default function ConfigPage() {
     if (tab === 'blacklist') loadBlacklist();
   }, [blacklistPage, blacklistSearch]);
 
-  // Poll import progress when running
   useEffect(() => {
     if (tab !== 'import' || importStatus?.status !== 'running') return;
     const interval = setInterval(() => {
@@ -178,7 +253,6 @@ export default function ConfigPage() {
     try {
       await importConnections(parseInt(importCrmId));
       toast.success('Import lancé');
-      // Start polling
       const status = await getImportStatus();
       setImportStatus(status);
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
@@ -191,7 +265,7 @@ export default function ConfigPage() {
     setLoading(true);
     try {
       await addToBlacklist(newBlacklist);
-      toast.success('Contact ajoute a la blacklist');
+      toast.success('Contact ajouté à la blacklist');
       setNewBlacklist({ urn_id: '', name: '', reason: '' });
       loadBlacklist();
     } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
@@ -201,7 +275,7 @@ export default function ConfigPage() {
   const handleRemoveBlacklist = async (blId) => {
     try {
       await removeFromBlacklist(blId);
-      toast.success('Retire de la blacklist');
+      toast.success('Retiré de la blacklist');
       loadBlacklist();
     } catch { toast.error('Erreur'); }
   };
@@ -220,358 +294,406 @@ export default function ConfigPage() {
     finally { setLoading(false); }
   };
 
+  const scheduleOn = String(settings.schedule_enabled).toLowerCase() === 'true';
+  const warmupOn = String(settings.warmup_enabled).toLowerCase() === 'true';
+
   return (
     <PageWrapper>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6 f">Configuration</h1>
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
-        {TABS.map(({ key, icon: Icon, label }) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-              tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            <Icon size={16} /> {label}
-          </button>
-        ))}
+      {/* Header */}
+      <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
+        <div>
+          <h1 className="text-[28px] font-semibold tracking-tight" style={{ letterSpacing: '-0.02em' }}>Configuration</h1>
+          <p className="text-[13.5px] mt-1" style={{ color: 'hsl(var(--muted))' }}>
+            Cookies LinkedIn, import, limites et plages horaires, blacklist, journal d'activité.
+          </p>
+        </div>
       </div>
 
-      <div className="g-card">
-        {/* Credentials tab */}
-        {tab === 'credentials' && (
-          <div className="max-w-lg space-y-4">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-sm font-medium text-gray-700">Statut actuel :</span>
-              {cookieStatus?.valid ? (
-                <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle size={16} /> Valide</span>
-              ) : (
-                <span className="flex items-center gap-1 text-sm text-red-600"><XCircle size={16} /> Expiré / Non configuré</span>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cookie li_at</label>
-              <textarea value={liAt} onChange={(e) => setLiAt(e.target.value)} rows={2}
-                placeholder="Collez votre cookie li_at..."
-                className="input-glass w-full font-mono text-xs" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">JSESSIONID</label>
-              <textarea value={jsessionid} onChange={(e) => setJsessionid(e.target.value)} rows={2}
-                placeholder="Collez votre JSESSIONID..."
-                className="input-glass w-full font-mono text-xs" />
-            </div>
-            <button onClick={handleSaveCookies} disabled={loading || !liAt || !jsessionid}
-              className="cta-btn px-6 py-2.5 rounded-lg text-sm disabled:opacity-40 flex items-center gap-2">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-              Tester et sauvegarder
+      {/* Tab pills */}
+      <div className="flex items-center gap-1 p-0.5 rounded-lg mb-6 w-fit"
+        style={{ background: 'hsl(220 20% 95%)' }}>
+        {TABS.map(({ key, icon: Icon, label }) => {
+          const active = tab === key;
+          return (
+            <button key={key} onClick={() => setTab(key)}
+              className="flex items-center gap-2 transition-all"
+              style={{
+                padding: '7px 14px', borderRadius: 8,
+                fontSize: 12.5, fontWeight: 500,
+                background: active ? 'hsl(var(--panel))' : 'transparent',
+                color: active ? 'hsl(var(--text))' : 'hsl(var(--muted))',
+                border: active ? '1px solid hsl(var(--border))' : '1px solid transparent',
+                boxShadow: active ? '0 1px 2px hsl(220 40% 20% / .04)' : 'none',
+                cursor: 'pointer',
+              }}>
+              <Icon size={14} /> {label}
             </button>
-          </div>
-        )}
+          );
+        })}
+      </div>
 
-        {/* Import tab */}
-        {tab === 'import' && (
-          <div className="space-y-8 max-w-lg">
+      {/* ── IDENTIFIANTS ── */}
+      {tab === 'credentials' && (
+        <div className="g-card" style={{ padding: 24 }}>
+          <SectionHeader
+            eyebrow="LinkedIn"
+            title="Cookies de session"
+            desc="Collez vos cookies li_at et JSESSIONID. Stockés localement, jamais envoyés à un tiers."
+            right={
+              cookieStatus?.valid ? (
+                <span className="chip emerald" style={{ fontSize: 11 }}>
+                  <CheckCircle size={11} /> Valide
+                </span>
+              ) : (
+                <span className="chip rose" style={{ fontSize: 11 }}>
+                  <XCircle size={11} /> Non configuré
+                </span>
+              )
+            } />
+
+          <div className="space-y-4 max-w-xl">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Importer vos connexions LinkedIn</h3>
-              <p className="text-sm text-gray-500 mb-3">Importez automatiquement toutes vos connexions dans un CRM</p>
+              <label className="form-label">Cookie li_at</label>
+              <textarea value={liAt} onChange={(e) => setLiAt(e.target.value)} rows={2}
+                placeholder="Collez votre cookie li_at…"
+                className="input-sm mono" style={{ fontSize: 12 }} />
+            </div>
+            <div>
+              <label className="form-label">JSESSIONID</label>
+              <textarea value={jsessionid} onChange={(e) => setJsessionid(e.target.value)} rows={2}
+                placeholder="Collez votre JSESSIONID…"
+                className="input-sm mono" style={{ fontSize: 12 }} />
+            </div>
+            <div className="flex justify-end">
+              <button onClick={handleSaveCookies} disabled={loading || !liAt || !jsessionid} className="cta-btn">
+                {loading ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+                {loading ? 'Vérification…' : 'Tester et sauvegarder'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* Progress bar when import is running or just finished */}
-              {importStatus && importStatus.status !== 'none' && (
-                <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {importStatus.status === 'running' && (
-                        <Loader2 size={16} className="animate-spin" style={{ color: 'var(--blue)' }} />
-                      )}
-                      {importStatus.status === 'completed' && (
-                        <CheckCircle size={16} className="text-emerald-500" />
-                      )}
-                      {importStatus.status === 'failed' && (
-                        <XCircle size={16} className="text-red-500" />
-                      )}
-                      <span className="text-sm font-medium text-gray-700">
-                        {importStatus.status === 'running' ? 'Import en cours...' :
-                         importStatus.status === 'completed' ? 'Import terminé' :
-                         importStatus.status === 'failed' ? 'Import échoué' : ''}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-500">
-                      {importStatus.total_found} trouvés
+      {/* ── IMPORT ── */}
+      {tab === 'import' && (
+        <div className="space-y-4">
+          {/* LinkedIn network import */}
+          <div className="g-card" style={{ padding: 24 }}>
+            <SectionHeader
+              eyebrow="Réseau LinkedIn"
+              title="Importer toutes vos connexions"
+              desc="Récupère l'intégralité de votre réseau LinkedIn et l'ajoute à un CRM. Le sync auto (toutes les 6h) prendra ensuite le relai." />
+
+            {importStatus && importStatus.status !== 'none' && (
+              <div className="g-card-soft mb-4" style={{ padding: 16, background: 'hsl(220 22% 98%)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {importStatus.status === 'running' && (
+                      <Loader2 size={14} className="spin" style={{ color: 'hsl(var(--accent))' }} />
+                    )}
+                    {importStatus.status === 'completed' && (
+                      <CheckCircle size={14} style={{ color: 'hsl(var(--emerald))' }} />
+                    )}
+                    {importStatus.status === 'failed' && (
+                      <XCircle size={14} style={{ color: 'hsl(var(--rose))' }} />
+                    )}
+                    <span className="text-[12.5px] font-medium" style={{ color: 'hsl(var(--text))' }}>
+                      {importStatus.status === 'running' ? 'Import en cours…' :
+                       importStatus.status === 'completed' ? 'Import terminé' :
+                       importStatus.status === 'failed' ? 'Import échoué' : ''}
                     </span>
                   </div>
-
-                  {importStatus.status === 'running' && (
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                      <div className="h-2 rounded-full transition-all animate-pulse" style={{ width: '100%', background: 'var(--blue)' }} />
-                    </div>
-                  )}
-                  {importStatus.status === 'completed' && (
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                      <div className="h-2 rounded-full bg-emerald-500" style={{ width: '100%' }} />
-                    </div>
-                  )}
-
-                  <div className="flex gap-4 text-xs text-gray-500">
-                    <span>Ajoutés : <strong className="text-gray-700">{importStatus.total_created}</strong></span>
-                    <span>Ignorés : <strong className="text-gray-700">{importStatus.total_skipped}</strong></span>
-                  </div>
-
-                  {importStatus.error_message && (
-                    <p className="text-xs text-red-600 mt-2">{importStatus.error_message}</p>
-                  )}
-
-                  {importStatus.total_skipped > 0 && (
-                    <div className="mt-3">
-                      <button
-                        onClick={() => setShowSkipped(!showSkipped)}
-                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-amber-100"
-                        style={{ color: '#D97706', background: showSkipped ? 'rgba(217,119,6,0.1)' : 'transparent' }}>
-                        <AlertTriangle size={13} />
-                        {importStatus.total_skipped} contact(s) ignoré(s)
-                        <ChevronDown size={13} style={{ transform: showSkipped ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                      </button>
-                      {showSkipped && importStatus.skipped_details?.length > 0 && (
-                        <div className="mt-2 max-h-60 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/50">
-                          <div className="divide-y divide-amber-100">
-                            {importStatus.skipped_details.map((s, i) => (
-                              <div key={i} className="flex items-center justify-between px-3 py-2.5 text-xs">
-                                <span className="font-medium text-gray-800">{s.name || 'Contact inconnu'}</span>
-                                <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full text-[10px] font-medium">{s.reason}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {showSkipped && (!importStatus.skipped_details || importStatus.skipped_details.length === 0) && (
-                        <p className="mt-2 text-xs text-gray-400 italic px-3">Détails non disponibles pour cet import.</p>
-                      )}
-                    </div>
-                  )}
+                  <span className="mono text-[11px]" style={{ color: 'hsl(var(--muted))' }}>
+                    {importStatus.total_found} trouvés
+                  </span>
                 </div>
-              )}
 
-              <div className="flex gap-3">
-                <select value={importCrmId} onChange={(e) => setImportCrmId(e.target.value)}
-                  disabled={importStatus?.status === 'running'}
-                  className="input-glass flex-1 disabled:opacity-50">
-                  <option value="">Sélectionner un CRM...</option>
-                  {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <button onClick={handleImportConnections} disabled={loading || importStatus?.status === 'running'}
-                  className="cta-btn px-4 py-2 rounded-lg text-sm disabled:opacity-40">
-                  {importStatus?.status === 'running' ? 'En cours...' : loading ? 'Import...' : 'Importer'}
+                <div className="pbar mb-3" style={{ height: 4 }}>
+                  <div
+                    className={importStatus.status === 'running' ? 'animate-pulse' : ''}
+                    style={{
+                      height: '100%',
+                      width: '100%',
+                      background: importStatus.status === 'failed'
+                        ? 'hsl(var(--rose))'
+                        : importStatus.status === 'completed'
+                          ? 'hsl(var(--emerald))'
+                          : 'hsl(var(--accent))',
+                      borderRadius: 999,
+                    }} />
+                </div>
+
+                <div className="flex gap-4 text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>
+                  <span>Ajoutés : <b style={{ color: 'hsl(var(--emerald))', fontWeight: 600 }}>{importStatus.total_created}</b></span>
+                  <span>Ignorés : <b style={{ color: 'hsl(var(--amber))', fontWeight: 600 }}>{importStatus.total_skipped}</b></span>
+                </div>
+
+                {importStatus.error_message && (
+                  <p className="text-[11.5px] mt-2" style={{ color: 'hsl(var(--rose))' }}>{importStatus.error_message}</p>
+                )}
+
+                {importStatus.total_skipped > 0 && (
+                  <div className="mt-3">
+                    <button onClick={() => setShowSkipped(!showSkipped)}
+                      className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        color: 'hsl(var(--amber))',
+                        background: showSkipped ? 'hsl(var(--amber) / .12)' : 'transparent',
+                        border: '1px solid hsl(var(--amber) / .3)',
+                      }}>
+                      <AlertTriangle size={11} />
+                      {importStatus.total_skipped} contact(s) ignoré(s)
+                      <ChevronDown size={11} style={{ transform: showSkipped ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+                    </button>
+                    {showSkipped && importStatus.skipped_details?.length > 0 && (
+                      <div className="mt-2 max-h-60 overflow-y-auto rounded-lg"
+                        style={{ border: '1px solid hsl(var(--amber) / .3)', background: 'hsl(var(--amber) / .06)' }}>
+                        {importStatus.skipped_details.map((s, i) => (
+                          <div key={i}
+                            className="flex items-center justify-between px-3 py-2 text-[11.5px]"
+                            style={{ borderBottom: i < importStatus.skipped_details.length - 1 ? '1px solid hsl(var(--amber) / .15)' : 'none' }}>
+                            <span className="font-medium" style={{ color: 'hsl(var(--text))' }}>{s.name || 'Contact inconnu'}</span>
+                            <span className="chip amber" style={{ fontSize: 10 }}>{s.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showSkipped && (!importStatus.skipped_details || importStatus.skipped_details.length === 0) && (
+                      <p className="mt-2 text-[11px] italic px-2" style={{ color: 'hsl(var(--muted))' }}>
+                        Détails non disponibles pour cet import.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="max-w-xl">
+              <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <label className="form-label">CRM destination</label>
+                  <select value={importCrmId} onChange={(e) => setImportCrmId(e.target.value)}
+                    disabled={importStatus?.status === 'running'} className="input-sm">
+                    <option value="">Sélectionner un CRM…</option>
+                    {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <button onClick={handleImportConnections}
+                  disabled={loading || importStatus?.status === 'running'} className="cta-btn">
+                  {importStatus?.status === 'running' ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
+                  {importStatus?.status === 'running' ? 'En cours…' : loading ? 'Import…' : 'Importer'}
                 </button>
               </div>
             </div>
+          </div>
 
-            <hr className="border-gray-200" />
-
+          {/* CSV import */}
+          <div className="g-card" style={{ padding: 24 }}>
             <CsvImportSection
               csvCrmId={csvCrmId} setCsvCrmId={setCsvCrmId}
               csvFile={csvFile} setCsvFile={setCsvFile}
               crms={crms} loading={loading} handleImportCSV={handleImportCSV}
             />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Settings tab */}
-        {tab === 'settings' && (
-          <div className="max-w-lg space-y-6">
-            {/* Limites */}
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Limites quotidiennes</h3>
-              <p className="text-xs text-gray-500 mb-3">Ces limites s'appliquent au total de toutes les campagnes actives combinées.</p>
-              <div className="space-y-4">
+      {/* ── PARAMÈTRES ── */}
+      {tab === 'settings' && (
+        <div className="space-y-4">
+          {/* Limites quotidiennes */}
+          <div className="g-card" style={{ padding: 24 }}>
+            <SectionHeader
+              eyebrow="Limites"
+              title="Quotas quotidiens"
+              desc="S'applique au total de toutes les campagnes actives combinées." />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
+              <div>
+                <label className="form-label">Max connexions par jour</label>
+                <input type="number" value={settings.max_connections_per_day || ''}
+                  onChange={(e) => setSettings({ ...settings, max_connections_per_day: e.target.value })}
+                  className="input-sm" />
+              </div>
+              <div>
+                <label className="form-label">Max messages par jour</label>
+                <input type="number" value={settings.max_dms_per_day || ''}
+                  onChange={(e) => setSettings({ ...settings, max_dms_per_day: e.target.value })}
+                  className="input-sm" />
+              </div>
+            </div>
+          </div>
+
+          {/* Plage horaire */}
+          <div className="g-card" style={{ padding: 24 }}>
+            <SectionHeader
+              eyebrow="Planning"
+              title="Plage horaire"
+              desc={scheduleOn
+                ? "Les campagnes ne s'exécutent que pendant cette plage, avec un espacement aléatoire humain."
+                : "Les campagnes tournent en continu avec un délai aléatoire entre les actions."}
+              right={<Toggle on={scheduleOn} onChange={(v) => {
+                const updates = { ...settings, schedule_enabled: v ? 'true' : 'false' };
+                if (v) {
+                  if (!settings.schedule_start_hour) updates.schedule_start_hour = '08:00';
+                  if (!settings.schedule_end_hour) updates.schedule_end_hour = '20:00';
+                  if (!settings.schedule_timezone) updates.schedule_timezone = 'Europe/Paris';
+                }
+                setSettings(updates);
+              }} />}
+            />
+
+            {scheduleOn ? (
+              <div className="space-y-3 max-w-xl">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Max connexions par jour</label>
-                  <input type="number" value={settings.max_connections_per_day || ''}
-                    onChange={(e) => setSettings({ ...settings, max_connections_per_day: e.target.value })}
-                    className="input-glass w-full" />
+                  <label className="form-label">Fuseau horaire</label>
+                  <select value={settings.schedule_timezone || 'Europe/Paris'}
+                    onChange={(e) => setSettings({ ...settings, schedule_timezone: e.target.value })}
+                    className="input-sm">
+                    <option value="Europe/Paris">Europe/Paris</option>
+                    <option value="Europe/London">Europe/London</option>
+                    <option value="Europe/Berlin">Europe/Berlin</option>
+                    <option value="Europe/Brussels">Europe/Brussels</option>
+                    <option value="Europe/Zurich">Europe/Zurich</option>
+                    <option value="America/New_York">America/New_York</option>
+                    <option value="America/Chicago">America/Chicago</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles</option>
+                    <option value="America/Toronto">America/Toronto</option>
+                    <option value="America/Montreal">America/Montreal</option>
+                    <option value="Asia/Dubai">Asia/Dubai</option>
+                    <option value="Africa/Casablanca">Africa/Casablanca</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
+                  <div>
+                    <label className="form-label">Début</label>
+                    <input type="time" value={settings.schedule_start_hour || '08:00'}
+                      onChange={(e) => setSettings({ ...settings, schedule_start_hour: e.target.value })}
+                      className="input-sm" />
+                  </div>
+                  <span className="pb-3" style={{ color: 'hsl(var(--muted))' }}>—</span>
+                  <div>
+                    <label className="form-label">Fin</label>
+                    <input type="time" value={settings.schedule_end_hour || '20:00'}
+                      onChange={(e) => setSettings({ ...settings, schedule_end_hour: e.target.value })}
+                      className="input-sm" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 max-w-xl">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
+                  <div>
+                    <label className="form-label">Min (minutes)</label>
+                    <input type="number" min="1" value={settings.action_interval_min || ''}
+                      onChange={(e) => setSettings({ ...settings, action_interval_min: e.target.value })}
+                      placeholder="2" className="input-sm" />
+                  </div>
+                  <span className="pb-3" style={{ color: 'hsl(var(--muted))' }}>—</span>
+                  <div>
+                    <label className="form-label">Max (minutes)</label>
+                    <input type="number" min="1" value={settings.action_interval_max || ''}
+                      onChange={(e) => setSettings({ ...settings, action_interval_max: e.target.value })}
+                      placeholder="5" className="input-sm" />
+                  </div>
+                </div>
+                <div className="info-pill inline-flex items-center gap-1.5">
+                  <Clock size={11} />
+                  Une action toutes les {settings.action_interval_min || 2} à {settings.action_interval_max || 5} minutes
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Warm-up */}
+          <div className="g-card" style={{ padding: 24 }}>
+            <SectionHeader
+              eyebrow="Sécurité"
+              title="Warm-up progressif"
+              desc="Augmente progressivement la limite quotidienne pour éviter la détection."
+              right={<Toggle on={warmupOn} onChange={(v) => setSettings({ ...settings, warmup_enabled: v ? 'true' : 'false' })} />}
+            />
+            {warmupOn && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl">
+                <div>
+                  <label className="form-label">Limite de départ</label>
+                  <input type="number" min="1" value={settings.warmup_start_limit || ''}
+                    onChange={(e) => setSettings({ ...settings, warmup_start_limit: e.target.value })}
+                    placeholder="5" className="input-sm" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Max messages par jour</label>
-                  <input type="number" value={settings.max_dms_per_day || ''}
-                    onChange={(e) => setSettings({ ...settings, max_dms_per_day: e.target.value })}
-                    className="input-glass w-full" />
+                  <label className="form-label">Limite cible</label>
+                  <input type="number" min="1" value={settings.warmup_target_limit || ''}
+                    onChange={(e) => setSettings({ ...settings, warmup_target_limit: e.target.value })}
+                    placeholder="25" className="input-sm" />
+                </div>
+                <div>
+                  <label className="form-label">Durée (jours)</label>
+                  <input type="number" min="1" value={settings.warmup_days || ''}
+                    onChange={(e) => setSettings({ ...settings, warmup_days: e.target.value })}
+                    placeholder="7" className="input-sm" />
+                </div>
+                <div className="md:col-span-3">
+                  <div className="info-pill inline-flex items-center gap-1.5">
+                    <TrendingUp size={11} />
+                    De {settings.warmup_start_limit || 5} à {settings.warmup_target_limit || 25} actions/jour sur {settings.warmup_days || 7} jours
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
 
-            <hr className="border-gray-200" />
-
-            {/* Plage horaire */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-gray-900">Plage horaire</h3>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={String(settings.schedule_enabled).toLowerCase() === 'true'}
-                    onChange={(e) => {
-                      const enabled = e.target.checked;
-                      const updates = { ...settings, schedule_enabled: enabled ? 'true' : 'false' };
-                      if (enabled) {
-                        if (!settings.schedule_start_hour) updates.schedule_start_hour = '08:00';
-                        if (!settings.schedule_end_hour) updates.schedule_end_hour = '20:00';
-                        if (!settings.schedule_timezone) updates.schedule_timezone = 'Europe/Paris';
-                      }
-                      setSettings(updates);
-                    }}
-                    className="sr-only peer" />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
-                    style={{ backgroundColor: (String(settings.schedule_enabled).toLowerCase() === 'true') ? 'var(--blue)' : undefined }}></div>
-                </label>
-              </div>
-
-              {(String(settings.schedule_enabled).toLowerCase() === 'true') ? (
-                <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-xs text-gray-500">Les campagnes ne s'exécutent que pendant cette plage. Les actions sont espacées automatiquement et aléatoirement pour simuler un comportement humain.</p>
-                  <div className="mb-3">
-                    <label className="block text-xs text-gray-500 mb-1">Fuseau horaire</label>
-                    <select value={settings.schedule_timezone || 'Europe/Paris'}
-                      onChange={(e) => setSettings({ ...settings, schedule_timezone: e.target.value })}
-                      className="input-glass w-full">
-                      <option value="Europe/Paris">Europe/Paris</option>
-                      <option value="Europe/London">Europe/London</option>
-                      <option value="Europe/Berlin">Europe/Berlin</option>
-                      <option value="Europe/Brussels">Europe/Brussels</option>
-                      <option value="Europe/Zurich">Europe/Zurich</option>
-                      <option value="America/New_York">America/New_York</option>
-                      <option value="America/Chicago">America/Chicago</option>
-                      <option value="America/Los_Angeles">America/Los_Angeles</option>
-                      <option value="America/Toronto">America/Toronto</option>
-                      <option value="America/Montreal">America/Montreal</option>
-                      <option value="Asia/Dubai">Asia/Dubai</option>
-                      <option value="Africa/Casablanca">Africa/Casablanca</option>
-                      <option value="UTC">UTC</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Début</label>
-                      <input type="time" value={settings.schedule_start_hour || '08:00'}
-                        onChange={(e) => setSettings({ ...settings, schedule_start_hour: e.target.value })}
-                        className="input-glass w-full" />
-                    </div>
-                    <span className="text-gray-400 mt-5">—</span>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Fin</label>
-                      <input type="time" value={settings.schedule_end_hour || '20:00'}
-                        onChange={(e) => setSettings({ ...settings, schedule_end_hour: e.target.value })}
-                        className="input-glass w-full" />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-xs text-gray-500">Les campagnes tournent en continu. Définissez l'intervalle entre chaque action (un délai aléatoire dans cette fourchette sera appliqué pour simuler un comportement humain).</p>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Min (minutes)</label>
-                      <input type="number" min="1" value={settings.action_interval_min || ''}
-                        onChange={(e) => setSettings({ ...settings, action_interval_min: e.target.value })}
-                        placeholder="2"
-                        className="input-glass w-full" />
-                    </div>
-                    <span className="text-gray-400 mt-5">—</span>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Max (minutes)</label>
-                      <input type="number" min="1" value={settings.action_interval_max || ''}
-                        onChange={(e) => setSettings({ ...settings, action_interval_max: e.target.value })}
-                        placeholder="5"
-                        className="input-glass w-full" />
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    Une action toutes les {settings.action_interval_min || 2} à {settings.action_interval_max || 5} minutes
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <hr className="border-gray-200" />
-
-            {/* Warmup progressif */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-gray-900">Warm-up progressif</h3>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={String(settings.warmup_enabled).toLowerCase() === 'true'}
-                    onChange={(e) => setSettings({ ...settings, warmup_enabled: e.target.checked ? 'true' : 'false' })}
-                    className="sr-only peer" />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
-                    style={{ backgroundColor: (String(settings.warmup_enabled).toLowerCase() === 'true') ? 'var(--blue)' : undefined }}></div>
-                </label>
-              </div>
-              <p className="text-xs text-gray-500 mb-3">Augmente progressivement le nombre d'actions par jour pour eviter la detection. La limite quotidienne monte lineairement de la limite de depart vers la limite cible sur la duree configuree.</p>
-              {(String(settings.warmup_enabled).toLowerCase() === 'true') && (
-                <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Limite de depart (actions/jour)</label>
-                    <input type="number" min="1" value={settings.warmup_start_limit || ''}
-                      onChange={(e) => setSettings({ ...settings, warmup_start_limit: e.target.value })}
-                      placeholder="5"
-                      className="input-glass w-full" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Limite cible (actions/jour)</label>
-                    <input type="number" min="1" value={settings.warmup_target_limit || ''}
-                      onChange={(e) => setSettings({ ...settings, warmup_target_limit: e.target.value })}
-                      placeholder="25"
-                      className="input-glass w-full" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Duree (jours)</label>
-                    <input type="number" min="1" value={settings.warmup_days || ''}
-                      onChange={(e) => setSettings({ ...settings, warmup_days: e.target.value })}
-                      placeholder="7"
-                      className="input-glass w-full" />
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    Augmente de {settings.warmup_start_limit || 5} a {settings.warmup_target_limit || 25} actions/jour sur {settings.warmup_days || 7} jours
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <button onClick={handleSaveSettings} disabled={loading}
-              className="cta-btn px-6 py-2.5 rounded-lg text-sm disabled:opacity-40 flex items-center gap-2">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-              Sauvegarder
+          {/* Save button for settings sections */}
+          <div className="flex justify-end">
+            <button onClick={handleSaveSettings} disabled={loading} className="cta-btn">
+              {loading ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+              {loading ? 'Sauvegarde…' : 'Sauvegarder les paramètres'}
             </button>
+          </div>
 
-            <hr className="border-gray-200" />
+          {/* Gemini key */}
+          <div className="g-card" style={{ padding: 24 }}>
+            <SectionHeader
+              eyebrow="IA"
+              title="Clé API Gemini"
+              desc={<>Votre clé personnelle pour les messages générés par IA. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--accent))', textDecoration: 'underline' }}>Obtenir une clé</a></>}
+              right={user?.has_gemini_key ? (
+                <span className="chip emerald" style={{ fontSize: 11 }}><CheckCircle size={11} /> Configurée</span>
+              ) : (
+                <span className="chip slate" style={{ fontSize: 11 }}><XCircle size={11} /> Aucune</span>
+              )} />
 
-            {/* Gemini API Key */}
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Clé API Gemini (IA)</h3>
-              <p className="text-xs text-gray-500 mb-3">
-                Votre clé personnelle pour les messages générés par IA.{' '}
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">Obtenir une clé</a>
-              </p>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="flex items-center gap-1.5">
-                  {user?.has_gemini_key ? (
-                    <>
-                      <CheckCircle size={14} className="text-green-500" />
-                      <span className="text-xs text-green-600 font-medium">Clé configurée</span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle size={14} className="text-gray-400" />
-                      <span className="text-xs text-gray-500">Aucune clé configurée</span>
-                    </>
-                  )}
-                </div>
+            <div className="max-w-xl space-y-3">
+              <div>
+                <label className="form-label">Clé API</label>
+                <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)}
+                  placeholder={user?.has_gemini_key ? 'Entrez une nouvelle clé pour remplacer…' : 'AIzaSy…'}
+                  className="input-sm mono" style={{ fontSize: 12 }} />
               </div>
-              <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)}
-                placeholder={user?.has_gemini_key ? 'Entrez une nouvelle clé pour remplacer...' : 'AIzaSy...'}
-                className="input-glass w-full mb-2" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
               {user?.has_gemini_key && (
-                <div className="flex items-center gap-1.5 mb-3 p-2 rounded-lg" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
-                  <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-                  <span className="text-xs text-amber-700">Changer la clé mettra en pause toutes vos campagnes IA en cours.</span>
+                <div className="flex items-start gap-2 p-3 rounded-lg"
+                  style={{ background: 'hsl(var(--amber) / .1)', border: '1px solid hsl(var(--amber) / .3)' }}>
+                  <AlertTriangle size={13} style={{ color: 'hsl(var(--amber))', marginTop: 1, flexShrink: 0 }} />
+                  <span className="text-[12px]" style={{ color: 'hsl(28 70% 30%)' }}>
+                    Changer la clé mettra en pause toutes vos campagnes IA en cours.
+                  </span>
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-end">
+                {user?.has_gemini_key && (
+                  <button onClick={async () => {
+                    setGeminiSaving(true);
+                    try {
+                      await updateGeminiKey('');
+                      toast.success('Clé API supprimée');
+                      refreshUser();
+                    } catch { toast.error('Erreur'); }
+                    finally { setGeminiSaving(false); }
+                  }} disabled={geminiSaving} className="ghost-btn"
+                    style={{ color: 'hsl(var(--rose))', borderColor: 'hsl(var(--rose) / .3)' }}>
+                    <Trash2 size={13} /> Supprimer
+                  </button>
+                )}
                 <button onClick={async () => {
                   if (!geminiKey.trim()) return;
                   setGeminiSaving(true);
@@ -582,137 +704,181 @@ export default function ConfigPage() {
                     refreshUser();
                   } catch { toast.error('Erreur'); }
                   finally { setGeminiSaving(false); }
-                }} disabled={geminiSaving || !geminiKey.trim()}
-                  className="cta-btn px-4 py-2 rounded-lg text-sm disabled:opacity-40 flex items-center gap-2">
-                  {geminiSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                }} disabled={geminiSaving || !geminiKey.trim()} className="cta-btn">
+                  {geminiSaving ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
                   Sauvegarder la clé
                 </button>
-                {user?.has_gemini_key && (
-                  <button onClick={async () => {
-                    setGeminiSaving(true);
-                    try {
-                      await updateGeminiKey('');
-                      toast.success('Clé API supprimée');
-                      refreshUser();
-                    } catch { toast.error('Erreur'); }
-                    finally { setGeminiSaving(false); }
-                  }} disabled={geminiSaving}
-                    className="px-4 py-2 rounded-lg text-sm border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40">
-                    Supprimer la clé
-                  </button>
-                )}
               </div>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-[11.5px] mt-2" style={{ color: 'hsl(var(--muted))' }}>
                 Besoin d'aide ?{' '}
-                <a href="https://www.linkedin.com/in/thomas-shamoev/" target="_blank" rel="noopener noreferrer" className="text-purple-500 underline">
+                <a href="https://www.linkedin.com/in/thomas-shamoev/" target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'hsl(var(--violet))', textDecoration: 'underline' }}>
                   Contactez Thomas Shamoev sur LinkedIn
                 </a>
               </p>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Blacklist tab */}
-        {tab === 'blacklist' && (
-          <div className="space-y-6">
-            <form onSubmit={handleAddBlacklist} className="flex gap-2 flex-wrap">
-              <input value={newBlacklist.urn_id} onChange={(e) => setNewBlacklist({ ...newBlacklist, urn_id: e.target.value })}
-                placeholder="URN ID (ex: ACoAAB...)" required
-                className="input-glass flex-1 min-w-[200px]" />
-              <input value={newBlacklist.name} onChange={(e) => setNewBlacklist({ ...newBlacklist, name: e.target.value })}
-                placeholder="Nom (optionnel)"
-                className="input-glass" />
-              <input value={newBlacklist.reason} onChange={(e) => setNewBlacklist({ ...newBlacklist, reason: e.target.value })}
-                placeholder="Raison (optionnel)"
-                className="input-glass" />
-              <button type="submit" disabled={loading}
-                className="cta-btn px-4 py-2 rounded-lg text-sm disabled:opacity-50 flex items-center gap-1">
-                <Plus size={14} /> Ajouter
-              </button>
+      {/* ── BLACKLIST ── */}
+      {tab === 'blacklist' && (
+        <div className="space-y-4">
+          <div className="g-card" style={{ padding: 24 }}>
+            <SectionHeader
+              eyebrow="Blacklist"
+              title="Ajouter un contact"
+              desc="Ces contacts seront exclus de toutes les campagnes futures." />
+            <form onSubmit={handleAddBlacklist} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-2 max-w-4xl">
+              <div>
+                <label className="form-label">URN ID</label>
+                <input value={newBlacklist.urn_id}
+                  onChange={(e) => setNewBlacklist({ ...newBlacklist, urn_id: e.target.value })}
+                  placeholder="ACoAAB…" required className="input-sm mono" style={{ fontSize: 12 }} />
+              </div>
+              <div>
+                <label className="form-label">Nom (optionnel)</label>
+                <input value={newBlacklist.name}
+                  onChange={(e) => setNewBlacklist({ ...newBlacklist, name: e.target.value })}
+                  placeholder="Jean Dupont" className="input-sm" />
+              </div>
+              <div>
+                <label className="form-label">Raison (optionnel)</label>
+                <input value={newBlacklist.reason}
+                  onChange={(e) => setNewBlacklist({ ...newBlacklist, reason: e.target.value })}
+                  placeholder="Déjà client…" className="input-sm" />
+              </div>
+              <div className="flex items-end">
+                <button type="submit" disabled={loading} className="cta-btn">
+                  <Plus size={13} /> Ajouter
+                </button>
+              </div>
             </form>
+          </div>
 
-            <div className="relative max-w-xs">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={blacklistSearch} onChange={(e) => { setBlacklistSearch(e.target.value); setBlacklistPage(1); }}
-                placeholder="Rechercher..."
-                className="input-glass w-full" style={{ paddingLeft: 36 }} />
+          <div className="g-card" style={{ padding: 24 }}>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <SectionHeader title="Contacts blacklistés" desc={`${blacklistTotal} au total`} />
+              <div className="relative max-w-xs">
+                <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted))' }} />
+                <input value={blacklistSearch}
+                  onChange={(e) => { setBlacklistSearch(e.target.value); setBlacklistPage(1); }}
+                  placeholder="Rechercher…" className="input-sm" style={{ paddingLeft: 32 }} />
+              </div>
             </div>
 
             {blacklistItems.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">Aucun contact dans la blacklist</p>
+              <div className="text-center py-10" style={{ color: 'hsl(var(--muted))' }}>
+                <ShieldOff size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
+                <p className="text-[13px]">Aucun contact dans la blacklist</p>
+              </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Nom</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">URN ID</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Raison</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                    <th className="w-10"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {blacklistItems.map((b) => (
-                    <tr key={b.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-900 font-medium">{b.name || '-'}</td>
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{b.urn_id}</td>
-                      <td className="px-4 py-3 text-gray-500">{b.reason || '-'}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{formatServerDate(b.created_at)}</td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => handleRemoveBlacklist(b.id)} className="text-gray-400 hover:text-red-500">
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
+              <div className="overflow-hidden rounded-xl" style={{ border: '1px solid hsl(var(--border))' }}>
+                <table className="w-full text-[12.5px]">
+                  <thead style={{ background: 'hsl(220 22% 98%)', borderBottom: '1px solid hsl(var(--border))' }}>
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>Nom</th>
+                      <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>URN ID</th>
+                      <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>Raison</th>
+                      <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>Date</th>
+                      <th className="w-10"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {blacklistItems.map((b, i) => (
+                      <tr key={b.id} className="row-hover"
+                        style={{ borderTop: i > 0 ? '1px solid hsl(var(--border))' : 'none' }}>
+                        <td className="px-4 py-3 font-medium" style={{ color: 'hsl(var(--text))' }}>{b.name || '—'}</td>
+                        <td className="px-4 py-3 mono text-[11px]" style={{ color: 'hsl(var(--muted))' }}>{b.urn_id}</td>
+                        <td className="px-4 py-3" style={{ color: 'hsl(var(--muted))' }}>{b.reason || '—'}</td>
+                        <td className="px-4 py-3 mono text-[11px]" style={{ color: 'hsl(var(--muted))' }}>{formatServerDate(b.created_at)}</td>
+                        <td className="px-4 py-3">
+                          <button onClick={() => handleRemoveBlacklist(b.id)}
+                            style={{ color: 'hsl(var(--muted))', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--rose))'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {blacklistTotal > 20 && (
-              <div className="flex justify-center gap-1">
-                {Array.from({ length: Math.min(Math.ceil(blacklistTotal / 20), 10) }, (_, i) => i + 1).map((p) => (
-                  <button key={p} onClick={() => setBlacklistPage(p)}
-                    className={`px-3 py-1 rounded text-xs font-medium ${p === blacklistPage ? 'text-white' : 'text-gray-600 hover:bg-gray-200'}`}
-                    style={p === blacklistPage ? { background: 'var(--blue)' } : undefined}>
-                    {p}
-                  </button>
-                ))}
+              <div className="flex justify-center gap-1 mt-4">
+                {Array.from({ length: Math.min(Math.ceil(blacklistTotal / 20), 10) }, (_, i) => i + 1).map((p) => {
+                  const active = p === blacklistPage;
+                  return (
+                    <button key={p} onClick={() => setBlacklistPage(p)}
+                      className="mono text-[11.5px]"
+                      style={{
+                        padding: '4px 10px', borderRadius: 6, fontWeight: 500,
+                        background: active ? 'hsl(var(--accent))' : 'transparent',
+                        color: active ? 'white' : 'hsl(var(--muted))',
+                        border: '1px solid ' + (active ? 'hsl(var(--accent))' : 'hsl(var(--border))'),
+                        cursor: 'pointer',
+                      }}>
+                      {p}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Logs tab */}
-        {tab === 'logs' && (
-          <div>
-            {logs.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">Aucune activité enregistrée</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+      {/* ── LOGS ── */}
+      {tab === 'logs' && (
+        <div className="g-card" style={{ padding: 24 }}>
+          <SectionHeader
+            eyebrow="Journal"
+            title="Activité récente"
+            desc={`${logs.length} dernières actions exécutées`} />
+
+          {logs.length === 0 ? (
+            <div className="text-center py-12" style={{ color: 'hsl(var(--muted))' }}>
+              <Activity size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
+              <p className="text-[13px]">Aucune activité enregistrée</p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl" style={{ border: '1px solid hsl(var(--border))' }}>
+              <table className="w-full text-[12.5px]">
+                <thead style={{ background: 'hsl(220 22% 98%)', borderBottom: '1px solid hsl(var(--border))' }}>
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Action</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Détails</th>
+                    <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>Date</th>
+                    <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>Action</th>
+                    <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>Statut</th>
+                    <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'hsl(var(--muted))', fontSize: 11.5 }}>Détails</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {logs.map((log, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-xs text-gray-500">{formatServerDateTime(log.created_at)}</td>
-                      <td className="px-4 py-3 text-gray-700">{log.action_type}</td>
-                      <td className="px-4 py-3 text-gray-600">{log.status || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">{log.error_message || '-'}</td>
-                    </tr>
-                  ))}
+                <tbody>
+                  {logs.map((log, i) => {
+                    const tone = log.status === 'success' ? 'emerald'
+                      : log.status === 'failed' || log.status === 'error' ? 'rose'
+                      : log.status === 'skipped' ? 'amber'
+                      : 'slate';
+                    return (
+                      <tr key={i} className="row-hover"
+                        style={{ borderTop: i > 0 ? '1px solid hsl(var(--border))' : 'none' }}>
+                        <td className="px-4 py-3 mono text-[11px]" style={{ color: 'hsl(var(--muted))' }}>{formatServerDateTime(log.created_at)}</td>
+                        <td className="px-4 py-3" style={{ color: 'hsl(var(--text))' }}>{log.action_type}</td>
+                        <td className="px-4 py-3">
+                          {log.status ? <span className={`chip ${tone}`} style={{ fontSize: 10.5 }}>{log.status}</span> : <span style={{ color: 'hsl(var(--muted))' }}>—</span>}
+                        </td>
+                        <td className="px-4 py-3 max-w-xs truncate" style={{ color: 'hsl(var(--muted))' }}>{log.error_message || '—'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
     </PageWrapper>
   );
 }

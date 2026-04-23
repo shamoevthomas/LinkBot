@@ -169,9 +169,9 @@ function KPICards({ stats }) {
     {
       label: 'Contacts', value: (stats?.total_contacts ?? 0).toLocaleString('fr-FR'),
       icon: Users, tone: 'accent', sparkColor: 'blue',
-      delta: stats?.contacts_delta != null ? (stats.contacts_delta >= 0 ? `+${stats.contacts_delta}` : `${stats.contacts_delta}`) : null,
-      deltaTone: (stats?.contacts_delta ?? 0) >= 0 ? 'emerald' : 'rose',
-      sub: '14 derniers jours',
+      delta: stats?.contacts_delta_14d > 0 ? `+${stats.contacts_delta_14d}` : null,
+      deltaTone: 'emerald',
+      sub: stats?.contacts_delta_14d > 0 ? 'depuis les 14 derniers jours' : 'réseau LinkedIn',
       trend: stats?.contacts_trend || [],
     },
     {

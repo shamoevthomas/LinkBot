@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Users, Clock, Trash2, Search, Rocket, Loader2, X } from 'lucide-react';
-import { getCRMs, createCRM, deleteCRM } from '../api/crm';
+import { getCRMs, getCRMsSummary, createCRM, deleteCRM } from '../api/crm';
 import PageWrapper from '../components/layout/PageWrapper';
 import { hueFromString } from '../components/ui/atoms';
 import { formatServerDate } from '../utils/date';
@@ -151,6 +151,7 @@ function CreateCRMModal({ open, onClose, onCreate, creating }) {
 
 export default function CRMListPage() {
   const [crms, setCrms] = useState([]);
+  const [summary, setSummary] = useState({ total_unique_contacts: 0 });
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -159,7 +160,11 @@ export default function CRMListPage() {
   const navigate = useNavigate();
 
   const load = async () => {
-    try { setCrms(await getCRMs()); }
+    try {
+      const [list, sum] = await Promise.all([getCRMs(), getCRMsSummary().catch(() => null)]);
+      setCrms(list);
+      if (sum) setSummary(sum);
+    }
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -197,7 +202,7 @@ export default function CRMListPage() {
     return list;
   }, [crms, query, sort]);
 
-  const totalContacts = crms.reduce((s, c) => s + (c.contact_count || 0), 0);
+  const totalContacts = summary.total_unique_contacts ?? 0;
   const activeCampaigns = crms.reduce((s, c) => s + (c.campaign_count || 0), 0);
 
   return (

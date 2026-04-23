@@ -151,6 +151,22 @@ async def search_linkedin_people(
 # CRM CRUD
 # ---------------------------------------------------------------------------
 
+@router.get("/summary")
+def crms_summary(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Total CRM lists + distinct contact count across all user's CRMs (no double-count)."""
+    crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
+    if not crm_ids:
+        return {"total_lists": 0, "total_unique_contacts": 0}
+    total_unique = db.query(func.count(func.distinct(Contact.urn_id))).filter(
+        Contact.crm_id.in_(crm_ids),
+        Contact.deleted_at.is_(None),
+    ).scalar() or 0
+    return {"total_lists": len(crm_ids), "total_unique_contacts": total_unique}
+
+
 @router.get("", response_model=list[CRMResponse])
 def list_crms(
     db: Session = Depends(get_db),

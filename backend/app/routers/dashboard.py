@@ -18,7 +18,22 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
     user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == _user.id).all()]
     user_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id).all()]
 
-    total_contacts = db.query(func.count(func.distinct(Contact.urn_id))).filter(Contact.crm_id.in_(user_crm_ids)).scalar() or 0 if user_crm_ids else 0
+    # Contacts = real LinkedIn network only (connection_status == "connected").
+    # Excludes search/campaign prospects, CSV imports without a connection marker, etc.
+    if user_crm_ids:
+        total_contacts = db.query(func.count(func.distinct(Contact.urn_id))).filter(
+            Contact.crm_id.in_(user_crm_ids),
+            Contact.connection_status == "connected",
+        ).scalar() or 0
+        cutoff_14d = datetime.utcnow() - timedelta(days=14)
+        contacts_delta_14d = db.query(func.count(func.distinct(Contact.urn_id))).filter(
+            Contact.crm_id.in_(user_crm_ids),
+            Contact.connection_status == "connected",
+            Contact.added_at >= cutoff_14d,
+        ).scalar() or 0
+    else:
+        total_contacts = 0
+        contacts_delta_14d = 0
     total_crms = len(user_crm_ids)
     active_campaigns = db.query(func.count(Campaign.id)).filter(Campaign.user_id == _user.id, Campaign.status == "running").scalar() or 0
 
@@ -149,6 +164,7 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
 
     return {
         "total_contacts": total_contacts,
+        "contacts_delta_14d": contacts_delta_14d,
         "total_crms": total_crms,
         "active_campaigns": active_campaigns,
         "actions_today": actions_today,

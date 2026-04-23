@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Rocket, Settings, Link as LinkIcon, Contact as ContactIcon, Bell, Magnet } from 'lucide-react';
+import { LayoutDashboard, Users, Rocket, Settings, Link as LinkIcon, Contact as ContactIcon, Bell, Magnet, MessageCircle, CheckCircle, AlertTriangle, BellOff, CheckCheck } from 'lucide-react';
 import { getNotifications } from '../../api/dashboard';
 import { getNotificationsList, markNotificationRead, markAllNotificationsRead } from '../../api/notifications';
 import UserPopup from '../ui/UserPopup';
@@ -15,10 +15,10 @@ const links = [
   { to: '/dashboard/config', icon: Settings, label: 'Configuration', dotKey: 'cookies_invalid' },
 ];
 
-const NOTIF_ICONS = {
-  reply_received: '💬',
-  campaign_completed: '✅',
-  cookies_expired: '⚠️',
+const NOTIF_META = {
+  reply_received:     { icon: MessageCircle, tone: 'violet' },
+  campaign_completed: { icon: CheckCircle,   tone: 'emerald' },
+  cookies_expired:    { icon: AlertTriangle, tone: 'amber' },
 };
 
 export default function Sidebar() {
@@ -132,48 +132,105 @@ export default function Sidebar() {
             {showNotifs && (
               <div style={{
                 position: 'absolute', right: 0, top: 44,
-                width: 340, maxHeight: 420, overflowY: 'auto',
-                background: 'hsl(var(--panel))', borderRadius: 14,
-                boxShadow: '0 20px 50px -20px hsl(220 40% 20% / .25), 0 4px 14px -6px hsl(220 40% 20% / .08)',
-                border: '1px solid hsl(var(--border-strong))',
-                zIndex: 100,
+                width: 360, maxHeight: 460, display: 'flex', flexDirection: 'column',
+                background: 'hsl(var(--panel))', borderRadius: 16,
+                boxShadow: '0 24px 60px -24px hsl(220 40% 20% / .28), 0 6px 18px -8px hsl(220 40% 20% / .08)',
+                border: '1px solid hsl(var(--border))',
+                overflow: 'hidden', zIndex: 100,
               }}>
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 16px', borderBottom: '1px solid hsl(var(--border))',
+                  padding: '14px 16px 12px', borderBottom: '1px solid hsl(var(--border))',
+                  flexShrink: 0,
                 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Notifications</span>
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', color: 'hsl(var(--text))' }}>
+                      Notifications
+                    </span>
+                    {unreadCount > 0 && (
+                      <span className="chip blue mono" style={{ fontSize: 10, padding: '1px 7px' }}>
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
                   {unreadCount > 0 && (
                     <button onClick={handleMarkAllRead}
-                      style={{ fontSize: 11, color: 'hsl(var(--accent))', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
-                      Tout marquer lu
+                      className="inline-flex items-center gap-1 transition-colors"
+                      style={{
+                        fontSize: 11.5, color: 'hsl(var(--muted))',
+                        background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500,
+                        padding: '4px 8px', borderRadius: 6,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--accent))'; e.currentTarget.style.background = 'hsl(var(--accent-soft))'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'hsl(var(--muted))'; e.currentTarget.style.background = 'none'; }}>
+                      <CheckCheck size={11} /> Tout marquer lu
                     </button>
                   )}
                 </div>
-                {notifList.length === 0 ? (
-                  <div style={{ padding: '24px 16px', textAlign: 'center', color: 'hsl(var(--muted))', fontSize: 13 }}>
-                    Aucune notification
-                  </div>
-                ) : (
-                  notifList.map((n) => (
-                    <div key={n.id}
-                      onClick={() => !n.read && handleMarkRead(n.id)}
-                      style={{
-                        padding: '10px 16px',
-                        borderBottom: '1px solid hsl(var(--border))',
-                        background: n.read ? 'hsl(var(--panel))' : 'hsl(var(--accent-soft))',
-                        cursor: n.read ? 'default' : 'pointer',
-                        display: 'flex', gap: 10, alignItems: 'flex-start',
-                      }}>
-                      <span style={{ fontSize: 16, marginTop: 2 }}>{NOTIF_ICONS[n.type] || '🔔'}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600 }}>{n.title}</div>
-                        {n.message && <div style={{ fontSize: 11, color: 'hsl(var(--muted))', marginTop: 2 }}>{n.message}</div>}
-                      </div>
-                      <span className="mono" style={{ fontSize: 10, color: 'hsl(var(--muted))', whiteSpace: 'nowrap', marginTop: 2 }}>{timeAgo(n.created_at)}</span>
+
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {notifList.length === 0 ? (
+                    <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                      <BellOff size={26} style={{ color: 'hsl(var(--muted))', opacity: 0.4, margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: 12.5, color: 'hsl(var(--muted))' }}>Aucune notification</div>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    notifList.map((n, i) => {
+                      const meta = NOTIF_META[n.type] || { icon: Bell, tone: 'accent' };
+                      const Ic = meta.icon;
+                      const isLast = i === notifList.length - 1;
+                      return (
+                        <div key={n.id}
+                          onClick={() => !n.read && handleMarkRead(n.id)}
+                          style={{
+                            position: 'relative',
+                            padding: '12px 16px 12px 18px',
+                            borderBottom: isLast ? 'none' : '1px solid hsl(var(--border))',
+                            cursor: n.read ? 'default' : 'pointer',
+                            display: 'flex', gap: 11, alignItems: 'flex-start',
+                            transition: 'background .15s',
+                          }}
+                          onMouseEnter={(e) => { if (!n.read) e.currentTarget.style.background = 'hsl(220 22% 98%)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                          {!n.read && (
+                            <span style={{
+                              position: 'absolute', left: 7, top: 20,
+                              width: 6, height: 6, borderRadius: '50%',
+                              background: 'hsl(var(--accent))',
+                              boxShadow: '0 0 0 3px hsl(var(--accent) / .18)',
+                            }} />
+                          )}
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                            background: `hsl(var(--${meta.tone}) / .12)`,
+                            color: `hsl(var(--${meta.tone}))`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <Ic size={14} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: 13, fontWeight: n.read ? 500 : 600,
+                              color: 'hsl(var(--text))', letterSpacing: '-0.005em',
+                              lineHeight: 1.35,
+                            }}>{n.title}</div>
+                            {n.message && (
+                              <div style={{ fontSize: 11.5, color: 'hsl(var(--muted))', marginTop: 2, lineHeight: 1.4 }}>
+                                {n.message}
+                              </div>
+                            )}
+                          </div>
+                          <span className="mono" style={{
+                            fontSize: 10, color: 'hsl(var(--muted))',
+                            whiteSpace: 'nowrap', marginTop: 3, flexShrink: 0,
+                          }}>
+                            {timeAgo(n.created_at)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
           </div>

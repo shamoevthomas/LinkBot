@@ -347,7 +347,6 @@ export default function CampaignsPage() {
           <p className="text-[13.5px] mt-1" style={{ color: 'hsl(var(--muted))' }}>
             Automatisez vos actions LinkedIn —{' '}
             <span className="mono" style={{ fontWeight: 500 }}>{counts.running}</span> en cours,{' '}
-            <span className="mono" style={{ fontWeight: 500 }}>{counts.scheduled}</span> planifiée{counts.scheduled > 1 ? 's' : ''},{' '}
             <span className="mono" style={{ fontWeight: 500 }}>{counts.completed}</span> terminée{counts.completed > 1 ? 's' : ''}
           </p>
         </div>
@@ -410,7 +409,6 @@ export default function CampaignsPage() {
           {[
             { k: 'all', l: 'Toutes', n: counts.all },
             { k: 'running', l: 'En cours', n: counts.running, dot: 'emerald' },
-            { k: 'scheduled', l: 'Planifiées', n: counts.scheduled, dot: 'amber' },
             { k: 'paused', l: 'En pause', n: counts.paused, dot: 'slate' },
             { k: 'completed', l: 'Terminées', n: counts.completed, dot: 'blue' },
           ].map((f) => (

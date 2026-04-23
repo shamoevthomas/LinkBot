@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { LogOut, Camera, Lock, ExternalLink, X, Loader2 } from 'lucide-react';
+import { LogOut, Camera, Lock, ExternalLink, X, Loader2, Check, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { updateProfile } from '../../api/user';
 import toast from 'react-hot-toast';
@@ -9,7 +9,6 @@ export default function UserPopup() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  // Form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [jobRole, setJobRole] = useState('');
@@ -21,7 +20,6 @@ export default function UserPopup() {
   const [picturePreview, setPicturePreview] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Sync form with user data when opening
   useEffect(() => {
     if (open && user) {
       setFirstName(user.first_name || '');
@@ -36,7 +34,6 @@ export default function UserPopup() {
     }
   }, [open, user]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -44,7 +41,6 @@ export default function UserPopup() {
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  // Close on Escape
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
@@ -94,19 +90,20 @@ export default function UserPopup() {
     }
   };
 
-  const initials = `${user?.first_name?.[0] || 'U'}${user?.last_name?.[0] || ''}`;
+  const initials = `${user?.first_name?.[0] || 'U'}${user?.last_name?.[0] || ''}`.toUpperCase();
   const displayPic = picturePreview || user?.profile_picture_path;
+  const connected = user?.cookies_valid;
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      {/* Trigger button */}
+      {/* Trigger */}
       <button
         onClick={() => setOpen(!open)}
         style={{
           padding: 0, border: 'none', background: 'none', cursor: 'pointer',
           borderRadius: 99, outline: 'none',
-          boxShadow: open ? '0 0 0 2px var(--blue)' : 'none',
-          transition: 'box-shadow 0.2s',
+          boxShadow: open ? '0 0 0 2px hsl(var(--accent))' : 'none',
+          transition: 'box-shadow 0.15s',
         }}
       >
         {user?.profile_picture_path ? (
@@ -114,138 +111,174 @@ export default function UserPopup() {
         ) : (
           <div style={{
             width: 32, height: 32, borderRadius: 99,
-            background: 'rgba(0,132,255,0.1)', color: 'var(--blue)',
+            background: 'hsl(var(--accent-soft))', color: 'hsl(var(--accent))',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 700,
+            fontSize: 11.5, fontWeight: 700,
           }}>
             {initials}
           </div>
         )}
       </button>
 
-      {/* Settings panel */}
+      {/* Panel */}
       {open && (
         <div style={{
           position: 'absolute', right: 0, top: 'calc(100% + 8px)',
-          width: 360, background: '#fff', borderRadius: 16,
-          boxShadow: '0 12px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.06)',
+          width: 380, background: 'hsl(var(--panel))', borderRadius: 18,
+          boxShadow: '0 24px 60px -24px hsl(220 40% 20% / .28), 0 6px 18px -8px hsl(220 40% 20% / .08)',
+          border: '1px solid hsl(var(--border))',
           zIndex: 100, maxHeight: 'calc(100vh - 100px)', overflowY: 'auto',
         }}>
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Mon profil</h3>
-            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 8 }}>
-              <X size={18} color="var(--text3)" />
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '16px 20px 12px',
+            borderBottom: '1px solid hsl(var(--border))',
+          }}>
+            <div className="flex items-center gap-2">
+              <UserIcon size={14} style={{ color: 'hsl(var(--muted))' }} />
+              <h3 style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', color: 'hsl(var(--text))', margin: 0 }}>
+                Mon profil
+              </h3>
+            </div>
+            <button onClick={() => setOpen(false)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 6, borderRadius: 8, color: 'hsl(var(--muted))',
+                display: 'flex', alignItems: 'center',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(220 22% 96%)'; e.currentTarget.style.color = 'hsl(var(--text))'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--muted))'; }}>
+              <X size={15} />
             </button>
           </div>
 
-          <div style={{ padding: '0 20px 20px' }}>
-            {/* Profile picture */}
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-              <label style={{ position: 'relative', cursor: 'pointer' }}>
+          <div style={{ padding: '18px 20px 16px' }}>
+            {/* Avatar */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
+              <label style={{ position: 'relative', cursor: 'pointer', display: 'block' }}>
                 {displayPic ? (
-                  <img src={displayPic} alt="" style={{ width: 80, height: 80, borderRadius: 99, objectFit: 'cover', border: '3px solid rgba(0,132,255,0.15)' }} />
+                  <img src={displayPic} alt=""
+                    style={{
+                      width: 84, height: 84, borderRadius: '50%', objectFit: 'cover',
+                      border: '3px solid hsl(var(--panel))',
+                      boxShadow: '0 0 0 3px hsl(var(--accent) / .18), 0 6px 18px -6px hsl(var(--accent) / .3)',
+                    }} />
                 ) : (
                   <div style={{
-                    width: 80, height: 80, borderRadius: 99,
-                    background: 'rgba(0,132,255,0.1)', color: 'var(--blue)',
+                    width: 84, height: 84, borderRadius: '50%',
+                    background: 'hsl(var(--accent-soft))', color: 'hsl(var(--accent))',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 24, fontWeight: 700, border: '3px solid rgba(0,132,255,0.15)',
+                    fontSize: 26, fontWeight: 700,
+                    border: '3px solid hsl(var(--panel))',
+                    boxShadow: '0 0 0 3px hsl(var(--accent) / .18), 0 6px 18px -6px hsl(var(--accent) / .3)',
                   }}>
                     {initials}
                   </div>
                 )}
                 <div style={{
-                  position: 'absolute', bottom: 0, right: 0,
-                  width: 28, height: 28, borderRadius: 99,
-                  background: 'var(--blue)', color: '#fff',
+                  position: 'absolute', bottom: -2, right: -2,
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: 'hsl(var(--accent))', color: 'white',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: '2px solid #fff',
+                  border: '2px solid hsl(var(--panel))',
+                  boxShadow: '0 4px 12px -2px hsl(var(--accent) / .5)',
                 }}>
-                  <Camera size={14} />
+                  <Camera size={13} />
                 </div>
                 <input type="file" accept="image/*" onChange={handlePictureChange} style={{ display: 'none' }} />
               </label>
             </div>
 
-            {/* Name fields */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text3)', marginBottom: 4 }}>Prenom</label>
-                <input value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                  className="input-glass" style={{ width: '100%', fontSize: 13 }} />
+            {/* Names */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div>
+                <label className="form-label">Prénom</label>
+                <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="input-sm" />
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text3)', marginBottom: 4 }}>Nom</label>
-                <input value={lastName} onChange={(e) => setLastName(e.target.value)}
-                  className="input-glass" style={{ width: '100%', fontSize: 13 }} />
+              <div>
+                <label className="form-label">Nom</label>
+                <input value={lastName} onChange={(e) => setLastName(e.target.value)} className="input-sm" />
               </div>
             </div>
 
-            {/* Job role */}
+            {/* Job */}
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text3)', marginBottom: 4 }}>Poste</label>
+              <label className="form-label">Poste</label>
               <input value={jobRole} onChange={(e) => setJobRole(e.target.value)}
-                placeholder="Ex: Founder / CEO"
-                className="input-glass" style={{ width: '100%', fontSize: 13 }} />
+                placeholder="Ex: Founder / CEO" className="input-sm" />
             </div>
 
-            {/* LinkedIn URL */}
+            {/* LinkedIn */}
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 500, color: 'var(--text3)', marginBottom: 4 }}>
-                <ExternalLink size={12} /> LinkedIn
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <ExternalLink size={11} /> LinkedIn
               </label>
               <input value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)}
-                placeholder="https://linkedin.com/in/..."
-                className="input-glass" style={{ width: '100%', fontSize: 13 }} />
+                placeholder="https://linkedin.com/in/…" className="input-sm" />
             </div>
 
-            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '0 0 16px' }} />
-
             {/* Password section */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
-                <Lock size={14} /> Changer le mot de passe
-              </label>
+            <div style={{
+              padding: 14,
+              background: 'hsl(220 22% 98%)',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 12,
+              marginBottom: 16,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <Lock size={12} style={{ color: 'hsl(var(--muted))' }} />
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'hsl(var(--text))', letterSpacing: '-0.005em' }}>
+                  Changer le mot de passe
+                </span>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Mot de passe actuel"
-                  className="input-glass" style={{ width: '100%', fontSize: 13 }} />
+                  placeholder="Mot de passe actuel" className="input-sm" />
                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Nouveau mot de passe"
-                  className="input-glass" style={{ width: '100%', fontSize: 13 }} />
+                  placeholder="Nouveau mot de passe" className="input-sm" />
                 <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirmer"
-                  className="input-glass" style={{ width: '100%', fontSize: 13 }} />
+                  placeholder="Confirmer" className="input-sm" />
               </div>
             </div>
 
-            {/* Save button */}
+            {/* Save */}
             <button onClick={handleSave} disabled={saving}
-              className="cta-btn" style={{ width: '100%', padding: '10px 0', fontSize: 13, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              {saving && <Loader2 size={14} className="animate-spin" />}
-              {saving ? 'Enregistrement...' : 'Enregistrer'}
+              className="cta-btn" style={{ width: '100%', justifyContent: 'center' }}>
+              {saving ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
+          </div>
 
-            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '16px 0 8px' }} />
-
-            {/* App info + logout */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 10, color: 'var(--text3)' }}>
-                LinkBot v1.0 — {user?.cookies_valid ? 'LinkedIn connecte' : 'LinkedIn deconnecte'}
+          {/* Footer */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 20px 14px',
+            borderTop: '1px solid hsl(var(--border))',
+            background: 'hsl(220 22% 98%)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: connected ? 'hsl(var(--emerald))' : 'hsl(var(--rose))',
+                boxShadow: connected ? '0 0 0 2px hsl(var(--emerald) / .2)' : '0 0 0 2px hsl(var(--rose) / .2)',
+              }} />
+              <span className="mono" style={{ fontSize: 10, color: 'hsl(var(--muted))' }}>
+                v1.0 · {connected ? 'LinkedIn connecté' : 'LinkedIn déconnecté'}
               </span>
-              <button onClick={() => { setOpen(false); logout(); }}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#ef4444', fontSize: 12, fontWeight: 500,
-                  display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 8,
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.06)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-              >
-                <LogOut size={14} /> Deconnexion
-              </button>
             </div>
+            <button onClick={() => { setOpen(false); logout(); }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'hsl(var(--rose))', fontSize: 12, fontWeight: 500,
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 10px', borderRadius: 8,
+                transition: 'background .15s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'hsl(var(--rose) / .08)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}>
+              <LogOut size={12} /> Déconnexion
+            </button>
           </div>
         </div>
       )}
