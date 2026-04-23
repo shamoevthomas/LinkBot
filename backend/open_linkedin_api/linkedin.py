@@ -250,7 +250,17 @@ class Linkedin(object):
         url = f"/feed/comments"
         url_params["updateId"] = "activity:" + post_urn
         res = self._fetch(url, params=url_params)
-        data = res.json()
+        self.logger.info(f"[GET_POST_COMMENTS] status={res.status_code} url_params={url_params}")
+        try:
+            data = res.json()
+        except Exception as exc:
+            self.logger.info(f"[GET_POST_COMMENTS] non-JSON response: {exc}, body[:200]={res.text[:200]!r}")
+            return []
+        self.logger.info(
+            f"[GET_POST_COMMENTS] data keys={list(data.keys()) if isinstance(data, dict) else type(data).__name__} "
+            f"elements={len(data.get('elements', [])) if isinstance(data, dict) else '?'} "
+            f"paging={data.get('paging') if isinstance(data, dict) else '?'}"
+        )
         if data and "status" in data and data["status"] != 200:
             self.logger.info("request failed: {}".format(data["status"]))
             return [{}]
