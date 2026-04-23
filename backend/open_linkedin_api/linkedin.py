@@ -230,6 +230,93 @@ class Linkedin(object):
             data["paging"] = res.json()["paging"]
         return data["elements"]
 
+    def _parse_comments_envelope(self, data: Dict) -> List:
+        """Parse LinkedIn's new GraphQL-style decorated response into legacy-shaped comments.
+
+        New format: {data: {*elements: [urn, ...], ...}, included: [...]}
+        Legacy format expected by callers: list of Comment dicts with
+          - entityUrn / dashEntityUrn
+          - commentary.text (or commentV2.text)
+          - commenter.com.linkedin.voyager.feed.MemberActor.miniProfile
+        """
+        inner = data.get("data")
+        if not isinstance(inner, dict):
+            return []
+        top_urns = inner.get("*elements") or inner.get("elements") or []
+        included = data.get("included") or []
+
+        # Index included by entityUrn
+        by_urn = {}
+        for item in included:
+            if isinstance(item, dict):
+                urn = item.get("entityUrn")
+                if urn:
+                    by_urn[urn] = item
+
+        def resolve(ref):
+            if isinstance(ref, str) and ref in by_urn:
+                return by_urn[ref]
+            return None
+
+        normalized = []
+        missing_comment = 0
+        missing_commenter = 0
+        for urn in top_urns:
+            comment = resolve(urn)
+            if not isinstance(comment, dict):
+                missing_comment += 1
+                continue
+            # Resolve commenter reference
+            commenter_ref = comment.get("*commenter") or comment.get("commenter")
+            commenter_obj = resolve(commenter_ref) if isinstance(commenter_ref, str) else commenter_ref
+            if not isinstance(commenter_obj, dict):
+                commenter_obj = {}
+                missing_commenter += 1
+
+            # Extract comment text from known fields
+            text = ""
+            for key in ("commentV2", "commentary", "comment"):
+                val = comment.get(key)
+                if isinstance(val, dict):
+                    t = val.get("text")
+                    if t:
+                        text = t
+                        break
+                elif isinstance(val, str) and val:
+                    text = val
+                    break
+
+            # Build legacy-shaped commenter envelope
+            # commenter_obj might be a MiniProfile directly, or wrap one.
+            mini = commenter_obj.get("miniProfile") if isinstance(commenter_obj, dict) else None
+            if not isinstance(mini, dict):
+                # Treat commenter_obj itself as the miniProfile if it has the right shape
+                if commenter_obj.get("firstName") or commenter_obj.get("publicIdentifier"):
+                    mini = commenter_obj
+                else:
+                    mini = {}
+
+            member_actor = {
+                "miniProfile": mini,
+                "urn": commenter_obj.get("urn") or mini.get("entityUrn") or mini.get("dashEntityUrn") or "",
+            }
+
+            normalized.append({
+                "entityUrn": comment.get("entityUrn") or urn,
+                "dashEntityUrn": comment.get("entityUrn") or urn,
+                "urn": comment.get("entityUrn") or urn,
+                "commentary": {"text": text},
+                "commenter": {"com.linkedin.voyager.feed.MemberActor": member_actor},
+                "_raw": comment,
+            })
+
+        self.logger.info(
+            f"[GET_POST_COMMENTS] parsed envelope — top_urns={len(top_urns)} "
+            f"resolved={len(normalized)} missing_comment={missing_comment} "
+            f"missing_commenter={missing_commenter}"
+        )
+        return normalized
+
     def get_post_comments(self, post_urn: str, comment_count=100) -> List:
         """
         get_post_comments: Get post comments
@@ -261,27 +348,9 @@ class Linkedin(object):
             f"elements={len(data.get('elements', [])) if isinstance(data, dict) else '?'} "
             f"paging={data.get('paging') if isinstance(data, dict) else '?'}"
         )
+        # New GraphQL-decorated envelope: {data: {...}, included: [...]}
         if isinstance(data, dict) and "data" in data and "elements" not in data:
-            inner = data.get("data")
-            if isinstance(inner, dict):
-                self.logger.info(f"[GET_POST_COMMENTS] inner data.data keys={list(inner.keys())}")
-                for k, v in inner.items():
-                    if isinstance(v, dict):
-                        self.logger.info(f"[GET_POST_COMMENTS]   data.data.{k} keys={list(v.keys())[:10]}")
-                    elif isinstance(v, list):
-                        self.logger.info(f"[GET_POST_COMMENTS]   data.data.{k} list len={len(v)} first_type={type(v[0]).__name__ if v else 'empty'}")
-                    else:
-                        self.logger.info(f"[GET_POST_COMMENTS]   data.data.{k}={v!r}")
-            included = data.get("included", [])
-            if isinstance(included, list):
-                type_counts = {}
-                for item in included:
-                    if isinstance(item, dict):
-                        t = item.get("$type") or item.get("type") or "unknown"
-                        type_counts[t] = type_counts.get(t, 0) + 1
-                self.logger.info(f"[GET_POST_COMMENTS] included total={len(included)} $type counts={type_counts}")
-                if included and isinstance(included[0], dict):
-                    self.logger.info(f"[GET_POST_COMMENTS] included[0] keys={list(included[0].keys())[:15]}")
+            return self._parse_comments_envelope(data)
         if data and "status" in data and data["status"] != 200:
             self.logger.info("request failed: {}".format(data["status"]))
             return [{}]
