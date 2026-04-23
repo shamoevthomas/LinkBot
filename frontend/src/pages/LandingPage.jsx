@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Users, Rocket, Sparkles, Repeat, Activity, Link as LinkIcon,
   Search, UserPlus, MessageSquare, Zap, Shield, FileText, FileSpreadsheet,
-  Target, UserCircle, Send, Calendar, ArrowRight,
+  Target, UserCircle, Send, Calendar, ArrowRight, ArrowUp,
 } from 'lucide-react';
 
 const ORB_SRC = 'https://future.co/images/homepage/glassy-orb/orb-purple.webm';
@@ -81,7 +81,15 @@ export default function LandingPage() {
   const page = useReveal();
   const [splash, setSplash] = useState(false);
   const [drops, setDrops] = useState([]);
+  const [showTop, setShowTop] = useState(false);
   const splashTimer = useRef(null);
+
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 600);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const triggerSplash = useCallback(() => {
     if (splash) return;
@@ -112,7 +120,6 @@ export default function LandingPage() {
       background: 'hsl(var(--bg))',
       color: 'hsl(var(--text))',
       position: 'relative',
-      overflow: 'hidden',
     }}>
       {/* Ambient blobs */}
       <div style={{
@@ -126,8 +133,68 @@ export default function LandingPage() {
         filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0,
       }} />
 
+      {/* Sticky topbar — always visible */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 50, padding: '18px 20px 0' }}>
+        <nav className="flex items-center justify-between"
+          style={{
+            maxWidth: 1160, margin: '0 auto',
+            padding: '10px 18px',
+            background: 'hsl(var(--panel) / .85)',
+            backdropFilter: 'saturate(180%) blur(14px)',
+            WebkitBackdropFilter: 'saturate(180%) blur(14px)',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: 16,
+            boxShadow: '0 1px 2px -1px hsl(220 40% 20% / .04)',
+          }}>
+          <RouterLink to="/" className="flex items-center gap-2"
+            style={{ textDecoration: 'none', color: 'hsl(var(--text))' }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+              style={{
+                background: 'hsl(var(--accent))', color: 'white',
+                boxShadow: '0 6px 16px -6px hsl(var(--accent) / .6)',
+              }}>
+              <LinkIcon size={14} />
+            </div>
+            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>LinkBot</span>
+          </RouterLink>
+
+          <div className="hidden md:flex items-center gap-7">
+            {[
+              ['Fonctionnalités', '#features'],
+              ['Campagnes', '#campaigns'],
+              ['IA', '#ai'],
+              ['Comment ça marche', '#how'],
+            ].map(([label, href]) => (
+              <a key={label} href={href}
+                className="transition-colors"
+                style={{ fontSize: 13, color: 'hsl(var(--muted))', textDecoration: 'none' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
+                {label}
+              </a>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/login')}
+              className="transition-colors"
+              style={{
+                fontSize: 13, color: 'hsl(var(--muted))',
+                background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
+              Se connecter
+            </button>
+            <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '8px 18px', fontSize: 13 }}>
+              S'inscrire
+            </button>
+          </div>
+        </nav>
+      </div>
+
       {/* ── HERO ── */}
-      <div className="relative overflow-hidden" style={{ minHeight: '100vh' }}>
+      <div className="relative overflow-hidden">
         {/* Top wash */}
         <div style={{
           position: 'absolute', top: -100, left: '50%', transform: 'translateX(-50%)',
@@ -135,64 +202,6 @@ export default function LandingPage() {
           background: 'radial-gradient(ellipse 70% 60% at 50% 0%, hsl(var(--accent) / .12), hsl(var(--accent) / .04) 50%, transparent 100%)',
           pointerEvents: 'none', zIndex: 0,
         }} />
-
-        {/* Topbar */}
-        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '18px 20px 0' }}>
-          <nav className="flex items-center justify-between"
-            style={{
-              padding: '10px 18px',
-              background: 'hsl(var(--panel) / .75)',
-              backdropFilter: 'saturate(180%) blur(14px)',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: 16,
-              boxShadow: '0 1px 2px -1px hsl(220 40% 20% / .04)',
-            }}>
-            <RouterLink to="/" className="flex items-center gap-2"
-              style={{ textDecoration: 'none', color: 'hsl(var(--text))' }}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{
-                  background: 'hsl(var(--accent))', color: 'white',
-                  boxShadow: '0 6px 16px -6px hsl(var(--accent) / .6)',
-                }}>
-                <LinkIcon size={14} />
-              </div>
-              <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>LinkBot</span>
-            </RouterLink>
-
-            <div className="hidden md:flex items-center gap-7">
-              {[
-                ['Fonctionnalités', '#features'],
-                ['Campagnes', '#campaigns'],
-                ['IA', '#ai'],
-                ['Comment ça marche', '#how'],
-              ].map(([label, href]) => (
-                <a key={label} href={href}
-                  className="transition-colors"
-                  style={{ fontSize: 13, color: 'hsl(var(--muted))', textDecoration: 'none' }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
-                  {label}
-                </a>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button onClick={() => navigate('/login')}
-                className="transition-colors"
-                style={{
-                  fontSize: 13, color: 'hsl(var(--muted))',
-                  background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
-                onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
-                Se connecter
-              </button>
-              <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '8px 18px', fontSize: 13 }}>
-                S'inscrire
-              </button>
-            </div>
-          </nav>
-        </div>
 
         {/* Hero content */}
         <section className="relative z-10 flex flex-col md:flex-row items-center"
@@ -879,6 +888,47 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
+
+      {/* Scroll-to-top floating bubble */}
+      <button
+        aria-label="Retour en haut"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: 24,
+          width: 44,
+          height: 44,
+          borderRadius: '50%',
+          background: 'hsl(var(--panel) / .9)',
+          backdropFilter: 'saturate(180%) blur(10px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(10px)',
+          border: '1px solid hsl(var(--border))',
+          color: 'hsl(var(--text))',
+          boxShadow: '0 8px 24px -8px hsl(220 40% 20% / .18)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 60,
+          opacity: showTop ? 1 : 0,
+          transform: showTop ? 'translateY(0) scale(1)' : 'translateY(12px) scale(0.85)',
+          pointerEvents: showTop ? 'auto' : 'none',
+          transition: 'opacity .25s ease, transform .25s cubic-bezier(0.22,1,0.36,1), background .2s, color .2s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'hsl(var(--accent))';
+          e.currentTarget.style.color = 'white';
+          e.currentTarget.style.borderColor = 'hsl(var(--accent))';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'hsl(var(--panel) / .9)';
+          e.currentTarget.style.color = 'hsl(var(--text))';
+          e.currentTarget.style.borderColor = 'hsl(var(--border))';
+        }}
+      >
+        <ArrowUp size={17} strokeWidth={2.2} />
+      </button>
 
       <style>{`
         @keyframes orbLogoIn {
