@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { Link as LinkIcon, Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
@@ -50,14 +50,11 @@ export default function LoginPage() {
         <div className="text-center mb-7">
           <RouterLink to="/" className="inline-flex items-center gap-2 mb-6"
             style={{ textDecoration: 'none' }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+            <img src="/Linky.png" alt="Linky"
               style={{
-                background: 'hsl(var(--accent))',
-                color: 'white',
-                boxShadow: '0 8px 20px -6px hsl(var(--accent) / .6)',
-              }}>
-              <LinkIcon size={18} />
-            </div>
+                width: 40, height: 40, objectFit: 'contain',
+                filter: 'drop-shadow(0 8px 20px hsl(var(--accent) / .4))',
+              }} />
             <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'hsl(var(--text))' }}>
               LinkBot
             </span>

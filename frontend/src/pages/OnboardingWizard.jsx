@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Users, Check, Link, Shield, Sparkles, Key, ExternalLink } from 'lucide-react';
+import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Users, Check, Shield, Sparkles, Key, ExternalLink } from 'lucide-react';
 import { submitOnboarding } from '../api/user';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -75,9 +75,8 @@ export default function OnboardingWizard() {
           }} />
 
           <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <Link size={20} className="text-white" />
-            </div>
+            <img src="/Linky.png" alt="Linky"
+              style={{ width: 40, height: 40, objectFit: 'contain' }} />
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Bienvenue sur LinkBot</h2>
               <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Configurez votre compte en 4 étapes</p>

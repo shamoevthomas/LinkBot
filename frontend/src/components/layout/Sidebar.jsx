@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Rocket, Settings, Link as LinkIcon, Contact as ContactIcon, Bell, Magnet, MessageCircle, CheckCircle, AlertTriangle, BellOff, CheckCheck } from 'lucide-react';
+import { LayoutDashboard, Users, Rocket, Settings, Contact as ContactIcon, Bell, Magnet, MessageCircle, CheckCircle, AlertTriangle, BellOff, CheckCheck } from 'lucide-react';
 import { getNotifications } from '../../api/dashboard';
 import { getNotificationsList, markNotificationRead, markAllNotificationsRead } from '../../api/notifications';
 import UserPopup from '../ui/UserPopup';
@@ -80,13 +80,11 @@ export default function Sidebar() {
         {/* Logo */}
         <NavLink to="/dashboard" end className="flex items-center gap-2 pr-3 border-r"
           style={{ borderColor: 'hsl(var(--border))', textDecoration: 'none' }}>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+          <img src="/Linky.png" alt="Linky"
             style={{
-              background: 'hsl(var(--accent))', color: 'white',
-              boxShadow: '0 6px 18px -6px hsl(var(--accent) / .6)',
-            }}>
-            <LinkIcon size={16} />
-          </div>
+              width: 32, height: 32, objectFit: 'contain',
+              filter: 'drop-shadow(0 6px 18px hsl(var(--accent) / .35))',
+            }} />
           <span style={{ fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em', color: 'hsl(var(--text))' }}>LinkBot</span>
         </NavLink>
 

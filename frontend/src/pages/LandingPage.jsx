@@ -148,13 +148,11 @@ export default function LandingPage() {
           }}>
           <RouterLink to="/" className="flex items-center gap-2"
             style={{ textDecoration: 'none', color: 'hsl(var(--text))' }}>
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+            <img src="/Linky.png" alt="Linky"
               style={{
-                background: 'hsl(var(--accent))', color: 'white',
-                boxShadow: '0 6px 16px -6px hsl(var(--accent) / .6)',
-              }}>
-              <LinkIcon size={14} />
-            </div>
+                width: 32, height: 32, objectFit: 'contain',
+                filter: 'drop-shadow(0 6px 16px hsl(var(--accent) / .35))',
+              }} />
             <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>LinkBot</span>
           </RouterLink>
 
@@ -291,7 +289,7 @@ export default function LandingPage() {
                   background: 'radial-gradient(ellipse 50% 35% at 35% 25%, rgba(255,255,255,0.45), transparent 60%)',
                   pointerEvents: 'none',
                 }} />
-                <img src="/linkedin.png" alt="LinkedIn"
+                <img src="/Linky.png" alt="Linky"
                   style={{
                     position: 'relative', zIndex: 2,
                     width: 400, height: 400, objectFit: 'contain',
@@ -877,10 +875,8 @@ export default function LandingPage() {
         <div style={{ height: 1, marginBottom: 32, background: 'linear-gradient(90deg, transparent, hsl(var(--border-strong)), transparent)' }} />
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md flex items-center justify-center"
-              style={{ background: 'hsl(var(--accent))', color: 'white' }}>
-              <LinkIcon size={11} />
-            </div>
+            <img src="/Linky.png" alt="Linky"
+              style={{ width: 24, height: 24, objectFit: 'contain' }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--muted))' }}>LinkBot</span>
           </div>
           <p className="text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>
