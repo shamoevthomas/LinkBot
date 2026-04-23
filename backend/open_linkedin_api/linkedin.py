@@ -2057,6 +2057,33 @@ class Linkedin(object):
         if not self.client.metadata.get("me") or not use_cache:
             res = self._fetch(f"/me")
             me_profile = res.json()
+            # New GraphQL-decorated /me envelope: lift the MiniProfile from `included`
+            # so downstream callers can still do profile["miniProfile"]["entityUrn"].
+            if (
+                isinstance(me_profile, dict)
+                and "data" in me_profile
+                and "miniProfile" not in me_profile
+            ):
+                included = me_profile.get("included") or []
+                mini = None
+                for item in included:
+                    if not isinstance(item, dict):
+                        continue
+                    t = item.get("$type") or ""
+                    if "MiniProfile" in t or item.get("publicIdentifier"):
+                        mini = item
+                        break
+                if mini:
+                    me_profile = {
+                        **me_profile,
+                        "miniProfile": mini,
+                        "plainId": (mini.get("entityUrn") or "").split(":")[-1],
+                    }
+                    self.logger.info(
+                        f"[GET_USER_PROFILE] normalized new envelope — publicId={mini.get('publicIdentifier')!r}"
+                    )
+                else:
+                    self.logger.warning("[GET_USER_PROFILE] new envelope but no MiniProfile in included")
             # cache profile
             self.client.metadata["me"] = me_profile
 
@@ -2547,7 +2574,13 @@ class Linkedin(object):
             "parentComment": parent_comment_urn,
         }
         res = self._fetch(url, params=url_params)
-        data = res.json()
+        try:
+            data = res.json()
+        except Exception:
+            return []
+        # New GraphQL-decorated envelope
+        if isinstance(data, dict) and "data" in data and "elements" not in data:
+            return self._parse_comments_envelope(data)
         if data and "status" in data and data["status"] != 200:
             return []
         return data.get("elements", [])
