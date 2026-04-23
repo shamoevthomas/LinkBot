@@ -111,6 +111,17 @@ body {
 .ghost-btn:hover { background: hsl(220 20% 97%); }
 .ghost-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.icon-btn {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.icon-btn:hover { background: hsl(220 22% 96%); border-color: hsl(var(--border)); }
+
 .tab-pill {
   padding: 8px 14px; border-radius: 12px;
   font-size: 13px; font-weight: 500;
