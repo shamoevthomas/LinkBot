@@ -3,7 +3,7 @@ import asyncio
 import logging
 from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends
-from sqlalchemy import func
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
 from app.models import User, CRM, Contact, Campaign, CampaignAction, CampaignContact, AppSettings, Notification
@@ -38,116 +38,126 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
     active_campaigns = db.query(func.count(Campaign.id)).filter(Campaign.user_id == _user.id, Campaign.status == "running").scalar() or 0
 
     today = date.today()
-    actions_today = 0
-    if user_campaign_ids:
-        actions_today = db.query(func.count(CampaignAction.id)).filter(
-            CampaignAction.campaign_id.in_(user_campaign_ids),
-            func.date(CampaignAction.created_at) == today
-        ).scalar() or 0
 
-    # Remaining quotas
-    max_conn_row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
-    max_dm_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
-    max_conn = int(max_conn_row.value) if max_conn_row else 25
-    max_dm = int(max_dm_row.value) if max_dm_row else 50
+    # Quotas (1 query via OR filter)
+    settings_rows = db.query(AppSettings).filter(
+        AppSettings.key.in_(["max_connections_per_day", "max_dms_per_day"])
+    ).all()
+    settings = {s.key: s.value for s in settings_rows}
+    max_conn = int(settings.get("max_connections_per_day", 25))
+    max_dm = int(settings.get("max_dms_per_day", 50))
 
-    conn_today = 0
-    dm_today = 0
+    # Today's actions: one query aggregating actions_today + conn_today + dm_today
+    actions_today = conn_today = dm_today = 0
     if user_campaign_ids:
-        conn_today = db.query(func.count(CampaignAction.id)).filter(
+        row = db.query(
+            func.count(CampaignAction.id).label("total"),
+            func.sum(case(
+                (
+                    (CampaignAction.action_type.in_(["connection_request", "connection_send"]))
+                    & (CampaignAction.status == "success"), 1
+                ),
+                else_=0,
+            )).label("conn"),
+            func.sum(case(
+                (
+                    (CampaignAction.action_type.in_(["dm_send", "dm_followup"]))
+                    & (CampaignAction.status == "success"), 1
+                ),
+                else_=0,
+            )).label("dm"),
+        ).filter(
             CampaignAction.campaign_id.in_(user_campaign_ids),
             func.date(CampaignAction.created_at) == today,
-            CampaignAction.action_type.in_(["connection_request", "connection_send"]),
-            CampaignAction.status == "success",
-        ).scalar() or 0
+        ).one()
+        actions_today = row.total or 0
+        conn_today = int(row.conn or 0)
+        dm_today = int(row.dm or 0)
 
-        dm_today = db.query(func.count(CampaignAction.id)).filter(
-            CampaignAction.campaign_id.in_(user_campaign_ids),
-            func.date(CampaignAction.created_at) == today,
-            CampaignAction.action_type.in_(["dm_send", "dm_followup"]),
-            CampaignAction.status == "success",
-        ).scalar() or 0
-
-    # Today's connection acceptances + replies (for the hero line)
-    today_accepted = 0
-    today_replies = 0
+    # Today's accepted + replies on CampaignContact (one query)
+    today_accepted = today_replies = 0
     if user_campaign_ids:
-        today_accepted = db.query(func.count(CampaignContact.id)).filter(
+        row = db.query(
+            func.sum(case(
+                (func.date(CampaignContact.connection_accepted_at) == today, 1),
+                else_=0,
+            )).label("accepted"),
+            func.sum(case(
+                (func.date(CampaignContact.replied_at) == today, 1),
+                else_=0,
+            )).label("replies"),
+        ).filter(
             CampaignContact.campaign_id.in_(user_campaign_ids),
-            CampaignContact.connection_accepted_at.isnot(None),
-            func.date(CampaignContact.connection_accepted_at) == today,
-        ).scalar() or 0
-        today_replies = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id.in_(user_campaign_ids),
-            CampaignContact.replied_at.isnot(None),
-            func.date(CampaignContact.replied_at) == today,
-        ).scalar() or 0
+        ).one()
+        today_accepted = int(row.accepted or 0)
+        today_replies = int(row.replies or 0)
 
-    # --- global reply rate (dm + connection_dm campaigns) ---
-    dm_campaign_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type.in_(["dm", "connection_dm", "search_connection_dm"])).all()]
+    # Recent campaigns + their IDs (1 query, reused below)
+    recent_campaigns = db.query(Campaign).filter(
+        Campaign.user_id == _user.id
+    ).order_by(Campaign.created_at.desc()).limit(5).all()
+
+    # Fetch campaign type buckets in one pass (replaces 3 separate ID queries)
+    campaign_types = db.query(Campaign.id, Campaign.type).filter(Campaign.user_id == _user.id).all()
+    dm_campaign_ids = [cid for cid, ctype in campaign_types if ctype in ("dm", "connection_dm", "search_connection_dm")]
+    all_conn_ids = [cid for cid, ctype in campaign_types if ctype in ("connection", "connection_dm", "search_connection_dm")]
+
+    # Global reply rate + connection rate in one CampaignContact scan per bucket
     global_reply_rate = 0.0
     if dm_campaign_ids:
-        total_messaged = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id.in_(dm_campaign_ids),
-            CampaignContact.status.notin_(["pending", "en_attente"]),
-        ).scalar() or 0
-        total_replied = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id.in_(dm_campaign_ids),
-            CampaignContact.status == "reussi",
-        ).scalar() or 0
-        global_reply_rate = round(total_replied / total_messaged * 100, 1) if total_messaged > 0 else 0.0
+        row = db.query(
+            func.sum(case((CampaignContact.status.notin_(["pending", "en_attente"]), 1), else_=0)).label("messaged"),
+            func.sum(case((CampaignContact.status == "reussi", 1), else_=0)).label("replied"),
+        ).filter(CampaignContact.campaign_id.in_(dm_campaign_ids)).one()
+        messaged = int(row.messaged or 0)
+        replied = int(row.replied or 0)
+        global_reply_rate = round(replied / messaged * 100, 1) if messaged else 0.0
 
-    # --- global connection rate ---
     global_connection_rate = 0.0
-    conn_dm_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type.in_(["connection_dm", "search_connection_dm"])).all()]
-    conn_only_ids = [c.id for c in db.query(Campaign.id).filter(Campaign.user_id == _user.id, Campaign.type == "connection").all()]
-    all_conn_ids = conn_dm_ids + conn_only_ids
-
-    total_conn_requests = 0
-    total_conn_accepted = 0
     if all_conn_ids:
-        # Sent = all contacts that got a connection request (not just pending in DB)
-        total_conn_requests = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id.in_(all_conn_ids),
-            CampaignContact.status != "pending",
-        ).scalar() or 0
-        # Accepted = contacts where connection was actually accepted
-        total_conn_accepted = db.query(func.count(CampaignContact.id)).filter(
-            CampaignContact.campaign_id.in_(all_conn_ids),
-            CampaignContact.connection_accepted_at.isnot(None),
-        ).scalar() or 0
-    if total_conn_requests > 0:
-        global_connection_rate = round(total_conn_accepted / total_conn_requests * 100, 1)
-
-    recent_campaigns = db.query(Campaign).filter(Campaign.user_id == _user.id).order_by(Campaign.created_at.desc()).limit(5).all()
+        row = db.query(
+            func.sum(case((CampaignContact.status != "pending", 1), else_=0)).label("sent"),
+            func.sum(case((CampaignContact.connection_accepted_at.isnot(None), 1), else_=0)).label("accepted"),
+        ).filter(CampaignContact.campaign_id.in_(all_conn_ids)).one()
+        sent = int(row.sent or 0)
+        accepted = int(row.accepted or 0)
+        global_connection_rate = round(accepted / sent * 100, 1) if sent else 0.0
 
     # CRM names for campaign display
     crm_name_by_id = {c.id: c.name for c in db.query(CRM).filter(CRM.user_id == _user.id).all()}
 
-    # Per-campaign reply/connection rates for the campaign cards on the dashboard
+    # Per-campaign rates: one GROUP BY query for all recent campaigns at once
+    # (was N+1: 2 calls × 4 subqueries × 5 campaigns = 40 queries)
+    recent_campaign_ids = [c.id for c in recent_campaigns]
+    campaign_rates = {}
+    if recent_campaign_ids:
+        rows = db.query(
+            CampaignContact.campaign_id,
+            func.sum(case((CampaignContact.status.notin_(["pending", "en_attente"]), 1), else_=0)).label("messaged"),
+            func.sum(case((CampaignContact.status == "reussi", 1), else_=0)).label("replied"),
+            func.sum(case((CampaignContact.status != "pending", 1), else_=0)).label("conn_sent"),
+            func.sum(case((CampaignContact.connection_accepted_at.isnot(None), 1), else_=0)).label("conn_accepted"),
+        ).filter(
+            CampaignContact.campaign_id.in_(recent_campaign_ids)
+        ).group_by(CampaignContact.campaign_id).all()
+        campaign_rates = {
+            r.campaign_id: {
+                "messaged": int(r.messaged or 0),
+                "replied": int(r.replied or 0),
+                "conn_sent": int(r.conn_sent or 0),
+                "conn_accepted": int(r.conn_accepted or 0),
+            }
+            for r in rows
+        }
+
     def _campaign_rates(c):
+        r = campaign_rates.get(c.id, {"messaged": 0, "replied": 0, "conn_sent": 0, "conn_accepted": 0})
         reply_rate = None
         connection_rate = None
         if c.type in ("dm", "connection_dm", "search_connection_dm"):
-            messaged = db.query(func.count(CampaignContact.id)).filter(
-                CampaignContact.campaign_id == c.id,
-                CampaignContact.status.notin_(["pending", "en_attente"]),
-            ).scalar() or 0
-            replied = db.query(func.count(CampaignContact.id)).filter(
-                CampaignContact.campaign_id == c.id,
-                CampaignContact.status == "reussi",
-            ).scalar() or 0
-            reply_rate = round(replied / messaged * 100, 1) if messaged else 0.0
+            reply_rate = round(r["replied"] / r["messaged"] * 100, 1) if r["messaged"] else 0.0
         if c.type in ("connection", "connection_dm", "search_connection_dm"):
-            sent = db.query(func.count(CampaignContact.id)).filter(
-                CampaignContact.campaign_id == c.id,
-                CampaignContact.status != "pending",
-            ).scalar() or 0
-            accepted = db.query(func.count(CampaignContact.id)).filter(
-                CampaignContact.campaign_id == c.id,
-                CampaignContact.connection_accepted_at.isnot(None),
-            ).scalar() or 0
-            connection_rate = round(accepted / sent * 100, 1) if sent else 0.0
+            connection_rate = round(r["conn_accepted"] / r["conn_sent"] * 100, 1) if r["conn_sent"] else 0.0
         return reply_rate, connection_rate
 
     recent_actions_q = []
@@ -161,6 +171,9 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
             .limit(8)
             .all()
         )
+
+    # Compute rates once per recent campaign (was called twice in the list comp)
+    recent_campaign_rates = {c.id: _campaign_rates(c) for c in recent_campaigns}
 
     return {
         "total_contacts": total_contacts,
@@ -192,8 +205,8 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
                 "total_succeeded": c.total_succeeded or 0,
                 "total_failed": c.total_failed or 0,
                 "total_skipped": c.total_skipped or 0,
-                "reply_rate": _campaign_rates(c)[0],
-                "connection_rate": _campaign_rates(c)[1],
+                "reply_rate": recent_campaign_rates[c.id][0],
+                "connection_rate": recent_campaign_rates[c.id][1],
             }
             for c in recent_campaigns
         ],
