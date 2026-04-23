@@ -300,6 +300,14 @@ class Linkedin(object):
                 "miniProfile": mini,
                 "urn": commenter_obj.get("urn") or mini.get("entityUrn") or mini.get("dashEntityUrn") or "",
             }
+            self.logger.info(
+                f"[GET_POST_COMMENTS] comment={comment.get('entityUrn')!r} "
+                f"commenter_ref={commenter_ref!r} "
+                f"commenter_obj_keys={list(commenter_obj.keys())[:10] if isinstance(commenter_obj, dict) else type(commenter_obj).__name__} "
+                f"mini_entityUrn={mini.get('entityUrn')!r} "
+                f"mini_publicId={mini.get('publicIdentifier')!r} "
+                f"mini_firstName={mini.get('firstName')!r}"
+            )
 
             normalized.append({
                 "entityUrn": comment.get("entityUrn") or urn,
