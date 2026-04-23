@@ -94,6 +94,16 @@ def _run_migrations():
         except Exception:
             pass  # table may not exist on very fresh installs; create_all will handle it
 
+        # Add cached LinkedIn picture + cached_at to user so the dashboard
+        # header doesn't have to round-trip to LinkedIn on every load.
+        user_columns = [c["name"] for c in inspector.get_columns("user")]
+        if "linkedin_picture_url" not in user_columns:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN linkedin_picture_url TEXT'))
+            print("[MIGRATION] Added linkedin_picture_url to user", flush=True)
+        if "linkedin_cached_at" not in user_columns:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN linkedin_cached_at TIMESTAMP'))
+            print("[MIGRATION] Added linkedin_cached_at to user", flush=True)
+
         # Make campaign_action.campaign_id nullable (lead magnet actions don't have a campaign)
         if is_pg:
             try:

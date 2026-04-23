@@ -19,6 +19,12 @@ class User(Base):
     job_role = Column(String)
     reason_for_using = Column(String)
     linkedin_profile_url = Column(String)
+    # Cached LinkedIn identity for the dashboard header. Populated from
+    # /me + /profile on first load, then refreshed in background so the
+    # UI never blocks on LinkedIn API round-trips (which are slow + rate
+    # limited).
+    linkedin_picture_url = Column(Text)
+    linkedin_cached_at = Column(DateTime)
     li_at_cookie = Column(Text)
     jsessionid_cookie = Column(Text)
     cookies_valid = Column(Boolean, default=True)

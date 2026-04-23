@@ -2,7 +2,7 @@
 import asyncio
 import logging
 from datetime import date, datetime, timedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
@@ -347,84 +347,55 @@ def _deep_find_picture(node, depth=0):
     return None
 
 
-@router.get("/linkedin-profile")
-async def linkedin_profile(user: User = Depends(get_current_user)):
-    """Return the LinkedIn account owner (picture + name) for the current user's cookies.
+def _fetch_linkedin_identity(user: User) -> dict | None:
+    """Hit LinkedIn /me + /profile and return normalized identity fields.
 
-    Strategy: /me → public_id → same dash profile endpoint the network sync uses.
-    This mirrors how get_all_connections() extracts pictures for contacts.
+    Returns None on failure. Keeps the same best-effort parsing path that was
+    inline in the endpoint before caching was introduced.
     """
-    if not user.li_at_cookie or not user.cookies_valid:
-        return _empty_profile()
     try:
         client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
-
-        # Step 1: /me — dump the shape so we can see what LinkedIn sent
-        me = await asyncio.to_thread(client.get_user_profile, False)
+        me = client.get_user_profile(False)
         if not me:
-            logger.warning("LinkedIn /me returned empty payload")
-            return _empty_profile()
+            return None
 
-        # Log the full top-level keys + 1st level of miniProfile if present
-        top_keys = list(me.keys()) if isinstance(me, dict) else []
         mini_raw = me.get("miniProfile") if isinstance(me, dict) else None
-        mini_keys = list(mini_raw.keys()) if isinstance(mini_raw, dict) else []
-        logger.info("linkedin /me top_keys=%s mini_keys=%s", top_keys, mini_keys)
-
         mini = mini_raw if isinstance(mini_raw, dict) else (me if isinstance(me, dict) else {})
         first_name = _text(mini.get("firstName"))
         last_name = _text(mini.get("lastName"))
         public_id = _text(mini.get("publicIdentifier")) or (_deep_find_public_id(me) or "")
         picture_url = _deep_find_picture(me)
 
-        logger.info(
-            "linkedin /me parse: public_id=%r first=%r last=%r picture=%s",
-            public_id, first_name, last_name, bool(picture_url),
-        )
-
-        # Step 2: user table sometimes has linkedin_profile_url = https://www.linkedin.com/in/<public_id>
         if not public_id and user.linkedin_profile_url:
             try:
                 tail = user.linkedin_profile_url.rstrip("/").split("/in/")[-1]
                 if tail and "/" not in tail and tail != user.linkedin_profile_url:
                     public_id = tail
-                    logger.info("linkedin: recovered public_id from user.linkedin_profile_url=%r", public_id)
             except Exception:
                 pass
 
-        # Step 3: full dash profile (same path as network contact extraction)
         if public_id and (not picture_url or not first_name):
             try:
-                full = await asyncio.to_thread(client.get_profile, public_id=public_id)
+                full = client.get_profile(public_id=public_id)
                 if isinstance(full, dict) and full:
                     if not first_name:
                         first_name = _text(full.get("firstName"))
                     if not last_name:
                         last_name = _text(full.get("lastName"))
-                    # _extract_profile_images puts the rootUrl at `displayPictureUrl`
-                    # and artifact segments at `img_W_H` keys.
                     root = full.get("displayPictureUrl")
-                    artifact_keys = [k for k in full.keys() if k.startswith("img_")]
-                    def _w(k):
-                        try:
-                            return int(k.split("_")[1])
-                        except Exception:
-                            return 0
-                    artifact_keys.sort(key=_w, reverse=True)
+                    artifact_keys = sorted(
+                        [k for k in full.keys() if k.startswith("img_")],
+                        key=lambda k: int(k.split("_")[1]) if k.split("_")[1].isdigit() else 0,
+                        reverse=True,
+                    )
                     if root and artifact_keys and not picture_url:
                         seg = full.get(artifact_keys[0])
                         if seg:
                             picture_url = f"{root}{seg}"
-                    logger.info(
-                        "linkedin dash profile: picture=%s first=%r full_keys=%s",
-                        bool(picture_url), first_name,
-                        [k for k in list(full.keys())[:20] if not k.startswith("img_")],
-                    )
             except Exception:
                 logger.exception("Failed to fetch full LinkedIn profile for %s", public_id)
 
         return {
-            "valid": True,
             "first_name": first_name or None,
             "last_name": last_name or None,
             "public_id": public_id or None,
@@ -432,7 +403,87 @@ async def linkedin_profile(user: User = Depends(get_current_user)):
         }
     except Exception:
         logger.exception("Failed to fetch LinkedIn profile")
+        return None
+
+
+def _refresh_linkedin_cache_sync(user_id: int) -> None:
+    """Fetch LinkedIn identity and persist to the user row. Runs in BG."""
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == user_id).first()
+        if not u or not u.li_at_cookie or not u.cookies_valid:
+            return
+        identity = _fetch_linkedin_identity(u)
+        if not identity:
+            return
+        u.first_name = u.first_name or identity.get("first_name")
+        u.last_name = u.last_name or identity.get("last_name")
+        u.linkedin_picture_url = identity.get("picture_url")
+        u.linkedin_cached_at = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
+
+
+CACHE_TTL = timedelta(hours=24)
+
+
+@router.get("/linkedin-profile")
+async def linkedin_profile(
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return the LinkedIn account owner (cached; refreshed in background).
+
+    Strategy: read picture/name from the user row. If the cache is missing or
+    older than 24h, trigger a background refresh so the NEXT dashboard load
+    has fresh data — never block the current request on LinkedIn.
+
+    Rationale: the voyager /me + /profile round-trip was the dominant latency
+    on dashboard first paint (~2-3s every time, on every page load).
+    """
+    if not user.li_at_cookie or not user.cookies_valid:
         return _empty_profile()
+
+    cached_at = user.linkedin_cached_at
+    stale = (not cached_at) or (datetime.utcnow() - cached_at > CACHE_TTL)
+    has_cache = bool(user.linkedin_picture_url or user.first_name)
+
+    if stale:
+        # Only schedule the refresh; never block on it.
+        background.add_task(_refresh_linkedin_cache_sync, user.id)
+
+    if has_cache:
+        return {
+            "valid": True,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "public_id": (user.linkedin_profile_url or "").rstrip("/").split("/in/")[-1] or None,
+            "picture_url": user.linkedin_picture_url,
+        }
+
+    # No cache yet — do the fetch inline this one time so the user sees
+    # something on first dashboard visit. Subsequent loads hit the cache.
+    identity = await asyncio.to_thread(_fetch_linkedin_identity, user)
+    if not identity:
+        return _empty_profile()
+
+    # Persist so next request is fast
+    try:
+        user.first_name = user.first_name or identity.get("first_name")
+        user.last_name = user.last_name or identity.get("last_name")
+        user.linkedin_picture_url = identity.get("picture_url")
+        user.linkedin_cached_at = datetime.utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return {
+        "valid": True,
+        **identity,
+    }
 
 
 @router.get("/notifications")
