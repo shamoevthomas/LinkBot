@@ -266,7 +266,11 @@ class Linkedin(object):
             if not isinstance(comment, dict):
                 missing_comment += 1
                 continue
-            # Resolve commenter reference
+            # Resolve commenter reference. Two possible shapes:
+            #   1. *commenter is a URN string → resolve from `included`
+            #   2. commenter is an inline MemberActor object (the common case
+            #      observed in prod), which itself has *miniProfile pointing
+            #      into `included`.
             commenter_ref = comment.get("*commenter") or comment.get("commenter")
             commenter_obj = resolve(commenter_ref) if isinstance(commenter_ref, str) else commenter_ref
             if not isinstance(commenter_obj, dict):
@@ -286,11 +290,16 @@ class Linkedin(object):
                     text = val
                     break
 
-            # Build legacy-shaped commenter envelope
-            # commenter_obj might be a MiniProfile directly, or wrap one.
-            mini = commenter_obj.get("miniProfile") if isinstance(commenter_obj, dict) else None
+            # Resolve the MiniProfile — this is where the real ACoAA... URN
+            # lives. MemberActor.urn is urn:li:member:<short numeric id> which
+            # LinkedIn rejects on like/DM/connect endpoints.
+            mini_ref = (
+                commenter_obj.get("*miniProfile")
+                or commenter_obj.get("miniProfile")
+            )
+            mini = resolve(mini_ref) if isinstance(mini_ref, str) else mini_ref
             if not isinstance(mini, dict):
-                # Treat commenter_obj itself as the miniProfile if it has the right shape
+                # Last resort: commenter_obj itself might be a MiniProfile
                 if commenter_obj.get("firstName") or commenter_obj.get("publicIdentifier"):
                     mini = commenter_obj
                 else:
@@ -298,7 +307,9 @@ class Linkedin(object):
 
             member_actor = {
                 "miniProfile": mini,
-                "urn": commenter_obj.get("urn") or mini.get("entityUrn") or mini.get("dashEntityUrn") or "",
+                # Prefer the MiniProfile's ACoAA URN over MemberActor.urn
+                # so split(':')[-1] downstream yields the usable profile ID.
+                "urn": mini.get("entityUrn") or mini.get("dashEntityUrn") or commenter_obj.get("urn") or "",
             }
             self.logger.info(
                 f"[GET_POST_COMMENTS] comment={comment.get('entityUrn')!r} "
