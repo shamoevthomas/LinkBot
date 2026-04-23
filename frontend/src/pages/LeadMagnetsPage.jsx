@@ -126,11 +126,9 @@ function LeadMagnetCard({ lm, onOpen, onAction }) {
               <Square size={13} style={{ color: 'hsl(var(--rose))' }} />
             </button>
           )}
-          {['pending', 'cancelled', 'failed'].includes(lm.status) && (
-            <button onClick={() => onAction(lm.id, 'delete')} className="icon-btn" title="Supprimer">
-              <Trash2 size={13} style={{ color: 'hsl(var(--rose))' }} />
-            </button>
-          )}
+          <button onClick={() => onAction(lm.id, 'delete')} className="icon-btn" title="Supprimer">
+            <Trash2 size={13} style={{ color: 'hsl(var(--rose))' }} />
+          </button>
         </div>
       </div>
 

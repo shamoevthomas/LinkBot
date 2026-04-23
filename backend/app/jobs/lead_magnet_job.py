@@ -122,7 +122,16 @@ async def _phase_detect_comments(db, lm, client):
         db.commit()
         return
 
+    print(f"[LEAD MAGNET] #{lm.id}: fetched {len(comments)} comments for urn={lm.post_activity_urn}", flush=True)
+
+    # Sample log to diagnose LinkedIn API shape changes
+    if comments:
+        first = comments[0] or {}
+        sample_keys = list(first.keys())[:8]
+        print(f"[LEAD MAGNET] #{lm.id}: first comment keys={sample_keys}", flush=True)
+
     processed_ids = set(json.loads(lm.processed_comment_ids or "[]"))
+    stats = {"total": 0, "no_urn": 0, "already_seen": 0, "no_keyword": 0, "own_comment": 0, "no_commenter": 0, "new": 0}
 
     # ── Get current user's URN to check for existing replies ──
     my_urn_id = None
@@ -143,13 +152,16 @@ async def _phase_detect_comments(db, lm, client):
     new_matches = 0
 
     for element in comments:
+        stats["total"] += 1
         # Extract comment data from LinkedIn API response
         comment_urn = element.get("dashEntityUrn") or element.get("urn") or ""
         if not comment_urn:
+            stats["no_urn"] += 1
             continue
 
         # Skip already processed
         if comment_urn in processed_ids:
+            stats["already_seen"] += 1
             continue
         processed_ids.add(comment_urn)
 
@@ -164,6 +176,7 @@ async def _phase_detect_comments(db, lm, client):
 
         # Check keyword match (partial, case-insensitive)
         if keyword and keyword not in comment_text.lower():
+            stats["no_keyword"] += 1
             continue
 
         # Extract commenter info
@@ -191,10 +204,12 @@ async def _phase_detect_comments(db, lm, client):
                     commenter_urn_id = ep.split(":")[-1]
 
         if not commenter_urn_id:
+            stats["no_commenter"] += 1
             continue
 
         # Skip if it's the user's own comment
         if my_urn_id and commenter_urn_id == my_urn_id:
+            stats["own_comment"] += 1
             continue
 
         # Check if already tracked
@@ -248,12 +263,14 @@ async def _phase_detect_comments(db, lm, client):
         db.add(lmc)
         lm.total_processed = (lm.total_processed or 0) + 1
         new_matches += 1
+        stats["new"] += 1
         _log_action(db, lm.id, None, "lm_comment_detected", "success", f"Keyword '{lm.keyword}' matched")
 
     # Save processed IDs
     lm.processed_comment_ids = json.dumps(list(processed_ids))
     db.commit()
 
+    print(f"[LEAD MAGNET] #{lm.id}: scan done — {stats}", flush=True)
     if new_matches > 0:
         print(f"[LEAD MAGNET] #{lm.id}: {new_matches} new keyword matches detected", flush=True)
 
