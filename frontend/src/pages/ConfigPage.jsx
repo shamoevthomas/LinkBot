@@ -614,7 +614,7 @@ export default function ConfigPage() {
               right={<Toggle on={warmupOn} onChange={(v) => setSettings({ ...settings, warmup_enabled: v ? 'true' : 'false' })} />}
             />
             {warmupOn && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
                 <div>
                   <label className="form-label">Limite de départ</label>
                   <input type="number" min="1" value={settings.warmup_start_limit || ''}
@@ -622,21 +622,18 @@ export default function ConfigPage() {
                     placeholder="5" className="input-sm" />
                 </div>
                 <div>
-                  <label className="form-label">Limite cible</label>
-                  <input type="number" min="1" value={settings.warmup_target_limit || ''}
-                    onChange={(e) => setSettings({ ...settings, warmup_target_limit: e.target.value })}
-                    placeholder="25" className="input-sm" />
+                  <label className="form-label">Durée (jours, max 6)</label>
+                  <input type="number" min="1" max="6" value={settings.warmup_days || ''}
+                    onChange={(e) => {
+                      const v = Math.min(6, Math.max(1, Number(e.target.value) || 1));
+                      setSettings({ ...settings, warmup_days: String(v) });
+                    }}
+                    placeholder="6" className="input-sm" />
                 </div>
-                <div>
-                  <label className="form-label">Durée (jours)</label>
-                  <input type="number" min="1" value={settings.warmup_days || ''}
-                    onChange={(e) => setSettings({ ...settings, warmup_days: e.target.value })}
-                    placeholder="7" className="input-sm" />
-                </div>
-                <div className="md:col-span-3">
+                <div className="md:col-span-2">
                   <div className="info-pill inline-flex items-center gap-1.5">
                     <TrendingUp size={11} />
-                    De {settings.warmup_start_limit || 5} à {settings.warmup_target_limit || 25} actions/jour sur {settings.warmup_days || 7} jours
+                    De {settings.warmup_start_limit || 5} actions/jour jusqu'à votre limite quotidienne sur {settings.warmup_days || 6} jours
                   </div>
                 </div>
               </div>

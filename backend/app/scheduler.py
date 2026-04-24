@@ -528,8 +528,15 @@ def get_global_actions_today(action_types: list, db_session=None) -> int:
             db.close()
 
 
+WARMUP_MAX_DAYS = 6
+
+
 def get_effective_daily_limit(base_limit: int, db_session=None) -> int:
-    """Apply warmup curve to the base daily limit if warmup is enabled."""
+    """Apply warmup curve to the base daily limit if warmup is enabled.
+
+    Target is always the user's configured daily limit (base_limit). The warmup
+    duration is clamped to WARMUP_MAX_DAYS so the target is reached within 6 days.
+    """
     from datetime import date as _date
     from app.database import SessionLocal
     from app.models import AppSettings
@@ -541,13 +548,17 @@ def get_effective_daily_limit(base_limit: int, db_session=None) -> int:
             return base_limit
 
         start_row = db.query(AppSettings).filter(AppSettings.key == "warmup_start_limit").first()
-        target_row = db.query(AppSettings).filter(AppSettings.key == "warmup_target_limit").first()
         days_row = db.query(AppSettings).filter(AppSettings.key == "warmup_days").first()
         started_row = db.query(AppSettings).filter(AppSettings.key == "warmup_started_at").first()
 
         start_limit = int(start_row.value) if start_row else 5
-        target_limit = int(target_row.value) if target_row else 25
-        warmup_days = int(days_row.value) if days_row else 7
+        warmup_days = int(days_row.value) if days_row else WARMUP_MAX_DAYS
+        warmup_days = max(1, min(warmup_days, WARMUP_MAX_DAYS))
+
+        # Target is the user's daily limit — no separate target setting.
+        # Clamp start below target so the curve is monotonic non-decreasing.
+        if start_limit >= base_limit:
+            return base_limit
 
         if not started_row or not started_row.value:
             return base_limit
@@ -556,9 +567,9 @@ def get_effective_daily_limit(base_limit: int, db_session=None) -> int:
         elapsed = (_date.today() - started_at).days
 
         if elapsed >= warmup_days:
-            return min(base_limit, target_limit)
+            return base_limit
 
-        effective = start_limit + (target_limit - start_limit) * elapsed / warmup_days
+        effective = start_limit + (base_limit - start_limit) * elapsed / warmup_days
         return min(base_limit, int(effective))
     except Exception:
         return base_limit

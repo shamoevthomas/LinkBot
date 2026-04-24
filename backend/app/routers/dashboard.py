@@ -39,13 +39,48 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
 
     today = date.today()
 
-    # Quotas (1 query via OR filter)
+    # Quotas — load warmup-related settings in the same query
+    from app.scheduler import get_effective_daily_limit, WARMUP_MAX_DAYS
     settings_rows = db.query(AppSettings).filter(
-        AppSettings.key.in_(["max_connections_per_day", "max_dms_per_day"])
+        AppSettings.key.in_([
+            "max_connections_per_day", "max_dms_per_day",
+            "warmup_enabled", "warmup_start_limit", "warmup_days", "warmup_started_at",
+        ])
     ).all()
     settings = {s.key: s.value for s in settings_rows}
-    max_conn = int(settings.get("max_connections_per_day", 25))
-    max_dm = int(settings.get("max_dms_per_day", 50))
+    base_conn = int(settings.get("max_connections_per_day", 25))
+    base_dm = int(settings.get("max_dms_per_day", 50))
+    # Effective limit = what the scheduler actually enforces right now (warmup-adjusted)
+    max_conn = get_effective_daily_limit(base_conn, db)
+    max_dm = get_effective_daily_limit(base_dm, db)
+
+    # Warmup display metadata — only populated when warmup is active AND in progress
+    warmup_info = None
+    if settings.get("warmup_enabled", "false").lower() == "true":
+        started_at_str = settings.get("warmup_started_at") or ""
+        if started_at_str:
+            try:
+                started_at = date.fromisoformat(started_at_str)
+                raw_days = int(settings.get("warmup_days") or WARMUP_MAX_DAYS)
+                warmup_days = max(1, min(raw_days, WARMUP_MAX_DAYS))
+                elapsed = (today - started_at).days
+                if elapsed < warmup_days:
+                    target_reached_on = started_at + timedelta(days=warmup_days)
+                    warmup_info = {
+                        "active": True,
+                        "start_limit": int(settings.get("warmup_start_limit") or 5),
+                        "days_total": warmup_days,
+                        "day_current": elapsed + 1,  # 1-indexed for display
+                        "days_remaining": max(0, warmup_days - elapsed),
+                        "started_at": started_at_str,
+                        "target_reached_on": target_reached_on.isoformat(),
+                        "target_conn": base_conn,
+                        "target_dm": base_dm,
+                        "today_conn_cap": max_conn,
+                        "today_dm_cap": max_dm,
+                    }
+            except (ValueError, TypeError):
+                pass
 
     # Today's actions: one query aggregating actions_today + conn_today + dm_today
     actions_today = conn_today = dm_today = 0
@@ -183,8 +218,11 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
         "actions_today": actions_today,
         "connections_today": conn_today,
         "connections_limit": max_conn,
+        "connections_base_limit": base_conn,
         "dms_today": dm_today,
         "dms_limit": max_dm,
+        "dms_base_limit": base_dm,
+        "warmup": warmup_info,
         "today_accepted": today_accepted,
         "today_replies": today_replies,
         "remaining_connections": max(0, max_conn - conn_today),

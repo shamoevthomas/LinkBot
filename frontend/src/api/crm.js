@@ -29,6 +29,8 @@ export const exportContacts = (crmId, params) =>
   client.get(`/crms/${crmId}/contacts/export`, { params, responseType: 'blob' }).then((r) => r.data);
 export const getAllContacts = (params) =>
   client.get('/crms/all-contacts', { params }).then((r) => r.data);
+export const getContactById = (contactId) =>
+  client.get(`/crms/contact/${contactId}`).then((r) => r.data);
 export const updateContactNotes = (crmId, contactId, notes) =>
   client.patch(`/crms/${crmId}/contacts/${contactId}/notes`, { notes }).then((r) => r.data);
 export const undoDeleteContacts = (crmId, contactIds) =>

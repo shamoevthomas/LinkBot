@@ -9,6 +9,7 @@ import client from '../api/client';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
+import ContactCardModal from '../components/ContactCardModal';
 import { formatServerDate } from '../utils/date';
 import toast from 'react-hot-toast';
 
@@ -31,12 +32,6 @@ export default function CRMDetailPage() {
   const [crms, setCrms] = useState([]);
   const [targetCrm, setTargetCrm] = useState('');
   const [selectedContact, setSelectedContact] = useState(null);
-  const [messageText, setMessageText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [aiAvailable, setAiAvailable] = useState(false);
-  const [showAiPrompt, setShowAiPrompt] = useState(false);
-  const [aiInstructions, setAiInstructions] = useState('');
-  const [generating, setGenerating] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [headlineSearch, setHeadlineSearch] = useState('');
@@ -64,10 +59,6 @@ export default function CRMDetailPage() {
   const [perPage, setPerPage] = useState(() => parseInt(localStorage.getItem('linkbot_perPage')) || 25);
 
   useEffect(() => { localStorage.setItem('linkbot_perPage', perPage); }, [perPage]);
-
-  useEffect(() => {
-    client.get('/ai/status').then((r) => setAiAvailable(r.data.available)).catch(() => {});
-  }, []);
 
   useEffect(() => { getTags().then(setTags).catch(() => {}); }, []);
 
@@ -315,33 +306,6 @@ export default function CRMDetailPage() {
   const openMoveModal = async () => {
     setCrms(await getCRMs());
     setShowMove(true);
-  };
-
-  const handleGenerateAI = async () => {
-    if (!aiInstructions.trim() || !selectedContact) return;
-    setGenerating(true);
-    try {
-      const data = await generateAIMessage(id, selectedContact.id, aiInstructions.trim());
-      setMessageText(data.message);
-      setShowAiPrompt(false);
-      setAiInstructions('');
-      toast.success('Message genere par l\'IA');
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Erreur lors de la generation');
-    } finally { setGenerating(false); }
-  };
-
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedContact) return;
-    setSending(true);
-    try {
-      await sendMessageToContact(id, selectedContact.id, messageText.trim());
-      toast.success('Message envoye');
-      setMessageText('');
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Erreur lors de l'envoi");
-    } finally { setSending(false); }
   };
 
   // Close dropdown menus on outside click
@@ -758,139 +722,12 @@ export default function CRMDetailPage() {
         )}
       </Modal>
 
-      {/* Contact detail modal */}
       {selectedContact && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedContact(null); setMessageText(''); setShowAiPrompt(false); setAiInstructions(''); }}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="relative rounded-t-2xl p-6 pb-16" style={{ background: 'linear-gradient(to right, var(--blue), #2563eb)' }}>
-              <button onClick={() => { setSelectedContact(null); setMessageText(''); setShowAiPrompt(false); setAiInstructions(''); }}
-                className="absolute top-4 right-4 p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors">
-                <X size={18} className="text-white" />
-              </button>
-            </div>
-
-            {/* Avatar */}
-            <div className="flex justify-center -mt-12">
-              {selectedContact.profile_picture_url ? (
-                <img src={selectedContact.profile_picture_url} alt=""
-                  className="w-24 h-24 rounded-full border-4 border-white object-cover shadow-lg" />
-              ) : (
-                <div className="w-24 h-24 rounded-full border-4 border-white text-2xl font-bold flex items-center justify-center shadow-lg"
-                  style={{ background: 'rgba(0,132,255,0.08)', color: 'var(--blue)' }}>
-                  {initials(selectedContact)}
-                </div>
-              )}
-            </div>
-
-            {/* Info */}
-            <div className="px-6 pt-3 pb-6">
-              <div className="text-center mb-4">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {selectedContact.first_name} {selectedContact.last_name}
-                </h2>
-                {selectedContact.headline && (
-                  <p className="text-sm text-gray-500 mt-1">{selectedContact.headline}</p>
-                )}
-              </div>
-
-              <div className="space-y-2 mb-5">
-                {selectedContact.location && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin size={14} className="text-gray-400 shrink-0" />
-                    {selectedContact.location}
-                  </div>
-                )}
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Briefcase size={14} className="text-gray-400 shrink-0" />
-                  <Badge status={selectedContact.connection_status} />
-                </div>
-                {selectedContact.linkedin_url && (
-                  <a href={selectedContact.linkedin_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm hover:underline" style={{ color: 'var(--blue)' }}>
-                    <ExternalLink size={14} className="shrink-0" />
-                    Voir le profil LinkedIn
-                  </a>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs mb-5">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <span className="text-gray-400">Ajoute le</span>
-                  <p className="font-medium text-gray-700 mt-0.5">
-                    {formatServerDate(selectedContact.added_at)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <span className="text-gray-400">Derniere interaction</span>
-                  <p className="font-medium text-gray-700 mt-0.5">
-                    {selectedContact.last_interaction_at
-                      ? formatServerDate(selectedContact.last_interaction_at)
-                      : 'Aucune'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div className="border-t border-gray-200 pt-4">
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Notes</label>
-                <textarea
-                  defaultValue={selectedContact.notes || ''}
-                  onBlur={(e) => {
-                    const val = e.target.value;
-                    if (val !== (selectedContact.notes || '')) {
-                      updateContactNotes(id, selectedContact.id, val).catch(() => {});
-                      setSelectedContact({ ...selectedContact, notes: val });
-                    }
-                  }}
-                  rows={3}
-                  placeholder="Ajouter des notes..."
-                  className="input-glass w-full resize-none text-sm"
-                />
-              </div>
-
-              {/* Send message */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-gray-700">Envoyer un message</label>
-                  {aiAvailable && !showAiPrompt && (
-                    <button onClick={() => setShowAiPrompt(true)}
-                      className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors flex items-center gap-1.5">
-                      <Sparkles size={13} /> Ecrire avec l'IA
-                    </button>
-                  )}
-                </div>
-
-                {showAiPrompt && (
-                  <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles size={14} className="text-purple-500" />
-                      <span className="text-sm font-medium text-purple-700">Instructions pour l'IA</span>
-                      <button onClick={() => setShowAiPrompt(false)} className="ml-auto text-purple-400 hover:text-purple-600">
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <textarea value={aiInstructions} onChange={(e) => setAiInstructions(e.target.value)}
-                      rows={3} placeholder="Ex: Je veux le contacter pour lui proposer un partenariat dans l'immobilier. Ton amical et professionnel..."
-                      className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent resize-none bg-white" />
-                    <button onClick={handleGenerateAI} disabled={generating || !aiInstructions.trim()}
-                      className="mt-2 w-full py-2 bg-purple-600 text-white font-semibold rounded-lg text-sm hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                      {generating ? <><Loader2 size={14} className="animate-spin" /> Generation en cours...</> : <><Sparkles size={14} /> Generer le message</>}
-                    </button>
-                  </div>
-                )}
-
-                <textarea value={messageText} onChange={(e) => setMessageText(e.target.value)}
-                  rows={3} placeholder={`Bonjour ${selectedContact.first_name || ''}...`}
-                  className="input-glass w-full px-3 py-2 resize-none" />
-                <button onClick={handleSendMessage} disabled={sending || !messageText.trim()}
-                  className="cta-btn mt-2 w-full disabled:opacity-50 flex items-center justify-center gap-2" style={{ padding: '10px 16px', fontSize: '14px' }}>
-                  {sending ? <><Loader2 size={16} className="animate-spin" /> Envoi...</> : <><Send size={16} /> Envoyer</>}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ContactCardModal
+          contact={selectedContact}
+          onClose={() => setSelectedContact(null)}
+          onUpdate={(c) => { setSelectedContact(c); load(); }}
+        />
       )}
     </PageWrapper>
   );

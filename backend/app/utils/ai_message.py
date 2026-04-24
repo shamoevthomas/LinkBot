@@ -9,8 +9,6 @@ from collections import deque
 import requests
 from typing import Dict, Any, List, Optional
 
-from app.config import GEMINI_API_KEY as _GLOBAL_GEMINI_KEY
-
 logger = logging.getLogger(__name__)
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
@@ -40,7 +38,9 @@ def _wait_for_rate_limit():
 
 def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> requests.Response:
     """POST to Gemini with rate limiting and retry on 429/503 (up to 3 attempts)."""
-    key = api_key or _GLOBAL_GEMINI_KEY
+    if not api_key:
+        raise ValueError("Gemini API key missing: user must configure their own key in settings")
+    key = api_key
     for attempt in range(3):
         _wait_for_rate_limit()
         resp = requests.post(

@@ -116,6 +116,7 @@ def list_all_contacts(
                     connection_status=c.connection_status or "unknown",
                     last_interaction_at=c.last_interaction_at,
                     added_at=c.added_at,
+                    notes=c.notes,
                     tags=[TagResponse(id=t.id, name=t.name, color=t.color) for t in c.tags],
                 ).model_dump(),
                 "crm_name": crm_map.get(c.crm_id, "—"),
@@ -389,6 +390,7 @@ def list_contacts(
                 connection_status=c.connection_status or "unknown",
                 last_interaction_at=c.last_interaction_at,
                 added_at=c.added_at,
+                notes=c.notes,
                 tags=[TagResponse(id=t.id, name=t.name, color=t.color) for t in c.tags],
             )
             for c in contacts
@@ -397,6 +399,50 @@ def list_contacts(
         "page": page,
         "per_page": per_page,
     }
+
+
+@router.get("/contact/{contact_id}", response_model=ContactResponse)
+def get_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Fetch a single contact by id, scoped to the current user's CRMs.
+
+    Used by modals opened from places that only carry the contact_id
+    (dashboard activity, campaign contact rows, lead-magnet leads).
+    """
+    contact = (
+        db.query(Contact)
+        .options(selectinload(Contact.tags))
+        .join(CRM, Contact.crm_id == CRM.id)
+        .filter(
+            Contact.id == contact_id,
+            Contact.deleted_at.is_(None),
+            CRM.user_id == _user.id,
+        )
+        .first()
+    )
+    if not contact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+
+    return ContactResponse(
+        id=contact.id,
+        crm_id=contact.crm_id,
+        urn_id=contact.urn_id,
+        public_id=contact.public_id,
+        first_name=contact.first_name,
+        last_name=contact.last_name,
+        headline=contact.headline,
+        location=contact.location,
+        profile_picture_url=contact.profile_picture_url,
+        linkedin_url=contact.linkedin_url,
+        connection_status=contact.connection_status or "unknown",
+        last_interaction_at=contact.last_interaction_at,
+        added_at=contact.added_at,
+        notes=contact.notes,
+        tags=[TagResponse(id=t.id, name=t.name, color=t.color) for t in contact.tags],
+    )
 
 
 @router.post("/{crm_id}/contacts", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)

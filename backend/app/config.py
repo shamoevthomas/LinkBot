@@ -18,9 +18,6 @@ JWT_EXPIRATION_HOURS = int(os.environ.get("JWT_EXPIRATION_HOURS", "72"))
 # CORS
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 
-# Gemini AI
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-
 # Cron secret (for external cron-job.org triggers)
 CRON_SECRET = os.environ.get("CRON_SECRET", "linkbot-cron-change-me")
 

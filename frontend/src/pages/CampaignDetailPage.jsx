@@ -12,6 +12,7 @@ import {
   retryFromAction,
 } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
+import ContactCardModal from '../components/ContactCardModal';
 import { StatusChip, TypeTag, Avatar, Progress, Chip, getInitials, hueFromString } from '../components/ui/atoms';
 import { parseServerDate, formatServerDateTime } from '../utils/date';
 import toast from 'react-hot-toast';
@@ -637,120 +638,11 @@ export default function CampaignDetailPage() {
         </div>
       )}
 
-      {/* Contact modal */}
       {selectedContact && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'hsl(222 22% 12% / .45)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setSelectedContact(null)}>
-          <div className="g-card w-full max-w-[440px] overflow-hidden" onClick={(e) => e.stopPropagation()}
-            style={{ boxShadow: '0 24px 60px -24px hsl(220 40% 10% / .35)' }}>
-
-            <div className="relative px-6 pt-6 pb-4">
-              <button onClick={() => setSelectedContact(null)}
-                className="absolute top-4 right-4 w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ color: 'hsl(var(--muted))', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                <X size={14} />
-              </button>
-
-              <div className="flex items-center gap-3">
-                <Avatar src={selectedContact.contact_profile_picture_url}
-                  initials={getInitials(selectedContact.contact_first_name, selectedContact.contact_last_name)}
-                  hue={hueFromString(`${selectedContact.contact_first_name || ''}${selectedContact.contact_last_name || ''}`)}
-                  size={48} />
-                <div className="flex-1 min-w-0 pr-6">
-                  <h3 className="text-[16px] font-semibold truncate" style={{ letterSpacing: '-0.01em' }}>
-                    {selectedContact.contact_first_name} {selectedContact.contact_last_name}
-                  </h3>
-                  {selectedContact.contact_headline && (
-                    <p className="text-[12px] truncate" style={{ color: 'hsl(var(--muted))' }}>{selectedContact.contact_headline}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                <StatusChip status={selectedContact.status} />
-                {selectedContact.contact_linkedin_url && (
-                  <a href={selectedContact.contact_linkedin_url} target="_blank" rel="noopener noreferrer"
-                    className="chip blue" style={{ padding: '3px 9px', textDecoration: 'none' }}>
-                    <Eye size={11} /> Profil LinkedIn
-                  </a>
-                )}
-              </div>
-            </div>
-
-            <div className="px-6 pb-5">
-              <div className="pt-4 border-t" style={{ borderColor: 'hsl(var(--border))' }}>
-                <div className="eyebrow mb-3">Historique</div>
-                <div className="space-y-3 relative">
-                  <div style={{ position: 'absolute', left: 7, top: 8, bottom: 16, width: 1, background: 'hsl(var(--border))' }} />
-                  {[
-                    { l: 'Message initial envoyé', v: fmtDate(selectedContact.main_sent_at), done: !!selectedContact.main_sent_at, tone: 'accent' },
-                    { l: 'Dernier envoi', v: fmtDate(selectedContact.last_sent_at), done: !!selectedContact.last_sent_at, tone: 'accent' },
-                    {
-                      l: `${selectedContact.last_sequence_sent || 0} relance${(selectedContact.last_sequence_sent || 0) > 1 ? 's' : ''} envoyée${(selectedContact.last_sequence_sent || 0) > 1 ? 's' : ''}`,
-                      v: (selectedContact.last_sequence_sent || 0) > 0 ? 'Séquence active' : 'Aucune',
-                      done: (selectedContact.last_sequence_sent || 0) > 0, tone: 'amber',
-                    },
-                    { l: 'Réponse reçue', v: selectedContact.replied_at ? fmtDate(selectedContact.replied_at) : 'Pas encore', done: !!selectedContact.replied_at, tone: 'emerald' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-3 relative">
-                      <div className="rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                        style={{
-                          width: 15, height: 15, zIndex: 2,
-                          background: item.done ? `hsl(var(--${item.tone}))` : 'white',
-                          border: item.done ? 'none' : '1.5px solid hsl(var(--border-strong))',
-                          boxShadow: item.done ? `0 0 0 3px hsl(var(--${item.tone}) / .15)` : 'none',
-                        }}>
-                        {item.done && <Check size={8} style={{ color: 'white' }} />}
-                      </div>
-                      <div className="flex-1 min-w-0 pb-1">
-                        <div className="text-[12px]" style={{ color: item.done ? 'hsl(var(--text))' : 'hsl(var(--muted))', fontWeight: item.done ? 500 : 400 }}>
-                          {item.l}
-                        </div>
-                        <div className="mono text-[11px] mt-0.5"
-                          style={{
-                            color: item.done ? `hsl(var(--${item.tone}))` : 'hsl(var(--muted))',
-                            fontWeight: item.done ? 500 : 400,
-                          }}>
-                          {item.v}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {!isSearch && !isConnection && selectedContact.status !== 'pending' && (
-              <div className="px-6 py-3 border-t flex items-center justify-between gap-2"
-                style={{ borderColor: 'hsl(var(--border))', background: 'hsl(220 22% 98%)' }}>
-                <select
-                  value={selectedContact.status}
-                  onChange={async (e) => {
-                    const newStatus = e.target.value;
-                    try {
-                      await updateContactStatus(id, selectedContact.contact_id, newStatus);
-                      setSelectedContact({ ...selectedContact, status: newStatus, replied_at: newStatus === 'reussi' ? (selectedContact.replied_at || new Date().toISOString()) : selectedContact.replied_at });
-                      load();
-                      toast.success('Statut mis à jour');
-                    } catch { toast.error('Erreur lors du changement de statut'); }
-                  }}
-                  className="ring-a cursor-pointer"
-                  style={{
-                    padding: '5px 10px', borderRadius: 8, fontSize: 11.5,
-                    border: '1px solid hsl(var(--border))', background: 'white',
-                  }}>
-                  <option value="envoye">Envoyé</option>
-                  <option value="relance_1">Relance 1</option>
-                  <option value="relance_2">Relance 2</option>
-                  <option value="relance_3">Relance 3</option>
-                  <option value="reussi">Répondu</option>
-                  <option value="perdu">Perdu</option>
-                </select>
-              </div>
-            )}
-          </div>
-        </div>
+        <ContactCardModal
+          contactId={selectedContact.contact_id}
+          onClose={() => setSelectedContact(null)}
+        />
       )}
     </PageWrapper>
   );

@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Search, ExternalLink, MapPin, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getAllContacts, getCRMs } from '../api/crm';
 import PageWrapper from '../components/layout/PageWrapper';
 import Badge from '../components/ui/Badge';
+import ContactCardModal from '../components/ContactCardModal';
 import { formatServerDate } from '../utils/date';
 
 export default function ContactsPage() {
-  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [crmFilter, setCrmFilter] = useState('');
   const [perPage, setPerPage] = useState(() => parseInt(localStorage.getItem('linkbot_perPage')) || 25);
+  const [selectedContact, setSelectedContact] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -98,7 +98,7 @@ export default function ContactsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {contacts.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
+                <tr key={c.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedContact(c)}>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2 min-w-0">
                       {c.profile_picture_url ? (
@@ -170,6 +170,14 @@ export default function ContactsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {selectedContact && (
+        <ContactCardModal
+          contact={selectedContact}
+          onClose={() => setSelectedContact(null)}
+          onUpdate={(c) => setSelectedContact(c)}
+        />
       )}
     </PageWrapper>
   );

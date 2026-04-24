@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Rocket, MessageSquare, UserPlus, Plus, ArrowRight, Loader2,
-  RefreshCw, Send, Clock, Check, X, Eye, MessageCircle, AlertCircle,
+  RefreshCw, Send, Clock, Check, X, Eye, MessageCircle, AlertCircle, TrendingUp,
 } from 'lucide-react';
 import { getDashboardStats, getLinkedInProfile } from '../api/dashboard';
 import { syncConnections } from '../api/config';
 import { useAuth } from '../context/AuthContext';
 import PageWrapper from '../components/layout/PageWrapper';
+import ContactCardModal from '../components/ContactCardModal';
 import { StatusChip, TypeTag, Avatar, Progress, Sparkline, hueFromString, getInitials } from '../components/ui/atoms';
 import { formatServerTime } from '../utils/date';
 import toast from 'react-hot-toast';
@@ -71,11 +72,47 @@ function Hero({ user, stats, onRefresh, onNewCRM, onNewCampaign, syncing }) {
   );
 }
 
+function WarmupPill({ warmup, connToday, dmToday }) {
+  const pct = warmup.days_total > 0 ? Math.min(100, (warmup.day_current / warmup.days_total) * 100) : 0;
+  const targetDate = warmup.target_reached_on
+    ? new Date(warmup.target_reached_on).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' })
+    : null;
+
+  return (
+    <div className="flex items-center gap-3 min-w-[320px]" style={{ flex: '1 1 320px' }}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+        <TrendingUp size={15} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-[12px] font-medium">
+            Warm-up · jour {warmup.day_current} / {warmup.days_total}
+          </span>
+          <span className="mono text-[11px]" style={{ color: 'hsl(var(--muted))' }}>
+            {connToday} invit. · {dmToday} msg aujourd'hui
+          </span>
+        </div>
+        <div className="text-[11px] mt-0.5" style={{ color: 'hsl(var(--muted))' }}>
+          Plafond du jour : <b style={{ fontWeight: 600, color: 'hsl(var(--fg))' }}>{warmup.today_conn_cap} invit.</b> · <b style={{ fontWeight: 600, color: 'hsl(var(--fg))' }}>{warmup.today_dm_cap} msg</b>
+          {targetDate && (
+            <> — cible ({warmup.target_conn}/{warmup.target_dm}) atteinte le <b style={{ fontWeight: 600, color: 'hsl(var(--fg))' }}>{targetDate}</b></>
+          )}
+        </div>
+        <div className="pbar mt-1.5" style={{ height: 4 }}>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AccountHealth({ stats, liProfile }) {
   const connToday = stats?.connections_today ?? 0;
   const connLimit = stats?.connections_limit ?? 25;
   const dmToday = stats?.dms_today ?? 0;
   const dmLimit = stats?.dms_limit ?? 50;
+  const warmup = stats?.warmup;
 
   const loading = liProfile === null;
   const valid = liProfile?.valid === true;
@@ -137,29 +174,33 @@ function AccountHealth({ stats, liProfile }) {
         </div>
       </div>
 
-      {rows.map((r) => {
-        const Ic = r.icon;
-        return (
-          <div key={r.label} className="flex items-center gap-3 min-w-[200px]" style={{ flex: '1 1 200px' }}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: `hsl(var(--${r.tone}) / .12)`, color: `hsl(var(--${r.tone}))` }}>
-              <Ic size={15} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[12px]" style={{ color: 'hsl(var(--muted))' }}>{r.label}</span>
-                <span className="mono text-[12px]">
-                  <b style={{ fontWeight: 600 }}>{r.value}</b>
-                  <span style={{ color: 'hsl(var(--muted))' }}> / {r.sub}</span>
-                </span>
+      {warmup?.active ? (
+        <WarmupPill warmup={warmup} connToday={connToday} dmToday={dmToday} />
+      ) : (
+        rows.map((r) => {
+          const Ic = r.icon;
+          return (
+            <div key={r.label} className="flex items-center gap-3 min-w-[200px]" style={{ flex: '1 1 200px' }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                style={{ background: `hsl(var(--${r.tone}) / .12)`, color: `hsl(var(--${r.tone}))` }}>
+                <Ic size={15} />
               </div>
-              <div className={`pbar mt-1.5 ${r.tone !== 'accent' ? r.tone : ''}`} style={{ height: 4 }}>
-                <span style={{ width: `${Math.min(100, r.pct)}%` }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[12px]" style={{ color: 'hsl(var(--muted))' }}>{r.label}</span>
+                  <span className="mono text-[12px]">
+                    <b style={{ fontWeight: 600 }}>{r.value}</b>
+                    <span style={{ color: 'hsl(var(--muted))' }}> / {r.sub}</span>
+                  </span>
+                </div>
+                <div className={`pbar mt-1.5 ${r.tone !== 'accent' ? r.tone : ''}`} style={{ height: 4 }}>
+                  <span style={{ width: `${Math.min(100, r.pct)}%` }} />
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 }
@@ -334,7 +375,7 @@ const ACTION_LABEL = {
   skipped: 'Ignoré',
 };
 
-function ActivityBlock({ actions, onViewAll }) {
+function ActivityBlock({ actions, onViewAll, onOpenContact }) {
   const [filter, setFilter] = useState('all');
   const normalize = (a) => {
     const t = (a.action_type || '').toLowerCase();
@@ -412,8 +453,12 @@ function ActivityBlock({ actions, onViewAll }) {
             const parts = (a.contact_name || '').trim().split(/\s+/).filter(Boolean);
             initials = ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
           }
+          const clickable = !!a.contact_id;
           return (
-            <div key={a.id || i} className="flex items-center gap-3 px-2 py-2 rounded-lg row-hover transition-colors">
+            <div key={a.id || i}
+              onClick={clickable ? () => onOpenContact?.(a.contact_id) : undefined}
+              className="flex items-center gap-3 px-2 py-2 rounded-lg row-hover transition-colors"
+              style={clickable ? { cursor: 'pointer' } : undefined}>
               <Avatar initials={initials} hue={hueFromString(name)} size={30} src={a.contact_profile_picture_url} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -446,6 +491,7 @@ export default function DashboardPage() {
   const [liProfile, setLiProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [openContactId, setOpenContactId] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -504,8 +550,16 @@ export default function DashboardPage() {
         <ActivityBlock
           actions={stats?.recent_actions || []}
           onViewAll={() => navigate('/dashboard/campaigns')}
+          onOpenContact={(id) => setOpenContactId(id)}
         />
       </div>
+
+      {openContactId && (
+        <ContactCardModal
+          contactId={openContactId}
+          onClose={() => setOpenContactId(null)}
+        />
+      )}
     </PageWrapper>
   );
 }

@@ -1,15 +1,28 @@
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import CORS_ORIGINS, UPLOADS_DIR
 from app.database import init_db, SessionLocal
+from app.dependencies import get_current_user
 from app.models import User, AppSettings, CRM
 from app.auth import hash_password
+
+# Sentry — opt-in via SENTRY_DSN. No-op when unset so local/dev stays quiet.
+_sentry_dsn = os.environ.get("SENTRY_DSN", "").strip()
+if _sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        environment=os.environ.get("ENV", "production"),
+        traces_sample_rate=0.0,
+        send_default_pii=False,
+    )
 
 # Configure root logger so all app.* loggers output to stdout
 logging.basicConfig(
@@ -45,8 +58,7 @@ def seed_db():
             "schedule_timezone": "Europe/Paris",
             "warmup_enabled": "false",
             "warmup_start_limit": "5",
-            "warmup_target_limit": "25",
-            "warmup_days": "7",
+            "warmup_days": "6",
             "warmup_started_at": "",
             "action_interval_min": "2",
             "action_interval_max": "5",
@@ -165,9 +177,79 @@ async def health():
 
 
 @app.get("/api/ai/status")
-def ai_status():
+def ai_status(user: User = Depends(get_current_user)):
     from app.utils.ai_message import is_ollama_available
-    return {"available": is_ollama_available()}
+    if not user.gemini_api_key:
+        return {"available": False}
+    return {"available": is_ollama_available(api_key=user.gemini_api_key)}
+
+
+@app.get("/api/admin/scheduler-status")
+def admin_scheduler_status(key: str = ""):
+    """Snapshot of the in-memory scheduler. Guarded by CRON_SECRET.
+
+    Use for quick ops checks: which campaigns are registered, when they fire next,
+    how the sync/reply tickers are doing. Returns everything as JSON-safe types.
+    """
+    from app.config import CRON_SECRET
+    if key != CRON_SECRET:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    from datetime import datetime as _dt
+    from app import scheduler as sched
+
+    now = _dt.utcnow()
+
+    def _fmt(dt):
+        return dt.isoformat() + "Z" if dt else None
+
+    def _eta(dt):
+        if not dt:
+            return None
+        return int((dt - now).total_seconds())
+
+    campaigns = []
+    for cid, info in sched._campaigns.items():
+        campaigns.append({
+            "campaign_id": cid,
+            "type": info.get("type"),
+            "interval_seconds": info.get("interval"),
+            "jitter_seconds": info.get("jitter"),
+            "paused": info.get("paused", False),
+            "last_run": _fmt(info.get("last_run")),
+            "next_run": _fmt(info.get("next_run")),
+            "next_run_in_seconds": _eta(info.get("next_run")),
+        })
+    campaigns.sort(key=lambda c: (c["next_run_in_seconds"] is None, c["next_run_in_seconds"] or 0))
+
+    return {
+        "now_utc": _fmt(now),
+        "total_registered": len(campaigns),
+        "total_paused": sum(1 for c in campaigns if c["paused"]),
+        "by_type": _count_by_type(campaigns),
+        "sync_connections": {
+            "last_run": _fmt(sched._last_sync_connections),
+            "interval_seconds": sched.SYNC_CONNECTIONS_INTERVAL,
+        },
+        "reply_checker": {
+            "last_run": _fmt(sched._last_reply_check),
+            "interval_seconds": sched.REPLY_CHECK_INTERVAL,
+            "overdue": (
+                sched._last_reply_check is not None
+                and (now - sched._last_reply_check).total_seconds() > sched.REPLY_CHECK_INTERVAL * 2
+            ),
+        },
+        "campaigns": campaigns,
+    }
+
+
+def _count_by_type(campaigns: list) -> dict:
+    counts: dict = {}
+    for c in campaigns:
+        t = c.get("type") or "unknown"
+        counts[t] = counts.get(t, 0) + 1
+    return counts
 
 
 @app.get("/api/cron/sync-connections")
