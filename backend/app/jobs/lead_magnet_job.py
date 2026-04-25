@@ -351,24 +351,18 @@ async def _phase_check_connections(db, lm, client):
                 except Exception as exc:
                     logger.warning("Failed to accept invitation from %s: %s", lmc.commenter_urn_id, exc)
 
-        # Otherwise check profile distance
+        # Same acceptance check as connection_dm_campaign.py:111-113 — the
+        # working reference. LinkedIn returns the connection state primarily
+        # in `connectionDistance` ("DISTANCE_1" when accepted), with `distance`
+        # as a secondary int.
         try:
             profile = await get_profile(client, urn_id=lmc.commenter_urn_id)
-            distance = profile.get("distance")
-            print(f"[LEAD MAGNET] #{lm.id}: {lmc.commenter_name} → distance={distance!r}",
-                  flush=True)
-            # LinkedIn returns distance as enum string ("DISTANCE_1") or
-            # sometimes as a dict {"value": "DISTANCE_1"} or int 1.
-            distance_str = ""
-            if isinstance(distance, dict):
-                distance_str = str(distance.get("value") or distance.get("$type") or "")
-            else:
-                distance_str = str(distance) if distance is not None else ""
-            is_connected = (
-                distance in (1, "1", "DISTANCE_1")
-                or "DISTANCE_1" in distance_str
+            distance = profile.get("distance", 0)
+            accepted = (
+                distance == 1
+                or str(profile.get("connectionDistance", "")).startswith("DISTANCE_1")
             )
-            if is_connected:
+            if accepted:
                 lmc.status = "dm_pending"
                 lmc.connection_accepted_at = datetime.utcnow()
                 lmc.is_connected = True
