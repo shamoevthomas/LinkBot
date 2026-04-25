@@ -439,8 +439,20 @@ async def reply_to_comment(
     So this one action drives a headless Chromium via Playwright. All other
     actions (like, dm, connect…) still use the fast HTTP path.
     """
-    li_at = client.client.session.cookies.get("li_at")
-    jsessionid = client.client.session.cookies.get("JSESSIONID")
+    # The client's RequestsCookieJar can accumulate duplicate cookies across
+    # subdomains (.linkedin.com vs www.linkedin.com). cookies.get() throws
+    # CookieConflictError in that case — iterate the jar and take the first
+    # matching cookie to be tolerant.
+    def _first_cookie(name):
+        try:
+            return client.client.session.cookies.get(name)
+        except Exception:
+            return next(
+                (c.value for c in client.client.session.cookies if c.name == name),
+                None,
+            )
+    li_at = _first_cookie("li_at")
+    jsessionid = _first_cookie("JSESSIONID")
     if not li_at or not jsessionid:
         logger.warning("reply_to_comment: missing cookies on client")
         return False
