@@ -314,6 +314,10 @@ async def _phase_check_connections(db, lm, client):
     if not pending:
         return
 
+    print(f"[LEAD MAGNET] #{lm.id}: check_connections — {len(pending)} pending "
+          f"({', '.join(c.commenter_name or '?' for c in pending[:5])}{'…' if len(pending) > 5 else ''})",
+          flush=True)
+
     # Fetch pending invitations once for all contacts
     pending_urn_ids = {lmc.commenter_urn_id for lmc in pending}
     invitations_by_urn = {}
@@ -324,8 +328,8 @@ async def _phase_check_connections(db, lm, client):
             inv_urn_id = inv_from.split(":")[-1] if ":" in str(inv_from) else str(inv_from)
             if inv_urn_id in pending_urn_ids:
                 invitations_by_urn[inv_urn_id] = inv
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[LEAD MAGNET] #{lm.id}: check_connections — get_invitations EXC: {exc}", flush=True)
 
     for lmc in pending:
         # Check if they sent us an invitation → accept it
@@ -351,7 +355,20 @@ async def _phase_check_connections(db, lm, client):
         try:
             profile = await get_profile(client, urn_id=lmc.commenter_urn_id)
             distance = profile.get("distance")
-            if distance in (1, "DISTANCE_1", "1"):
+            print(f"[LEAD MAGNET] #{lm.id}: {lmc.commenter_name} → distance={distance!r}",
+                  flush=True)
+            # LinkedIn returns distance as enum string ("DISTANCE_1") or
+            # sometimes as a dict {"value": "DISTANCE_1"} or int 1.
+            distance_str = ""
+            if isinstance(distance, dict):
+                distance_str = str(distance.get("value") or distance.get("$type") or "")
+            else:
+                distance_str = str(distance) if distance is not None else ""
+            is_connected = (
+                distance in (1, "1", "DISTANCE_1")
+                or "DISTANCE_1" in distance_str
+            )
+            if is_connected:
                 lmc.status = "dm_pending"
                 lmc.connection_accepted_at = datetime.utcnow()
                 lmc.is_connected = True
@@ -361,6 +378,7 @@ async def _phase_check_connections(db, lm, client):
                 lmc.status = "failed"
                 _log_action(db, lm.id, None, "lm_connection_timeout", "failed", "Connection not accepted after 7 days")
         except Exception as exc:
+            print(f"[LEAD MAGNET] #{lm.id}: get_profile EXC for {lmc.commenter_name}: {exc}", flush=True)
             logger.warning("Failed to check connection for %s: %s", lmc.commenter_urn_id, exc)
 
     db.commit()
