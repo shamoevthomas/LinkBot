@@ -237,6 +237,10 @@ async def import_csv(
         row[0] for row in db.query(Contact.urn_id).filter(Contact.crm_id == crm_id).all()
     )
 
+    def _slug(*parts: str) -> str:
+        out = "-".join(p.strip().lower() for p in parts if p)
+        return "".join(ch if ch.isalnum() or ch == "-" else "-" for ch in out).strip("-")
+
     created = 0
     skipped = 0
     for c in contacts:
@@ -245,16 +249,21 @@ async def import_csv(
             contact_key = c.get("urn_id") or c.get("public_id") or ""
             linkedin_url = c.get("linkedin_url") or ""
 
-            if not contact_key and not linkedin_url:
-                skipped += 1
-                continue
-
-            # If no urn_id/public_id, derive from linkedin_url slug
+            # If no urn_id/public_id but we have a linkedin_url, derive slug
             if not contact_key and linkedin_url:
                 if "/in/" in linkedin_url:
                     contact_key = linkedin_url.rstrip("/").split("/in/")[-1].split("?")[0]
                 else:
                     contact_key = linkedin_url.rstrip("/").split("/")[-1]
+
+            # If still no key but we have a name, use a 'pending:' placeholder.
+            # The background enrichment task searches LinkedIn by name+headline
+            # and replaces this with the real ACoAA… URN.
+            if not contact_key:
+                first = (c.get("first_name") or "").strip()
+                last = (c.get("last_name") or "").strip()
+                if first or last:
+                    contact_key = f"pending:{_slug(first, last)}"
 
             if not contact_key:
                 skipped += 1

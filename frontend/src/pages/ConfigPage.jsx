@@ -23,17 +23,17 @@ const TABS = [
 
 const CSV_PROMPT = `J'ai un fichier CSV avec des contacts LinkedIn. Transforme-le en un CSV compatible avec les colonnes suivantes (garde exactement ces noms de colonnes) :
 
-- first_name : prénom du contact
-- last_name : nom de famille
-- linkedin_url : URL complète du profil LinkedIn (ex: https://www.linkedin.com/in/jean-dupont)
-- headline : titre / poste du contact (optionnel)
-- location : localisation (optionnel)
+- first_name : prénom du contact (obligatoire)
+- last_name : nom de famille (obligatoire)
+- linkedin_url : URL complète du profil LinkedIn (optionnel — si manquant, Linky retrouvera le contact par recherche)
+- headline : titre / poste du contact (optionnel — aide à la recherche si linkedin_url est manquant)
+- location : localisation (optionnel — aide à la recherche si linkedin_url est manquant)
 
 Règles :
 - La première ligne doit être l'en-tête avec les noms de colonnes ci-dessus
 - Sépare par des virgules, encadre les valeurs contenant des virgules avec des guillemets
 - Si une colonne n'existe pas dans mon fichier source, laisse-la vide
-- La colonne linkedin_url est obligatoire pour chaque contact
+- Au minimum, first_name + last_name sont requis pour chaque contact
 - Retourne uniquement le CSV brut, sans explication`;
 
 function SectionHeader({ eyebrow, title, desc, right }) {
