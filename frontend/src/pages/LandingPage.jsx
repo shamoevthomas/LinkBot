@@ -1,12 +1,11 @@
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Users, Rocket, Sparkles, Repeat, Activity, Link as LinkIcon,
   Search, UserPlus, MessageSquare, Zap, Shield, FileText, FileSpreadsheet,
   Target, UserCircle, Send, Calendar, ArrowRight, ArrowUp,
+  Eye, Mail, MessageCircle, TrendingUp, Lock, Clock, CheckCircle2,
 } from 'lucide-react';
-
-const ORB_SRC = 'https://future.co/images/homepage/glassy-orb/orb-purple.webm';
 
 function useReveal() {
   const ref = useRef(null);
@@ -76,13 +75,299 @@ function Stat({ value, label, delay = '' }) {
   );
 }
 
+/**
+ * Hero illustration: floating cards diagramming Linky's lead magnet flow.
+ * Post detected → commenter scored → bot replies publicly + DMs the lead magnet
+ * → conversion. Connectors are an SVG layer behind the cards.
+ */
+function HeroCards() {
+  return (
+    <div className="relative mx-auto" style={{ width: '100%', maxWidth: 560, aspectRatio: '1 / 1.05' }}>
+      {/* Dotted connectors layer */}
+      <svg
+        viewBox="0 0 560 588"
+        preserveAspectRatio="none"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }}
+      >
+        <defs>
+          <linearGradient id="lc" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="hsl(220 14% 70%)" stopOpacity="0.25" />
+            <stop offset="50%" stopColor="hsl(220 14% 60%)" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="hsl(220 14% 70%)" stopOpacity="0.25" />
+          </linearGradient>
+        </defs>
+        {/* Profile → Composer */}
+        <path d="M 280 230 L 280 310" stroke="url(#lc)" strokeWidth="1.4" strokeDasharray="3 5" fill="none" />
+        {/* Composer → LinkedIn channel */}
+        <path d="M 200 470 C 160 510, 130 510, 110 530" stroke="url(#lc)" strokeWidth="1.4" strokeDasharray="3 5" fill="none" />
+        {/* Composer → Email channel */}
+        <path d="M 360 470 C 400 510, 430 510, 450 530" stroke="url(#lc)" strokeWidth="1.4" strokeDasharray="3 5" fill="none" />
+        {/* LinkedIn → conv */}
+        <path d="M 130 580 C 170 595, 220 595, 260 588" stroke="url(#lc)" strokeWidth="1.4" strokeDasharray="3 5" fill="none" />
+        {/* Email → conv */}
+        <path d="M 430 580 C 390 595, 340 595, 300 588" stroke="url(#lc)" strokeWidth="1.4" strokeDasharray="3 5" fill="none" />
+      </svg>
+
+      {/* Card 1: Post detected (top-left) */}
+      <div className="absolute float-1" style={{ top: '4%', left: '2%', zIndex: 2 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '14px 16px', borderRadius: 14,
+          minWidth: 195,
+          boxShadow: '0 24px 50px -22px hsl(220 40% 20% / .18), 0 6px 14px -8px hsl(220 40% 20% / .08)',
+        }}
+      >
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+            <Eye size={13} />
+          </div>
+          <span className="eyebrow" style={{ fontSize: 9.5 }}>POST DÉTECTÉ</span>
+        </div>
+        <div className="text-[18px] font-semibold tracking-tight" style={{ letterSpacing: '-0.02em' }}>47 commentaires</div>
+        <div className="text-[10.5px]" style={{ color: 'hsl(var(--muted))' }}>Linky surveille en continu</div>
+       </div>
+      </div>
+
+      {/* Card 2: RDV qualifiés (top-right) */}
+      <div className="absolute float-2" style={{ top: '0%', right: '0%', zIndex: 2 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '14px 18px', borderRadius: 14,
+          minWidth: 165, textAlign: 'center',
+          boxShadow: '0 24px 50px -22px hsl(var(--accent) / .25), 0 6px 14px -8px hsl(220 40% 20% / .08)',
+        }}
+      >
+        <div className="eyebrow mb-1" style={{ fontSize: 9.5 }}>RDV QUALIFIÉS</div>
+        <div className="text-[24px] font-semibold tracking-tight mono" style={{ color: 'hsl(var(--accent))', letterSpacing: '-0.03em' }}>
+          +28
+        </div>
+        <div className="text-[10px]" style={{ color: 'hsl(var(--muted))' }}>par mois en moyenne</div>
+       </div>
+      </div>
+
+      {/* Card 3: Commenter profile (center) */}
+      <div className="absolute float-3" style={{ top: '20%', left: '50%', zIndex: 3 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '14px 18px', borderRadius: 14,
+          width: 280,
+          boxShadow: '0 24px 50px -22px hsl(220 40% 20% / .22), 0 6px 14px -8px hsl(220 40% 20% / .1)',
+        }}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, hsl(var(--violet)), hsl(var(--violet) / .7))',
+              color: 'white',
+            }}>ML</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <div className="text-[13.5px] font-semibold leading-tight">Marie Laurent</div>
+              <span className="text-[9.5px]" style={{ color: 'hsl(var(--muted))' }}>· il y a 2 min</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10.5px]" style={{ color: 'hsl(var(--muted))' }}>
+              <span style={{ color: 'hsl(var(--accent))', fontWeight: 600 }}>in</span>
+              Founder · Studio Acme
+            </div>
+          </div>
+        </div>
+        <div className="rounded-lg px-2.5 py-1.5 text-[10.5px] leading-snug mb-2"
+          style={{
+            background: 'hsl(220 22% 98%)',
+            borderLeft: '2px solid hsl(var(--accent) / .4)',
+            color: 'hsl(var(--text))',
+          }}>
+          « Hyper intéressée, je veux bien le guide 🙏 »
+        </div>
+        <div className="flex items-center justify-between text-[10.5px]">
+          <span className="flex items-center gap-1" style={{ color: 'hsl(var(--muted))' }}>
+            <span className="live-dot" style={{ width: 5, height: 5 }} />
+            Déjà connectée
+          </span>
+          <span className="chip emerald" style={{ fontSize: 9.5, padding: '2px 7px' }}>
+            DM direct
+          </span>
+        </div>
+       </div>
+      </div>
+
+      {/* Card 4: Composer / Reply (center-bottom) */}
+      <div className="absolute float-4" style={{ top: '53%', left: '50%', zIndex: 3, width: '88%', maxWidth: 460 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '14px 16px', borderRadius: 14,
+          boxShadow: '0 30px 60px -28px hsl(220 40% 20% / .25), 0 8px 18px -10px hsl(220 40% 20% / .1)',
+        }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center"
+              style={{ background: 'hsl(var(--violet) / .14)', color: 'hsl(var(--violet))' }}>
+              <Sparkles size={11} />
+            </div>
+            <span className="text-[12px] font-semibold">Réponse IA</span>
+          </div>
+          <span className="text-[10.5px]" style={{ color: 'hsl(var(--muted))' }}>→ Marie</span>
+        </div>
+        <div className="rounded-lg px-3 py-2.5 text-[11.5px] leading-snug"
+          style={{
+            background: 'hsl(220 22% 98%)',
+            border: '1px solid hsl(var(--border))',
+            color: 'hsl(var(--text))',
+          }}>
+          Merci Marie 👋 <span style={{ color: 'hsl(var(--muted))' }}>Je t'envoie ça en DM tout de suite — un guide qui devrait coller pile avec ce que tu cherches…</span>
+        </div>
+        <div className="flex items-center gap-1.5 mt-2 text-[10px]" style={{ color: 'hsl(var(--muted))' }}>
+          <Activity size={10} />
+          Reply public + DM privé
+          <span className="ml-auto flex items-center gap-1" style={{ color: 'hsl(var(--emerald))', fontWeight: 600 }}>
+            <CheckCircle2 size={10} /> Envoyé
+          </span>
+        </div>
+       </div>
+      </div>
+
+      {/* Card 5: Reply channel (bottom-left) */}
+      <div className="absolute float-5" style={{ bottom: '6%', left: '0%', zIndex: 2 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '10px 14px', borderRadius: 12,
+          minWidth: 165,
+          boxShadow: '0 18px 36px -18px hsl(220 40% 20% / .18)',
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'hsl(var(--accent))', color: 'white' }}>
+            <MessageCircle size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold leading-tight">Commentaire</div>
+            <div className="flex items-center gap-1 text-[10px]" style={{ color: 'hsl(var(--muted))' }}>
+              Posté sous le post
+              <CheckCircle2 size={10} style={{ color: 'hsl(var(--emerald))' }} />
+            </div>
+          </div>
+        </div>
+       </div>
+      </div>
+
+      {/* Card 6: DM channel (bottom-right) */}
+      <div className="absolute float-6" style={{ bottom: '6%', right: '0%', zIndex: 2 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '10px 14px', borderRadius: 12,
+          minWidth: 165,
+          boxShadow: '0 18px 36px -18px hsl(220 40% 20% / .18)',
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'hsl(var(--violet))', color: 'white' }}>
+            <Send size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold leading-tight">DM privé</div>
+            <div className="flex items-center gap-1 text-[10px]" style={{ color: 'hsl(var(--muted))' }}>
+              Lead magnet livré
+              <CheckCircle2 size={10} style={{ color: 'hsl(var(--emerald))' }} />
+            </div>
+          </div>
+        </div>
+       </div>
+      </div>
+
+      {/* Card 7: Heures récupérées (very bottom center) */}
+      <div className="absolute float-7" style={{ bottom: '-2%', left: '50%', zIndex: 2 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '8px 16px', borderRadius: 12,
+          boxShadow: '0 18px 36px -16px hsl(var(--amber) / .35)',
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'hsl(var(--amber) / .14)', color: 'hsl(var(--amber))' }}>
+            <Clock size={15} />
+          </div>
+          <div>
+            <div className="eyebrow" style={{ fontSize: 9, color: 'hsl(var(--muted))' }}>TEMPS GAGNÉ</div>
+            <div className="text-[18px] font-semibold mono" style={{ color: 'hsl(var(--amber))', letterSpacing: '-0.02em', lineHeight: 1 }}>+20 h / sem</div>
+          </div>
+        </div>
+       </div>
+      </div>
+
+      {/* Card 8: Connexions stat (mid-left, floating) */}
+      <div className="absolute float-8" style={{ top: '32%', left: '-3%', zIndex: 2 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '10px 14px', borderRadius: 12,
+          minWidth: 150,
+          boxShadow: '0 18px 36px -18px hsl(var(--emerald) / .25)',
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'hsl(var(--emerald) / .14)', color: 'hsl(var(--emerald))' }}>
+            <UserPlus size={15} />
+          </div>
+          <div>
+            <div className="text-[16px] font-semibold mono" style={{ color: 'hsl(var(--emerald))', letterSpacing: '-0.02em', lineHeight: 1 }}>
+              +544
+            </div>
+            <div className="text-[10px]" style={{ color: 'hsl(var(--muted))', marginTop: 2 }}>
+              connexions · 14 j
+            </div>
+          </div>
+        </div>
+       </div>
+      </div>
+
+      {/* Card 9: Taux de réponse (mid-right, floating) */}
+      <div className="absolute float-9" style={{ top: '34%', right: '-3%', zIndex: 2 }}>
+       <div
+        className="g-card hero-card"
+        style={{
+          padding: '10px 14px', borderRadius: 12,
+          minWidth: 150,
+          boxShadow: '0 18px 36px -18px hsl(var(--violet) / .25)',
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'hsl(var(--violet) / .14)', color: 'hsl(var(--violet))' }}>
+            <MessageSquare size={15} />
+          </div>
+          <div>
+            <div className="text-[16px] font-semibold mono" style={{ color: 'hsl(var(--violet))', letterSpacing: '-0.02em', lineHeight: 1 }}>
+              42 %
+            </div>
+            <div className="text-[10px]" style={{ color: 'hsl(var(--muted))', marginTop: 2 }}>
+              taux de réponse
+            </div>
+          </div>
+        </div>
+       </div>
+      </div>
+
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const page = useReveal();
-  const [splash, setSplash] = useState(false);
-  const [drops, setDrops] = useState([]);
   const [showTop, setShowTop] = useState(false);
-  const splashTimer = useRef(null);
 
   useEffect(() => {
     const onScroll = () => setShowTop(window.scrollY > 600);
@@ -90,30 +375,6 @@ export default function LandingPage() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  const triggerSplash = useCallback(() => {
-    if (splash) return;
-    setSplash(true);
-    const newDrops = Array.from({ length: 50 }).map((_, i) => {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 300 + Math.random() * 900;
-      const size = 6 + Math.random() * 22;
-      const duration = 0.8 + Math.random() * 1.2;
-      const delay = Math.random() * 0.25;
-      return {
-        id: i,
-        tx: Math.cos(angle) * speed,
-        ty: Math.sin(angle) * speed - 100 * Math.random(),
-        size, duration, delay,
-        opacity: 0.4 + Math.random() * 0.5,
-        blur: Math.random() > 0.6 ? 2 : 0,
-      };
-    });
-    setDrops(newDrops);
-    splashTimer.current = setTimeout(() => { setSplash(false); setDrops([]); }, 3000);
-  }, [splash]);
-
-  useEffect(() => () => clearTimeout(splashTimer.current), []);
 
   return (
     <div ref={page} style={{
@@ -161,7 +422,7 @@ export default function LandingPage() {
               ['Fonctionnalités', '#features'],
               ['Campagnes', '#campaigns'],
               ['IA', '#ai'],
-              ['Comment ça marche', '#how'],
+              ['FAQ', '#faq'],
             ].map(([label, href]) => (
               <a key={label} href={href}
                 className="transition-colors"
@@ -207,18 +468,16 @@ export default function LandingPage() {
           <div className="animate-fade-rise text-center md:text-left" style={{ flex: 1 }}>
             <div className="chip blue mb-5" style={{ fontSize: 11, padding: '4px 12px' }}>
               <Sparkles size={11} />
-              Propulsé par IA
+              Lead magnets · Connexion · DM · CRM
             </div>
             <h1 style={{
-              fontSize: 'clamp(40px, 5.5vw, 68px)',
+              fontSize: 'clamp(40px, 5.5vw, 64px)',
               fontWeight: 600, lineHeight: 1.02,
               letterSpacing: '-0.03em',
               color: 'hsl(var(--text))',
             }}>
-              Automatisez votre{' '}
-              <span style={{ color: 'hsl(var(--accent))' }}>prospection</span>{' '}
-              avec élégance et{' '}
-              <span style={{ color: 'hsl(var(--accent))' }}>précision</span>.
+              Votre prospection LinkedIn,{' '}
+              <span style={{ color: 'hsl(var(--accent))' }}>en pilote automatique</span>.
             </h1>
             <p className="animate-fade-rise-delay mx-auto md:mx-0"
               style={{
@@ -226,10 +485,23 @@ export default function LandingPage() {
                 color: 'hsl(var(--muted))',
                 maxWidth: 500, marginTop: 24,
               }}>
-              CRM intelligent, campagnes automatiques, messages personnalisés par IA.
-              Linky transforme votre réseau LinkedIn en machine de croissance,
-              pendant que vous vous concentrez sur l'essentiel.
+              Transformez les commentaires de vos posts en leads, lancez des campagnes
+              de connexion à grande échelle, gérez tous vos DM depuis un CRM unique.
+              Linky orchestre tout, 24h/24, avec des messages personnalisés par IA.
             </p>
+            {/* Use-case chips: equal weight to inbound + outbound */}
+            <div className="animate-fade-rise-delay flex flex-wrap items-center gap-1.5 mt-5">
+              {[
+                ['Lead magnet', 'blue'],
+                ['Connexion', 'emerald'],
+                ['DM + relances', 'violet'],
+                ['Combo connexion → DM', 'amber'],
+              ].map(([label, tone]) => (
+                <span key={label} className={`chip ${tone}`} style={{ fontSize: 10.5, padding: '3px 9px' }}>
+                  {label}
+                </span>
+              ))}
+            </div>
             <div className="animate-fade-rise-delay-2 flex flex-wrap items-center gap-3" style={{ marginTop: 32 }}>
               <button onClick={() => navigate('/register')} className="cta-btn"
                 style={{ padding: '14px 28px', fontSize: 14 }}>
@@ -240,76 +512,32 @@ export default function LandingPage() {
                 Voir les fonctionnalités
               </button>
             </div>
+            <div className="animate-fade-rise-delay-2 flex flex-wrap items-center gap-x-5 gap-y-2 mt-7 text-[11.5px]"
+              style={{ color: 'hsl(var(--muted))' }}>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 size={13} style={{ color: 'hsl(var(--emerald))' }} />
+                Setup en 3 min
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Lock size={13} style={{ color: 'hsl(var(--emerald))' }} />
+                Cookies stockés chez vous
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Shield size={13} style={{ color: 'hsl(var(--emerald))' }} />
+                Patterns humains
+              </span>
+            </div>
           </div>
 
-          {/* Orb */}
+          {/* Hero illustration: floating cards (Linky lead-magnet flow) */}
           <div
-            className="animate-fade-rise-delay hidden md:flex"
-            onMouseEnter={triggerSplash}
+            className="animate-fade-rise-delay flex"
             style={{
               flex: 1, justifyContent: 'center', alignItems: 'center',
-              position: 'relative', overflow: 'visible', cursor: 'pointer',
-              minHeight: 500,
+              position: 'relative', overflow: 'visible',
+              minHeight: 560, padding: '20px 0',
             }}>
-            <video
-              autoPlay loop muted playsInline
-              style={{
-                width: 500, height: 500,
-                transform: 'scale(1.25)',
-                mixBlendMode: 'screen',
-                filter: 'hue-rotate(-55deg) saturate(250%) brightness(1.2) contrast(1.1)',
-                pointerEvents: 'none',
-                transition: 'opacity 0.3s',
-                opacity: splash ? 0 : 1,
-              }}>
-              <source src={ORB_SRC} type="video/webm" />
-            </video>
-
-            {splash && (
-              <div style={{
-                position: 'absolute', top: '50%', left: '50%',
-                transform: 'translate(-50%, -50%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                animation: 'orbLogoIn 0.6s cubic-bezier(0.22,1,0.36,1) forwards',
-              }}>
-                <div style={{
-                  position: 'absolute', width: 600, height: 600, borderRadius: '50%',
-                  background: 'radial-gradient(circle, hsl(var(--accent) / .25), hsl(var(--accent) / .08) 50%, transparent 70%)',
-                  filter: 'blur(40px)', pointerEvents: 'none',
-                }} />
-                <div style={{
-                  position: 'absolute', width: 480, height: 480, borderRadius: '50%',
-                  background: 'radial-gradient(circle at 35% 28%, rgba(120,190,255,0.4) 0%, hsl(var(--accent) / .12) 35%, rgba(0,80,200,0.08) 60%, transparent 80%)',
-                  border: '1.5px solid hsl(var(--accent) / .15)',
-                  boxShadow: 'inset 0 4px 30px rgba(255,255,255,0.2), inset 0 -15px 30px rgba(0,60,160,0.1), 0 0 60px hsl(var(--accent) / .15)',
-                  backdropFilter: 'blur(8px)',
-                }} />
-                <div style={{
-                  position: 'absolute', width: 480, height: 480, borderRadius: '50%',
-                  background: 'radial-gradient(ellipse 50% 35% at 35% 25%, rgba(255,255,255,0.45), transparent 60%)',
-                  pointerEvents: 'none',
-                }} />
-                <img src="/linkedin.png" alt="LinkedIn"
-                  style={{
-                    position: 'relative', zIndex: 2,
-                    width: 400, height: 400, objectFit: 'contain',
-                    filter: 'drop-shadow(0 4px 20px hsl(var(--accent) / .4))',
-                  }} />
-              </div>
-            )}
-
-            {drops.map((d) => (
-              <div key={d.id} style={{
-                position: 'absolute', top: '50%', left: '50%',
-                width: d.size, height: d.size, borderRadius: '50%',
-                background: `radial-gradient(circle at 35% 30%, rgba(120,200,255,${d.opacity}), hsl(var(--accent) / ${d.opacity * 0.8}))`,
-                boxShadow: d.blur ? `0 0 ${d.blur * 3}px hsl(var(--accent) / .3)` : 'none',
-                filter: d.blur ? `blur(${d.blur}px)` : 'none',
-                animation: `dropFly ${d.duration}s ${d.delay}s cubic-bezier(0.2,0.8,0.3,1) forwards`,
-                opacity: 0, pointerEvents: 'none', zIndex: 50,
-                '--tx': `${d.tx}px`, '--ty': `${d.ty}px`,
-              }} />
-            ))}
+            <HeroCards />
           </div>
         </section>
       </div>
@@ -317,8 +545,8 @@ export default function LandingPage() {
       {/* ── FEATURES ── */}
       <section id="features" className="relative" style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Fonctionnalités">
-          Tout ce qu'il faut pour{' '}
-          <span style={{ color: 'hsl(var(--accent))' }}>dominer LinkedIn</span>.
+          Tout-en-un, sans{' '}
+          <span style={{ color: 'hsl(var(--accent))' }}>stack à bricoler</span>.
         </SectionTitle>
 
         {/* Bento grid — 3 rows of 6 cells, cards span 2–4 cells */}
@@ -401,7 +629,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* 4 types de campagnes */}
+          {/* 5 types de campagnes (incluant Lead Magnet, le différenciateur) */}
           <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-2" style={{ borderRadius: 20 }}>
             <div className="p-6">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-4"
@@ -409,17 +637,18 @@ export default function LandingPage() {
                 <Rocket size={16} />
               </div>
               <h3 className="text-[17px] font-semibold mb-2 tracking-tight" style={{ letterSpacing: '-0.01em' }}>
-                4 types de campagnes.
+                5 moteurs de campagne.
               </h3>
               <p className="text-[12.5px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))' }}>
-                Recherche, Connexion, DM, Connexion + DM. Tout tourne en arrière-plan.
+                Lead Magnet, Recherche, Connexion, DM, Combo. Tout tourne en arrière-plan, 24h/24.
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {[
+                  ['Lead Magnet', 'accent'],
                   ['Recherche', 'blue'],
-                  ['Connexion', 'blue'],
-                  ['Message', 'emerald'],
-                  ['Combo', 'violet'],
+                  ['Connexion', 'emerald'],
+                  ['DM', 'violet'],
+                  ['Combo', 'amber'],
                 ].map(([label, tone]) => (
                   <span key={label} className={`chip ${tone}`} style={{ fontSize: 10.5 }}>{label}</span>
                 ))}
@@ -549,11 +778,76 @@ export default function LandingPage() {
       {/* ── CAMPAIGNS ── */}
       <section id="campaigns" className="relative" style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 20px' }}>
         <SectionTitle sub="Campagnes">
-          Quatre moteurs,{' '}
+          Cinq moteurs,{' '}
           <span style={{ color: 'hsl(var(--accent))' }}>une seule interface</span>.
         </SectionTitle>
 
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 auto-rows-[minmax(0,auto)]">
+          {/* ── LEAD MAGNET — the killer feature, spans full width on top ── */}
+          <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-6"
+            style={{
+              borderRadius: 20,
+              background: 'linear-gradient(135deg, hsl(var(--panel)) 0%, hsl(var(--accent-soft)) 100%)',
+              border: '1px solid hsl(var(--accent) / .25)',
+            }}>
+            <div className="grid md:grid-cols-[1.1fr,1fr] gap-6 p-7 items-center">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: 'hsl(var(--accent))', color: 'white' }}>
+                    <Sparkles size={17} />
+                  </div>
+                  <span className="chip blue" style={{ fontSize: 10.5 }}>Lead Magnet</span>
+                  <span className="chip emerald" style={{ fontSize: 10.5 }}>Inbound</span>
+                </div>
+                <h3 className="text-[22px] font-semibold mb-3 tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+                  Vos commentaires deviennent des leads, en pilote auto.
+                </h3>
+                <p className="text-[13.5px] leading-relaxed mb-4" style={{ color: 'hsl(var(--muted))', maxWidth: 460 }}>
+                  Linky surveille vos posts en continu. Quand quelqu'un commente,
+                  le bot répond publiquement (« Merci, je t'envoie ça en DM »)
+                  et envoie automatiquement votre ressource (PDF, lien, code promo)
+                  dans la foulée — avec un message personnalisé pour chaque profil.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    ['Détection en continu', 'blue'],
+                    ['Réponse publique', 'accent'],
+                    ['DM auto-personnalisé', 'violet'],
+                    ['Connecté ou non', 'emerald'],
+                  ].map(([label, tone]) => (
+                    <span key={label} className={`chip ${tone}`} style={{ fontSize: 10.5 }}>{label}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mini-flow illustration: post → comment → reply + DM */}
+              <div className="flex flex-col gap-2">
+                {[
+                  { tone: 'accent', icon: Eye,        label: 'Post détecté',          sub: '47 commentaires en cours' },
+                  { tone: 'violet', icon: MessageCircle, label: 'Marie commente',     sub: '« Je veux bien le guide 🙏 »' },
+                  { tone: 'emerald', icon: Send,      label: 'Reply + DM envoyés',    sub: 'Lead magnet livré · 28 s' },
+                ].map((step, i) => {
+                  const Ic = step.icon;
+                  return (
+                    <div key={i} className="g-card-soft flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                      style={{ background: 'hsl(var(--panel))', border: '1px solid hsl(var(--border))' }}>
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: `hsl(var(--${step.tone}) / .14)`, color: `hsl(var(--${step.tone}))` }}>
+                        <Ic size={15} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12.5px] font-semibold leading-tight">{step.label}</div>
+                        <div className="text-[11px]" style={{ color: 'hsl(var(--muted))' }}>{step.sub}</div>
+                      </div>
+                      <CheckCircle2 size={14} style={{ color: 'hsl(var(--emerald))' }} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           {/* Recherche — card with search bar + result rows */}
           <div className="reveal reveal-delay-1 g-card overflow-hidden md:col-span-3" style={{ borderRadius: 20 }}>
             <div className="p-6">
@@ -800,21 +1094,148 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── STATS ── */}
-      <section className="relative" style={{ maxWidth: 900, margin: '0 auto', padding: '56px 20px' }}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
-          <Stat delay="reveal-delay-1" value="4"  label="Types de campagnes" />
-          <Stat delay="reveal-delay-2" value="7"  label="Relances automatiques" />
-          <Stat delay="reveal-delay-3" value="6h" label="Sync automatique" />
-          <Stat delay="reveal-delay-4" value="∞"  label="Messages personnalisés" />
+      {/* ── RESULTS ── replaces the old generic stats with KPIs that match
+          the hero illustration (so the promise is reinforced, not abstract). */}
+      <section className="relative" style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 20px' }}>
+        <SectionTitle sub="Pourquoi Linky">
+          Des résultats{' '}
+          <span style={{ color: 'hsl(var(--accent))' }}>concrets</span>, pas des promesses.
+        </SectionTitle>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {[
+            {
+              tone: 'emerald', icon: UserPlus,
+              value: '+544', unit: '',
+              label: 'connexions LinkedIn générées en 14 jours',
+              sub: 'Campagne combo connexion + DM',
+            },
+            {
+              tone: 'accent', icon: Calendar,
+              value: '+28', unit: '',
+              label: 'RDV qualifiés par mois en moyenne',
+              sub: 'Lead magnets + relances IA',
+            },
+            {
+              tone: 'amber', icon: Clock,
+              value: '+20', unit: 'h',
+              label: 'récupérées chaque semaine',
+              sub: 'Plus de copié-collé, plus d\'oubli',
+            },
+          ].map((s, i) => {
+            const Ic = s.icon;
+            return (
+              <div key={i} className={`reveal reveal-delay-${i + 1} g-card p-7`}
+                style={{ borderRadius: 20 }}>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-5"
+                  style={{ background: `hsl(var(--${s.tone}) / .12)`, color: `hsl(var(--${s.tone}))` }}>
+                  <Ic size={18} />
+                </div>
+                <div className="flex items-baseline gap-1 mb-2 mono"
+                  style={{ color: `hsl(var(--${s.tone}))`, letterSpacing: '-0.03em' }}>
+                  <span className="text-[44px] font-semibold leading-none">{s.value}</span>
+                  {s.unit && <span className="text-[24px] font-semibold leading-none">{s.unit}</span>}
+                </div>
+                <p className="text-[14px] font-medium mb-1" style={{ color: 'hsl(var(--text))' }}>
+                  {s.label}
+                </p>
+                <p className="text-[12px]" style={{ color: 'hsl(var(--muted))' }}>{s.sub}</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── BEFORE / AFTER ── */}
+      <section className="relative" style={{ maxWidth: 1100, margin: '0 auto', padding: '72px 20px' }}>
+        <SectionTitle sub="Avant / Après">
+          Votre semaine,{' '}
+          <span style={{ color: 'hsl(var(--accent))' }}>libérée</span>.
+        </SectionTitle>
+
+        <div className="reveal g-card overflow-hidden" style={{ borderRadius: 20 }}>
+          <div className="grid grid-cols-[1.1fr,1fr,1fr] text-[12px]"
+            style={{ background: 'hsl(220 22% 98%)', borderBottom: '1px solid hsl(var(--border))' }}>
+            <div className="px-5 py-3 font-semibold" style={{ color: 'hsl(var(--muted))' }}>Tâche</div>
+            <div className="px-5 py-3 font-semibold text-center" style={{ color: 'hsl(var(--muted))' }}>Sans Linky</div>
+            <div className="px-5 py-3 font-semibold text-center" style={{ color: 'hsl(var(--accent))' }}>Avec Linky</div>
+          </div>
+          {[
+            { task: 'Détecter les commentaires sur tes posts', before: '2 h · check manuel', after: 'Live · auto' },
+            { task: 'Répondre + envoyer le lead magnet en DM', before: '5 min × N · jamais à temps', after: '< 30 s · auto' },
+            { task: 'Trouver 500 prospects qualifiés',           before: '10 h Sales Nav', after: '30 min' },
+            { task: 'Lancer une campagne Connexion + DM',        before: '5 h · scripts à la main', after: '0 min · 100 % auto' },
+            { task: 'Suivre les leads & relancer',               before: '2 h Excel', after: 'Temps réel · CRM' },
+          ].map((row, i, arr) => (
+            <div key={row.task}
+              className="grid grid-cols-[1.1fr,1fr,1fr] text-[13px] items-center"
+              style={i < arr.length - 1 ? { borderBottom: '1px solid hsl(var(--border))' } : {}}>
+              <div className="px-5 py-4" style={{ color: 'hsl(var(--text))' }}>{row.task}</div>
+              <div className="px-5 py-4 text-center" style={{ color: 'hsl(var(--muted))', textDecoration: 'line-through' }}>
+                {row.before}
+              </div>
+              <div className="px-5 py-4 text-center font-semibold" style={{ color: 'hsl(var(--emerald))' }}>
+                {row.after}
+              </div>
+            </div>
+          ))}
+          <div className="grid grid-cols-[1.1fr,1fr,1fr] text-[14px] items-center"
+            style={{ background: 'hsl(var(--accent-soft))', borderTop: '1px solid hsl(var(--accent) / .25)' }}>
+            <div className="px-5 py-4 font-semibold">Temps économisé</div>
+            <div className="px-5 py-4" />
+            <div className="px-5 py-4 text-center font-semibold mono" style={{ color: 'hsl(var(--accent))' }}>
+              ~ 20 h / semaine
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECURITY / TRUST ── */}
+      <section className="relative" style={{ maxWidth: 1100, margin: '0 auto', padding: '72px 20px' }}>
+        <SectionTitle sub="Sécurité">
+          Votre compte LinkedIn,{' '}
+          <span style={{ color: 'hsl(var(--accent))' }}>protégé</span>.
+        </SectionTitle>
+
+        <div className="grid md:grid-cols-3 gap-5">
+          {[
+            {
+              icon: Lock, tone: 'emerald',
+              title: 'Cookies stockés chez vous',
+              desc: 'Vos cookies li_at et JSESSIONID restent sur votre serveur. Aucun tiers, aucun relais externe, aucun stockage cloud.',
+            },
+            {
+              icon: Activity, tone: 'accent',
+              title: 'Patterns humains',
+              desc: 'Délais randomisés entre chaque action, plages horaires respectées, batch intelligent. LinkedIn ne voit aucune différence avec un humain.',
+            },
+            {
+              icon: Target, tone: 'amber',
+              title: 'Limites automatiques',
+              desc: 'Quotas quotidiens respectés, étalement sur N jours, arrêt automatique en cas d\'anomalie. Le rythme reste sous votre contrôle.',
+            },
+          ].map((item, i) => {
+            const Ic = item.icon;
+            return (
+              <div key={item.title} className={`reveal reveal-delay-${i + 1} g-card p-6`}
+                style={{ borderRadius: 18 }}>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+                  style={{ background: `hsl(var(--${item.tone}) / .12)`, color: `hsl(var(--${item.tone}))` }}>
+                  <Ic size={18} />
+                </div>
+                <h3 className="text-[15px] font-semibold mb-2" style={{ letterSpacing: '-0.01em' }}>{item.title}</h3>
+                <p className="text-[13px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>{item.desc}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       {/* ── DETAILS ── editorial two-column list, not a cards grid */}
       <section className="relative" style={{ maxWidth: 1100, margin: '0 auto', padding: '72px 20px' }}>
-        <SectionTitle sub="Détails">
-          Pensé pour les{' '}
-          <span style={{ color: 'hsl(var(--accent))' }}>professionnels exigeants</span>.
+        <SectionTitle sub="Le détail qui compte">
+          Tout ce que vous{' '}
+          <span style={{ color: 'hsl(var(--accent))' }}>cherchiez ailleurs</span>.
         </SectionTitle>
 
         <div className="grid md:grid-cols-2 gap-x-14 gap-y-7">
@@ -844,6 +1265,66 @@ export default function LandingPage() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section id="faq" className="relative" style={{ maxWidth: 860, margin: '0 auto', padding: '80px 20px' }}>
+        <SectionTitle sub="FAQ">
+          Les questions{' '}
+          <span style={{ color: 'hsl(var(--accent))' }}>qu'on nous pose</span>.
+        </SectionTitle>
+
+        <div className="reveal space-y-3">
+          {[
+            {
+              q: 'Linky est-il safe pour mon compte LinkedIn ?',
+              a: "Oui. Tous les délais sont randomisés, les quotas LinkedIn respectés (max ~80 invitations/semaine, batch intelligent), et les actions étalées sur des plages horaires réalistes. Linky se comporte comme un humain — aucune action en rafale, aucun pattern détectable. Vos cookies restent stockés sur votre serveur, jamais envoyés ailleurs.",
+            },
+            {
+              q: 'Combien de temps avant de voir des résultats ?',
+              a: "Une campagne de connexion donne ses premiers acceptations sous 24-72h. Pour les lead magnets, les premiers DM partent dès qu'un commentaire est détecté (en quelques minutes). Comptez 2 semaines pour avoir un volume statistique exploitable.",
+            },
+            {
+              q: 'Faut-il que mon ordinateur reste allumé ?',
+              a: "Non. Linky tourne sur un serveur 24h/24. Vous pouvez fermer votre PC, partir en weekend, dormir : les campagnes continuent, les commentaires sont détectés, les DM sont envoyés.",
+            },
+            {
+              q: 'Comment Linky personnalise les messages ?',
+              a: "Chaque message peut être généré par IA (Gemini) à partir du profil du contact, de son expérience et de ses publications récentes. Vous pouvez aussi écrire vos propres templates avec variables ({first_name}, {company}, etc.). Vous gardez le contrôle, même sur les générations IA — un aperçu des 3 premiers messages est toujours proposé avant lancement.",
+            },
+            {
+              q: 'Puis-je annuler à tout moment ?',
+              a: "Oui, sans engagement. Vos données restent exportables (CSV, journal d'activité complet). Aucune carte bancaire requise pour l'inscription gratuite.",
+            },
+            {
+              q: 'Linky remplace mon Sales Navigator ?',
+              a: "Linky est complémentaire. Il s'appuie sur LinkedIn (Sales Nav inclus si vous l'avez) pour rechercher des prospects, mais automatise tout le reste : envoi, relances, suivi, CRM, lead magnets. Vous pouvez aussi importer vos contacts depuis un CSV existant.",
+            },
+          ].map((item, i) => (
+            <details key={i} className={`g-card`}
+              style={{
+                borderRadius: 14,
+                background: 'hsl(var(--panel))',
+                cursor: 'pointer',
+              }}>
+              <summary className="px-5 py-4 flex items-center justify-between gap-4 list-none"
+                style={{
+                  fontSize: 14.5, fontWeight: 600, color: 'hsl(var(--text))',
+                  letterSpacing: '-0.005em',
+                }}>
+                {item.q}
+                <span className="shrink-0 transition-transform faq-chev"
+                  style={{ color: 'hsl(var(--muted))' }}>
+                  <ArrowRight size={16} />
+                </span>
+              </summary>
+              <div className="px-5 pb-5 text-[13.5px] leading-relaxed"
+                style={{ color: 'hsl(var(--muted))' }}>
+                {item.a}
+              </div>
+            </details>
+          ))}
         </div>
       </section>
 
@@ -927,16 +1408,44 @@ export default function LandingPage() {
       </button>
 
       <style>{`
-        @keyframes orbLogoIn {
-          0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.3); }
-          50%  { opacity: 1; transform: translate(-50%,-50%) scale(1.1); }
-          100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+        /* FAQ chevron rotates when <details> is open */
+        details[open] .faq-chev { transform: rotate(90deg); }
+        details summary::-webkit-details-marker { display: none; }
+        .faq-chev { transition: transform 0.25s cubic-bezier(0.22,1,0.36,1); }
+
+        /* Inner card: hover scale only (transform owned by inner div) */
+        .hero-card {
+          transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                      box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+          transform-origin: center center;
+          will-change: transform;
         }
-        @keyframes dropFly {
-          0%   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-          70%  { opacity: 0.8; }
-          100% { opacity: 0; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.2); }
+        .hero-card:hover {
+          transform: scale(1.07);
         }
+        .hero-card:hover { z-index: 50; }
+
+        /* Outer wrapper: floating animation (transform owned by outer div) */
+        @keyframes float-y {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-7px); }
+        }
+        @keyframes float-cx {
+          0%, 100% { transform: translateX(-50%) translateY(0); }
+          50% { transform: translateX(-50%) translateY(-7px); }
+        }
+        /* fill-mode backwards: apply the 0% keyframe during the delay so
+           centered cards keep their translateX(-50%) before the animation
+           starts (otherwise they sit at left:50% un-translated for 0.6-3s). */
+        .float-1 { animation: float-y 6s ease-in-out 0s infinite both; }
+        .float-2 { animation: float-y 7s ease-in-out 1.2s infinite both; }
+        .float-3 { animation: float-cx 6.5s ease-in-out 0.6s infinite both; }
+        .float-4 { animation: float-cx 7.5s ease-in-out 1.8s infinite both; }
+        .float-5 { animation: float-y 6.8s ease-in-out 2.4s infinite both; }
+        .float-6 { animation: float-y 7.2s ease-in-out 0.4s infinite both; }
+        .float-7 { animation: float-cx 6s ease-in-out 3s infinite both; }
+        .float-8 { animation: float-y 7.4s ease-in-out 0.8s infinite both; }
+        .float-9 { animation: float-y 6.6s ease-in-out 2s infinite both; }
       `}</style>
     </div>
   );

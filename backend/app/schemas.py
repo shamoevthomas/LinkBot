@@ -298,6 +298,7 @@ class LeadMagnetResponse(BaseModel):
     total_likes: int = 0
     error_message: Optional[str] = None
     started_at: Optional[datetime] = None
+    next_run_at: Optional[datetime] = None
     created_at: datetime
 
 class LeadMagnetContactResponse(BaseModel):

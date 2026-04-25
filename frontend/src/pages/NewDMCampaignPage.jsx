@@ -263,22 +263,30 @@ export default function NewDMCampaignPage() {
   return (
     <PageWrapper>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(reconfigure ? `/dashboard/campaigns/${reconfigure.id}` : '/dashboard/campaigns')} className="p-2 hover:bg-gray-200 rounded-lg">
-          <ArrowLeft size={20} className="text-gray-600" />
+      <div className="flex items-center gap-3 mb-7">
+        <button onClick={() => navigate(reconfigure ? `/dashboard/campaigns/${reconfigure.id}` : '/dashboard/campaigns')}
+          className="p-2 rounded-lg transition-colors"
+          style={{ color: 'hsl(var(--muted))' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(220 18% 96%)'; e.currentTarget.style.color = 'hsl(var(--text))'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--muted))'; }}>
+          <ArrowLeft size={20} />
         </button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-900 f">
+          <div className="eyebrow mb-1">
+            {reconfigure ? 'Reconfigurer' : searchConnectionDMConfig ? 'Recherche + Connexion + DM' : connectionConfig ? 'Connexion + DM' : 'Campagne'}
+          </div>
+          <h1 className="text-[24px] font-semibold tracking-tight"
+            style={{ color: 'hsl(var(--text))', letterSpacing: '-0.02em' }}>
             {reconfigure ? 'Reconfigurer la campagne' : searchConnectionDMConfig ? 'Campagne Recherche + Connexion + DM' : connectionConfig ? 'Campagne Connexion + DM' : 'Campagne Message'}
           </h1>
-          <p className="text-xs text-gray-500">
-            {reconfigure ? 'Modifiez les messages et ajoutez un message de secours' : searchConnectionDMConfig ? 'Recherche + connexion + messages apres acceptation' : connectionConfig ? 'Messages apres acceptation de la connexion' : 'Configurez et visualisez votre sequence de messages'}
+          <p className="text-[12.5px] mt-0.5" style={{ color: 'hsl(var(--muted))' }}>
+            {reconfigure ? 'Modifiez les messages et ajoutez un message de secours' : searchConnectionDMConfig ? 'Recherche + connexion + messages après acceptation' : connectionConfig ? 'Messages après acceptation de la connexion' : 'Configurez et visualisez votre séquence de messages'}
           </p>
         </div>
         <button onClick={handleLaunch} disabled={launching || !canLaunch}
-          className="cta-btn flex items-center gap-2 disabled:opacity-40"
-          style={{ padding: '10px 24px', fontSize: 14 }}>
-          {launching ? <><Loader2 size={16} className="animate-spin" /> {reconfigure ? 'Sauvegarde...' : 'Lancement...'}</> : reconfigure ? <><Save size={16} /> Sauvegarder et reprendre</> : <><Rocket size={16} /> Lancer</>}
+          className="cta-btn flex items-center gap-2"
+          style={{ padding: '11px 24px', fontSize: 13.5 }}>
+          {launching ? <><Loader2 size={16} className="animate-spin" /> {reconfigure ? 'Sauvegarde…' : 'Lancement…'}</> : reconfigure ? <><Save size={16} /> Sauvegarder</> : <><Rocket size={16} /> Lancer</>}
         </button>
       </div>
 
@@ -288,87 +296,112 @@ export default function NewDMCampaignPage() {
         {/* ======== LEFT: Configuration ======== */}
         <div className="space-y-4" style={{ position: 'sticky', top: 80 }}>
           {/* General */}
-          <div className="g-card !p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Send size={14} style={{ color: 'var(--blue)' }} /> Configuration
-            </h3>
+          <div className="g-card !p-5 space-y-3.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+                <Send size={13} />
+              </div>
+              <h3 className="text-[13.5px] font-semibold" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.005em' }}>Configuration</h3>
+            </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Nom</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Prospection Q2"
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Nom</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Prospection Q2"
                 className="input-glass w-full" style={{ fontSize: 13 }} disabled={!!reconfigure} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">CRM cible</label>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>CRM cible</label>
               <select value={crmId} onChange={(e) => setCrmId(e.target.value)}
                 className="input-glass w-full" style={{ fontSize: 13 }} disabled={!!reconfigure}>
-                <option value="">Selectionner...</option>
+                <option value="">Sélectionner…</option>
                 {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count})</option>)}
               </select>
             </div>
             {(connectionConfig || searchConnectionDMConfig) && (
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Delai avant DM (apres acceptation)</label>
+                <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'hsl(var(--muted))' }}>Délai avant DM (après acceptation)</label>
                 <div className="flex items-center gap-2">
                   <input type="number" min={0} max={168} value={dmDelayHours} onChange={(e) => setDmDelayHours(parseInt(e.target.value) || 0)}
                     className="input-glass w-20" style={{ fontSize: 13 }} />
-                  <span className="text-xs text-gray-500">heure(s)</span>
+                  <span className="text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>heure(s)</span>
                 </div>
               </div>
             )}
           </div>
 
           {/* Context */}
-          <div className="g-card !p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <FileText size={14} className="text-orange-500" /> Contexte
-            </h3>
-            <textarea value={contextText} onChange={(e) => setContextText(e.target.value)}
-              rows={3} placeholder="Votre offre, produit, service..."
-              className="input-glass w-full resize-none" style={{ fontSize: 12 }} />
+          <div className="g-card !p-5 space-y-3.5">
             <div className="flex items-center gap-2">
-              <label className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ background: 'hsl(var(--amber) / .14)', color: 'hsl(var(--amber))' }}>
+                <FileText size={13} />
+              </div>
+              <h3 className="text-[13.5px] font-semibold" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.005em' }}>Contexte</h3>
+            </div>
+            <textarea value={contextText} onChange={(e) => setContextText(e.target.value)}
+              rows={3} placeholder="Votre offre, produit, service…"
+              className="input-glass w-full resize-none" style={{ fontSize: 12.5 }} />
+            <div className="flex items-center gap-2">
+              <label className="ghost-btn !py-1.5 !px-3 cursor-pointer flex items-center gap-1.5"
+                style={{ fontSize: 11.5 }}>
                 {extracting ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                {extracting ? 'Extraction...' : 'PDF'}
+                {extracting ? 'Extraction…' : 'PDF'}
                 <input type="file" accept=".pdf" onChange={handlePdfUpload} className="hidden" disabled={extracting} />
               </label>
-              {pdfName && <span className="text-[10px] text-green-600 truncate flex-1">{pdfName}</span>}
+              {pdfName && (
+                <span className="chip emerald truncate flex-1" style={{ fontSize: 10.5 }} title={pdfName}>
+                  {pdfName}
+                </span>
+              )}
             </div>
           </div>
 
           {/* AI */}
-          <div className="g-card !p-4 space-y-3" style={useAi ? { borderColor: 'rgba(147,51,234,0.3)', background: 'rgba(147,51,234,0.02)' } : undefined}>
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="g-card !p-5 space-y-3"
+            style={useAi ? {
+              borderColor: 'hsl(var(--violet) / .35)',
+              background: 'linear-gradient(180deg, hsl(var(--panel)) 0%, hsl(262 100% 99%) 100%)',
+            } : undefined}>
+            <label className="flex items-center gap-2.5 cursor-pointer">
               <input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)}
-                className="w-4 h-4 text-purple-600 rounded" />
-              <Sparkles size={14} className="text-purple-500" />
-              <span className="text-sm font-semibold text-purple-800">IA Gemini</span>
-              {!aiAvailable && <span className="text-[10px] text-gray-400">(non configure)</span>}
+                className="w-4 h-4 rounded"
+                style={{ accentColor: 'hsl(var(--violet))' }} />
+              <Sparkles size={14} style={{ color: 'hsl(var(--violet))' }} />
+              <span className="text-[13px] font-semibold" style={{ color: 'hsl(var(--violet))' }}>IA Gemini</span>
+              {!aiAvailable && (
+                <span className="chip slate" style={{ fontSize: 9.5, padding: '1px 6px' }}>non configurée</span>
+              )}
             </label>
             {useAi && (
               <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
-                rows={3} placeholder="Instructions pour l'IA..."
-                className="w-full px-3 py-2 border border-purple-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-white" />
+                rows={3} placeholder="Instructions pour l'IA…"
+                className="input-glass w-full resize-none" style={{ fontSize: 12.5 }} />
             )}
           </div>
 
           {/* Fallback message — only show here in template mode (in full mode it's in the workflow) */}
           {useAi && mode !== 'full' && (
-            <div className="g-card !p-4 space-y-3" style={{ borderColor: 'rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.02)' }}>
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <AlertCircle size={14} className="text-amber-500" /> Message de secours
-              </h3>
-              <p className="text-[11px] text-gray-500">
-                Si l'IA echoue apres 3 tentatives, ce message sera envoye a la place.
+            <div className="g-card !p-5 space-y-3"
+              style={{
+                borderColor: 'hsl(var(--amber) / .35)',
+                background: 'linear-gradient(180deg, hsl(var(--panel)) 0%, hsl(38 100% 98%) 100%)',
+              }}>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: 'hsl(var(--amber) / .14)', color: 'hsl(var(--amber))' }}>
+                  <AlertCircle size={13} />
+                </div>
+                <h3 className="text-[13.5px] font-semibold" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.005em' }}>Message de secours</h3>
+              </div>
+              <p className="text-[11.5px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>
+                Si l'IA échoue après 3 tentatives, ce message sera envoyé à la place.
               </p>
               <textarea value={fallbackMessage} onChange={(e) => setFallbackMessage(e.target.value)}
-                rows={3} placeholder={`Bonjour {first_name},\n\nJ'aimerais echanger avec vous sur...`}
-                className="w-full px-3 py-2 border border-amber-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none bg-white" />
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                rows={3} placeholder={`Bonjour {first_name},\n\nJ'aimerais échanger avec vous sur…`}
+                className="input-glass w-full resize-none" style={{ fontSize: 12.5 }} />
+              <div className="flex flex-wrap gap-1.5">
                 {['{first_name}', '{last_name}', '{headline}'].map((v) => (
-                  <span key={v} style={{
-                    fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                    background: '#fef3c7', color: '#92400e', fontFamily: 'monospace',
-                  }}>{v}</span>
+                  <span key={v} className="chip amber mono" style={{ fontSize: 10 }}>{v}</span>
                 ))}
               </div>
             </div>
@@ -381,18 +414,18 @@ export default function NewDMCampaignPage() {
           {useAi && (
             <div className="flex gap-2 mb-5">
               <button onClick={() => { setMode('template'); setPreviews(null); }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border-2"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium transition-all"
                 style={mode === 'template'
-                  ? { borderColor: 'var(--blue)', background: 'rgba(0,132,255,0.05)', color: 'var(--blue)' }
-                  : { borderColor: '#e5e7eb', color: '#6b7280' }}>
+                  ? { border: '1.5px solid hsl(var(--accent) / .5)', background: 'hsl(var(--accent-soft))', color: 'hsl(var(--accent))' }
+                  : { border: '1.5px solid hsl(var(--border))', background: 'hsl(var(--panel))', color: 'hsl(var(--muted))' }}>
                 <PenTool size={14} /> Template + variables
               </button>
               <button onClick={() => { setMode('full'); setPreviews(null); }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border-2"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium transition-all"
                 style={mode === 'full'
-                  ? { borderColor: '#9333ea', background: 'rgba(147,51,234,0.05)', color: '#9333ea' }
-                  : { borderColor: '#e5e7eb', color: '#6b7280' }}>
-                <Wand2 size={14} /> IA complete
+                  ? { border: '1.5px solid hsl(var(--violet) / .5)', background: 'hsl(262 90% 97%)', color: 'hsl(var(--violet))' }
+                  : { border: '1.5px solid hsl(var(--border))', background: 'hsl(var(--panel))', color: 'hsl(var(--muted))' }}>
+                <Wand2 size={14} /> IA complète
               </button>
             </div>
           )}
@@ -400,8 +433,19 @@ export default function NewDMCampaignPage() {
           {/* AI generate button */}
           {mode === 'template' && useAi && aiPrompt && (
             <button onClick={generateAllMessages} disabled={generating}
-              className="w-full mb-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-xl text-sm hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
-              {generating ? <><Loader2 size={16} className="animate-spin" /> Generation...</> : <><Sparkles size={16} /> Generer avec l'IA</>}
+              className="w-full mb-4 flex items-center justify-center gap-2 transition-all"
+              style={{
+                padding: '11px 18px',
+                fontSize: 13.5, fontWeight: 600,
+                color: 'white',
+                background: 'linear-gradient(135deg, hsl(var(--violet)), hsl(262 75% 52%))',
+                borderRadius: 12,
+                border: '1px solid hsl(var(--violet) / .6)',
+                boxShadow: '0 6px 16px -8px hsl(var(--violet) / .5)',
+                cursor: generating ? 'not-allowed' : 'pointer',
+                opacity: generating ? 0.5 : 1,
+              }}>
+              {generating ? <><Loader2 size={16} className="animate-spin" /> Génération…</> : <><Sparkles size={16} /> Générer avec l'IA</>}
             </button>
           )}
 
@@ -413,70 +457,92 @@ export default function NewDMCampaignPage() {
                   {/* Delay connector */}
                   {idx > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
-                      <div style={{ width: 2, height: 16, background: '#d1d5db' }} />
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '4px 12px', borderRadius: 99,
-                        background: '#f3f4f6', border: '1px solid #e5e7eb',
-                      }}>
-                        <Clock size={12} style={{ color: '#9ca3af' }} />
-                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>apres</span>
+                      <div style={{ width: 1.5, height: 16, background: 'hsl(var(--border-strong))' }} />
+                      <div className="flex items-center gap-1.5"
+                        style={{
+                          padding: '4px 12px', borderRadius: 999,
+                          background: 'hsl(var(--panel))',
+                          border: '1px solid hsl(var(--border))',
+                          boxShadow: '0 1px 2px hsl(220 40% 20% / .04)',
+                        }}>
+                        <Clock size={11} style={{ color: 'hsl(var(--muted))' }} />
+                        <span className="text-[11px] font-medium" style={{ color: 'hsl(var(--muted))' }}>après</span>
                         <input type="number" value={msg.delay_days} min={1} max={30}
                           onChange={(e) => updateMessage(idx, 'delay_days', parseInt(e.target.value) || 1)}
+                          className="mono"
                           style={{
-                            width: 36, padding: '2px 4px', border: '1px solid #d1d5db', borderRadius: 6,
-                            fontSize: 11, textAlign: 'center', background: '#fff',
+                            width: 36, padding: '2px 4px',
+                            border: '1px solid hsl(var(--border))', borderRadius: 6,
+                            fontSize: 11, textAlign: 'center',
+                            background: 'hsl(var(--bg))',
+                            color: 'hsl(var(--text))',
                           }} />
-                        <span style={{ fontSize: 11, color: '#6b7280' }}>jours</span>
+                        <span className="text-[11px]" style={{ color: 'hsl(var(--muted))' }}>jours</span>
                       </div>
-                      <div style={{ width: 2, height: 16, background: '#d1d5db' }} />
+                      <div style={{ width: 1.5, height: 16, background: 'hsl(var(--border-strong))' }} />
                     </div>
                   )}
 
                   {/* Message node */}
                   <div style={{
-                    border: idx === 0 ? '2px solid var(--blue)' : '1px solid #e5e7eb',
-                    borderRadius: 16, overflow: 'hidden',
-                    background: '#fff',
-                    boxShadow: idx === 0 ? '0 4px 12px rgba(0,132,255,0.08)' : '0 1px 4px rgba(0,0,0,0.04)',
+                    border: idx === 0 ? '1.5px solid hsl(var(--accent) / .55)' : '1px solid hsl(var(--border))',
+                    borderRadius: 18, overflow: 'hidden',
+                    background: 'hsl(var(--panel))',
+                    boxShadow: idx === 0
+                      ? '0 12px 30px -16px hsl(var(--accent) / .25), 0 2px 6px hsl(220 40% 20% / .04)'
+                      : '0 1px 3px hsl(220 40% 20% / .04)',
                   }}>
                     {/* Node header */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '8px 14px',
-                      background: idx === 0 ? 'linear-gradient(135deg, var(--blue), #2563eb)' : '#f9fafb',
-                      borderBottom: idx === 0 ? 'none' : '1px solid #e5e7eb',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{
-                          width: 22, height: 22, borderRadius: 8,
-                          background: idx === 0 ? 'rgba(255,255,255,0.2)' : '#e5e7eb',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 11, fontWeight: 700,
-                          color: idx === 0 ? '#fff' : '#6b7280',
-                        }}>
+                    <div className="flex items-center justify-between"
+                      style={{
+                        padding: '10px 16px',
+                        background: idx === 0
+                          ? 'linear-gradient(135deg, hsl(var(--accent)), hsl(214 95% 50%))'
+                          : 'hsl(220 22% 98%)',
+                        borderBottom: idx === 0 ? 'none' : '1px solid hsl(var(--border))',
+                      }}>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex items-center justify-center"
+                          style={{
+                            width: 24, height: 24, borderRadius: 8,
+                            background: idx === 0 ? 'rgba(255,255,255,0.22)' : 'hsl(220 18% 92%)',
+                            color: idx === 0 ? '#fff' : 'hsl(var(--muted))',
+                            fontSize: 11, fontWeight: 700,
+                          }}>
                           {idx === 0 ? <Send size={11} /> : idx}
                         </div>
-                        <span style={{
-                          fontSize: 13, fontWeight: 600,
-                          color: idx === 0 ? '#fff' : '#374151',
-                        }}>
+                        <span className="text-[13px] font-semibold"
+                          style={{
+                            color: idx === 0 ? '#fff' : 'hsl(var(--text))',
+                            letterSpacing: '-0.005em',
+                          }}>
                           {idx === 0 ? 'Message principal' : `Relance ${idx}`}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <div className="flex items-center gap-1">
                         {useAi && aiPrompt && (
                           <button onClick={() => regenerateOne(idx)} disabled={regeneratingIdx === idx}
                             style={{
-                              background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 6,
-                              color: idx === 0 ? 'rgba(255,255,255,0.7)' : '#9ca3af',
-                            }}>
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              padding: 5, borderRadius: 6,
+                              color: idx === 0 ? 'rgba(255,255,255,0.85)' : 'hsl(var(--muted))',
+                              transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = idx === 0 ? 'rgba(255,255,255,0.15)' : 'hsl(220 18% 96%)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                             {regeneratingIdx === idx ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                           </button>
                         )}
                         {idx > 0 && (
                           <button onClick={() => removeFollowup(idx)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 6, color: '#ef4444' }}>
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              padding: 5, borderRadius: 6,
+                              color: 'hsl(var(--rose))',
+                              transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'hsl(352 90% 96%)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                             <Trash2 size={13} />
                           </button>
                         )}
@@ -484,28 +550,19 @@ export default function NewDMCampaignPage() {
                     </div>
 
                     {/* Node body */}
-                    <div style={{ padding: 14 }}>
+                    <div style={{ padding: 16 }}>
                       <textarea value={msg.message_template} onChange={(e) => updateMessage(idx, 'message_template', e.target.value)}
                         rows={3} placeholder={idx === 0
-                          ? `Bonjour {first_name},\n{compliment}\n...`
-                          : `Bonjour {first_name}, je me permets de revenir vers vous...`}
-                        style={{
-                          width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 10,
-                          fontSize: 12, resize: 'none', lineHeight: 1.5,
-                          background: '#fafafa',
-                        }} />
-                      <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          ? `Bonjour {first_name},\n{compliment}\n…`
+                          : `Bonjour {first_name}, je me permets de revenir vers vous…`}
+                        className="input-glass w-full resize-none"
+                        style={{ fontSize: 12.5, lineHeight: 1.55 }} />
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
                         {['{first_name}', '{last_name}', '{headline}', '{location}'].map((v) => (
-                          <span key={v} style={{
-                            fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                            background: '#f3f4f6', color: '#6b7280', fontFamily: 'monospace',
-                          }}>{v}</span>
+                          <span key={v} className="chip slate mono" style={{ fontSize: 10 }}>{v}</span>
                         ))}
                         {useAi && (
-                          <span style={{
-                            fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                            background: 'rgba(147,51,234,0.08)', color: '#9333ea', fontFamily: 'monospace', fontWeight: 600,
-                          }}>{'{compliment}'}</span>
+                          <span className="chip violet mono" style={{ fontSize: 10, fontWeight: 600 }}>{'{compliment}'}</span>
                         )}
                       </div>
                     </div>
@@ -516,21 +573,23 @@ export default function NewDMCampaignPage() {
               {/* Add follow-up button */}
               {messages.length < 8 && (
                 <>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
-                    <div style={{ width: 2, height: 20, background: '#e5e7eb', borderStyle: 'dashed' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0' }}>
+                    <div style={{ width: 1.5, height: 20, borderLeft: '1.5px dashed hsl(var(--border-strong))' }} />
                   </div>
                   <button onClick={addFollowup}
+                    className="w-full flex items-center justify-center gap-2 transition-all"
                     style={{
-                      width: '100%', padding: '12px 0',
-                      border: '2px dashed #d1d5db', borderRadius: 14,
-                      background: 'none', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      fontSize: 13, fontWeight: 500, color: '#9ca3af',
-                      transition: 'all 0.2s',
+                      padding: '12px 0',
+                      border: '1.5px dashed hsl(var(--border-strong))',
+                      borderRadius: 14,
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      fontSize: 13, fontWeight: 500,
+                      color: 'hsl(var(--muted))',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#9ca3af'; }}>
-                    <Plus size={16} /> Ajouter une relance ({messages.length - 1}/7)
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--accent))'; e.currentTarget.style.color = 'hsl(var(--accent))'; e.currentTarget.style.background = 'hsl(var(--accent-soft))'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border-strong))'; e.currentTarget.style.color = 'hsl(var(--muted))'; e.currentTarget.style.background = 'transparent'; }}>
+                    <Plus size={15} /> Ajouter une relance ({messages.length - 1}/7)
                   </button>
                 </>
               )}
@@ -541,17 +600,22 @@ export default function NewDMCampaignPage() {
           {mode === 'full' && (
             <div>
               {/* Info card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(147,51,234,0.06), rgba(99,102,241,0.06))',
-                border: '1px solid rgba(147,51,234,0.15)', borderRadius: 14,
-                padding: 16, marginBottom: 16,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <Wand2 size={18} className="text-purple-600" />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#6b21a8' }}>Message entier par l'IA</span>
+              <div className="g-card !p-5 mb-4"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(var(--panel)) 0%, hsl(262 100% 98%) 100%)',
+                  border: '1px solid hsl(var(--violet) / .3)',
+                }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ background: 'hsl(var(--violet) / .14)', color: 'hsl(var(--violet))' }}>
+                    <Wand2 size={15} />
+                  </div>
+                  <span className="text-[14px] font-semibold" style={{ color: 'hsl(var(--violet))', letterSpacing: '-0.005em' }}>
+                    Message entier par l'IA
+                  </span>
                 </div>
-                <p style={{ fontSize: 11, color: '#7c3aed', lineHeight: 1.5 }}>
-                  Chaque message sera ecrit de A a Z en fonction du profil LinkedIn du contact.
+                <p className="text-[12px] leading-relaxed" style={{ color: 'hsl(var(--muted))' }}>
+                  Chaque message sera écrit de A à Z en fonction du profil LinkedIn du contact.
                 </p>
               </div>
 
@@ -559,32 +623,42 @@ export default function NewDMCampaignPage() {
               <div>
                 {/* Main message node */}
                 <div style={{
-                  border: '2px solid #9333ea', borderRadius: 14, overflow: 'hidden',
-                  boxShadow: '0 4px 12px rgba(147,51,234,0.08)',
+                  border: '1.5px solid hsl(var(--violet) / .55)', borderRadius: 18, overflow: 'hidden',
+                  background: 'hsl(var(--panel))',
+                  boxShadow: '0 12px 30px -16px hsl(var(--violet) / .25), 0 2px 6px hsl(220 40% 20% / .04)',
                 }}>
-                  <div style={{
-                    padding: '8px 14px',
-                    background: 'linear-gradient(135deg, #9333ea, #6366f1)',
-                    display: 'flex', alignItems: 'center', gap: 8,
-                  }}>
-                    <Send size={12} color="#fff" />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Message principal</span>
+                  <div className="flex items-center gap-2.5"
+                    style={{
+                      padding: '10px 16px',
+                      background: 'linear-gradient(135deg, hsl(var(--violet)), hsl(262 75% 52%))',
+                    }}>
+                    <div className="flex items-center justify-center"
+                      style={{ width: 24, height: 24, borderRadius: 8, background: 'rgba(255,255,255,0.22)' }}>
+                      <Send size={11} color="#fff" />
+                    </div>
+                    <span className="text-[13px] font-semibold" style={{ color: '#fff', letterSpacing: '-0.005em' }}>Message principal</span>
                   </div>
-                  <div style={{ padding: 14 }}>
-                    <p style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', marginBottom: 10 }}>
-                      Genere automatiquement par l'IA pour chaque contact
+                  <div style={{ padding: 16 }}>
+                    <p className="text-[12px] italic mb-3" style={{ color: 'hsl(var(--muted))' }}>
+                      Généré automatiquement par l'IA pour chaque contact
                     </p>
-                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                        <AlertCircle size={12} style={{ color: '#d97706' }} />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e' }}>Message de secours</span>
+                    <div style={{
+                      background: 'linear-gradient(180deg, hsl(var(--panel)) 0%, hsl(38 100% 98%) 100%)',
+                      border: '1px solid hsl(var(--amber) / .35)',
+                      borderRadius: 10, padding: 12,
+                    }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle size={12} style={{ color: 'hsl(var(--amber))' }} />
+                        <span className="text-[11px] font-semibold" style={{ color: 'hsl(var(--amber))', letterSpacing: '-0.005em' }}>
+                          Message de secours
+                        </span>
                       </div>
                       <textarea value={fallbacks[0] || ''} onChange={(e) => setFallbacks({ ...fallbacks, 0: e.target.value })}
-                        rows={2} placeholder={`Bonjour {first_name}, j'aimerais echanger avec vous...`}
-                        style={{ width: '100%', padding: '6px 10px', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11, resize: 'none', background: '#fff' }} />
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                        rows={2} placeholder={`Bonjour {first_name}, j'aimerais échanger avec vous…`}
+                        className="input-glass w-full resize-none" style={{ fontSize: 11.5 }} />
+                      <div className="flex flex-wrap gap-1 mt-2">
                         {['{first_name}', '{last_name}', '{headline}'].map((v) => (
-                          <span key={v} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontFamily: 'monospace' }}>{v}</span>
+                          <span key={v} className="chip amber mono" style={{ fontSize: 9.5 }}>{v}</span>
                         ))}
                       </div>
                     </div>
@@ -594,61 +668,83 @@ export default function NewDMCampaignPage() {
                 {/* Follow-up nodes */}
                 {Array.from({ length: followupCount }).map((_, i) => (
                   <div key={i}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
-                      <div style={{ width: 2, height: 16, background: '#d1d5db' }} />
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '4px 12px', borderRadius: 99,
-                        background: '#f3f4f6', border: '1px solid #e5e7eb',
-                      }}>
-                        <Clock size={12} style={{ color: '#9ca3af' }} />
-                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>apres</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0' }}>
+                      <div style={{ width: 1.5, height: 16, background: 'hsl(var(--border-strong))' }} />
+                      <div className="flex items-center gap-1.5"
+                        style={{
+                          padding: '4px 12px', borderRadius: 999,
+                          background: 'hsl(var(--panel))',
+                          border: '1px solid hsl(var(--border))',
+                          boxShadow: '0 1px 2px hsl(220 40% 20% / .04)',
+                        }}>
+                        <Clock size={11} style={{ color: 'hsl(var(--muted))' }} />
+                        <span className="text-[11px] font-medium" style={{ color: 'hsl(var(--muted))' }}>après</span>
                         <input type="number" value={followupDelays[i] || 3} min={1} max={30}
                           onChange={(e) => updateFollowupDelay(i, e.target.value)}
+                          className="mono"
                           style={{
-                            width: 36, padding: '2px 4px', border: '1px solid #d1d5db', borderRadius: 6,
-                            fontSize: 11, textAlign: 'center', background: '#fff',
+                            width: 36, padding: '2px 4px',
+                            border: '1px solid hsl(var(--border))', borderRadius: 6,
+                            fontSize: 11, textAlign: 'center',
+                            background: 'hsl(var(--bg))',
+                            color: 'hsl(var(--text))',
                           }} />
-                        <span style={{ fontSize: 11, color: '#6b7280' }}>jours</span>
+                        <span className="text-[11px]" style={{ color: 'hsl(var(--muted))' }}>jours</span>
                       </div>
-                      <div style={{ width: 2, height: 16, background: '#d1d5db' }} />
+                      <div style={{ width: 1.5, height: 16, background: 'hsl(var(--border-strong))' }} />
                     </div>
                     <div style={{
-                      border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden',
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                      border: '1px solid hsl(var(--border))', borderRadius: 18, overflow: 'hidden',
+                      background: 'hsl(var(--panel))',
+                      boxShadow: '0 1px 3px hsl(220 40% 20% / .04)',
                     }}>
-                      <div style={{
-                        padding: '8px 14px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{
-                            width: 22, height: 22, borderRadius: 8, background: '#e5e7eb',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 11, fontWeight: 700, color: '#6b7280',
-                          }}>{i + 1}</div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Relance {i + 1}</span>
+                      <div className="flex items-center justify-between"
+                        style={{
+                          padding: '10px 16px',
+                          background: 'hsl(220 22% 98%)',
+                          borderBottom: '1px solid hsl(var(--border))',
+                        }}>
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex items-center justify-center"
+                            style={{
+                              width: 24, height: 24, borderRadius: 8,
+                              background: 'hsl(220 18% 92%)',
+                              color: 'hsl(var(--muted))',
+                              fontSize: 11, fontWeight: 700,
+                            }}>{i + 1}</div>
+                          <span className="text-[13px] font-semibold" style={{ color: 'hsl(var(--text))', letterSpacing: '-0.005em' }}>
+                            Relance {i + 1}
+                          </span>
                         </div>
                         <button onClick={removeFullFollowup}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#ef4444' }}>
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: 5, borderRadius: 6, color: 'hsl(var(--rose))',
+                          }}>
                           <Trash2 size={13} />
                         </button>
                       </div>
-                      <div style={{ padding: 14 }}>
-                        <p style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', marginBottom: 10 }}>
-                          Genere automatiquement par l'IA
+                      <div style={{ padding: 16 }}>
+                        <p className="text-[12px] italic mb-3" style={{ color: 'hsl(var(--muted))' }}>
+                          Généré automatiquement par l'IA
                         </p>
-                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 10 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                            <AlertCircle size={12} style={{ color: '#d97706' }} />
-                            <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e' }}>Message de secours</span>
+                        <div style={{
+                          background: 'linear-gradient(180deg, hsl(var(--panel)) 0%, hsl(38 100% 98%) 100%)',
+                          border: '1px solid hsl(var(--amber) / .35)',
+                          borderRadius: 10, padding: 12,
+                        }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertCircle size={12} style={{ color: 'hsl(var(--amber))' }} />
+                            <span className="text-[11px] font-semibold" style={{ color: 'hsl(var(--amber))', letterSpacing: '-0.005em' }}>
+                              Message de secours
+                            </span>
                           </div>
                           <textarea value={fallbacks[i + 1] || ''} onChange={(e) => setFallbacks({ ...fallbacks, [i + 1]: e.target.value })}
-                            rows={2} placeholder={`Bonjour {first_name}, je me permets de vous relancer...`}
-                            style={{ width: '100%', padding: '6px 10px', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11, resize: 'none', background: '#fff' }} />
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                            rows={2} placeholder={`Bonjour {first_name}, je me permets de vous relancer…`}
+                            className="input-glass w-full resize-none" style={{ fontSize: 11.5 }} />
+                          <div className="flex flex-wrap gap-1 mt-2">
                             {['{first_name}', '{last_name}', '{headline}'].map((v) => (
-                              <span key={v} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontFamily: 'monospace' }}>{v}</span>
+                              <span key={v} className="chip amber mono" style={{ fontSize: 9.5 }}>{v}</span>
                             ))}
                           </div>
                         </div>
@@ -660,84 +756,114 @@ export default function NewDMCampaignPage() {
                 {/* Add follow-up */}
                 {followupCount < 7 && (
                   <>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
-                      <div style={{ width: 2, height: 20, borderLeft: '2px dashed #e5e7eb' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0' }}>
+                      <div style={{ width: 1.5, height: 20, borderLeft: '1.5px dashed hsl(var(--border-strong))' }} />
                     </div>
                     <button onClick={addFullFollowup}
+                      className="w-full flex items-center justify-center gap-2 transition-all"
                       style={{
-                        width: '100%', padding: '12px 0',
-                        border: '2px dashed #d1d5db', borderRadius: 14,
-                        background: 'none', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        fontSize: 13, fontWeight: 500, color: '#9ca3af',
-                        transition: 'all 0.2s',
+                        padding: '12px 0',
+                        border: '1.5px dashed hsl(var(--border-strong))',
+                        borderRadius: 14,
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        fontSize: 13, fontWeight: 500,
+                        color: 'hsl(var(--muted))',
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#9333ea'; e.currentTarget.style.color = '#9333ea'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#9ca3af'; }}>
-                      <Plus size={16} /> Ajouter une relance ({followupCount}/7)
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--violet))'; e.currentTarget.style.color = 'hsl(var(--violet))'; e.currentTarget.style.background = 'hsl(262 100% 98%)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--border-strong))'; e.currentTarget.style.color = 'hsl(var(--muted))'; e.currentTarget.style.background = 'transparent'; }}>
+                      <Plus size={15} /> Ajouter une relance ({followupCount}/7)
                     </button>
                   </>
                 )}
               </div>
 
               {/* Extra instructions */}
-              <div style={{ marginTop: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#7c3aed', marginBottom: 4 }}>
-                  Consignes supplementaires (optionnel)
+              <div style={{ marginTop: 18 }}>
+                <label className="block text-[11.5px] font-medium mb-1.5" style={{ color: 'hsl(var(--violet))', letterSpacing: '-0.005em' }}>
+                  Consignes supplémentaires (optionnel)
                 </label>
                 <textarea value={extraInstructions} onChange={(e) => { setExtraInstructions(e.target.value); setPreviews(null); }}
-                  rows={2} placeholder="Ex: Ton direct et amical, pose une question ouverte..."
+                  rows={2} placeholder="Ex : Ton direct et amical, pose une question ouverte…"
+                  className="input-glass w-full resize-none"
                   style={{
-                    width: '100%', padding: '8px 12px', border: '1px solid rgba(147,51,234,0.2)',
-                    borderRadius: 10, fontSize: 12, resize: 'none', background: '#fff',
+                    fontSize: 12.5,
+                    borderColor: 'hsl(var(--violet) / .3)',
                   }} />
               </div>
 
               {/* Preview button */}
               <button onClick={generatePreviews} disabled={previewLoading}
-                style={{ marginTop: 12, width: '100%', padding: '10px 0', borderRadius: 12, border: '1px solid rgba(147,51,234,0.3)', background: 'rgba(147,51,234,0.04)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#7c3aed' }}>
+                className="w-full flex items-center justify-center gap-2 transition-all"
+                style={{
+                  marginTop: 12, padding: '11px 18px',
+                  borderRadius: 12,
+                  border: '1.5px solid hsl(var(--violet) / .4)',
+                  background: 'hsl(262 100% 98%)',
+                  cursor: previewLoading ? 'not-allowed' : 'pointer',
+                  fontSize: 13, fontWeight: 600,
+                  color: 'hsl(var(--violet))',
+                  opacity: previewLoading ? 0.6 : 1,
+                }}>
                 {previewLoading
-                  ? <><Loader2 size={14} className="animate-spin" /> Analyse des profils...</>
-                  : <><Eye size={14} /> {previews ? 'Regenerer les apercus' : 'Apercu sur 3 contacts'}</>
+                  ? <><Loader2 size={14} className="animate-spin" /> Analyse des profils…</>
+                  : <><Eye size={14} /> {previews ? 'Régénérer les aperçus' : 'Aperçu sur 3 contacts'}</>
                 }
               </button>
 
               {/* Preview results */}
               {previews && (
-                <div style={{ marginTop: 16 }} className="space-y-3">
-                  <h4 style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Eye size={14} className="text-purple-500" /> Apercu
+                <div style={{ marginTop: 18 }} className="space-y-3">
+                  <h4 className="flex items-center gap-2 text-[13px] font-semibold"
+                    style={{ color: 'hsl(var(--text))', letterSpacing: '-0.005em' }}>
+                    <Eye size={14} style={{ color: 'hsl(var(--violet))' }} /> Aperçu
                   </h4>
                   {previews.map((preview, pIdx) => (
-                    <div key={pIdx} style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f9fafb', borderBottom: '1px solid #f3f4f6' }}>
+                    <div key={pIdx} className="g-card overflow-hidden" style={{ borderRadius: 14 }}>
+                      <div className="flex items-center gap-2.5"
+                        style={{
+                          padding: '10px 14px',
+                          background: 'hsl(220 22% 98%)',
+                          borderBottom: '1px solid hsl(var(--border))',
+                        }}>
                         {preview.contact.profile_picture_url ? (
-                          <img src={preview.contact.profile_picture_url} alt="" style={{ width: 28, height: 28, borderRadius: 99, objectFit: 'cover' }} />
+                          <img src={preview.contact.profile_picture_url} alt=""
+                            style={{ width: 28, height: 28, borderRadius: 99, objectFit: 'cover' }} />
                         ) : (
-                          <div style={{ width: 28, height: 28, borderRadius: 99, background: 'rgba(0,132,255,0.08)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
+                          <div className="flex items-center justify-center font-semibold"
+                            style={{
+                              width: 28, height: 28, borderRadius: 99,
+                              background: 'hsl(var(--accent-soft))',
+                              color: 'hsl(var(--accent))',
+                              fontSize: 10,
+                            }}>
                             {(preview.contact.first_name?.[0] || '')}{(preview.contact.last_name?.[0] || '')}
                           </div>
                         )}
-                        <div>
-                          <p style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{preview.contact.first_name} {preview.contact.last_name}</p>
-                          {preview.contact.headline && <p style={{ fontSize: 10, color: '#9ca3af' }}>{preview.contact.headline}</p>}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12.5px] font-semibold truncate" style={{ color: 'hsl(var(--text))' }}>
+                            {preview.contact.first_name} {preview.contact.last_name}
+                          </p>
+                          {preview.contact.headline && (
+                            <p className="text-[10.5px] truncate" style={{ color: 'hsl(var(--muted))' }}>
+                              {preview.contact.headline}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div style={{ padding: 14 }}>
                         {preview.messages.map((rm, mIdx) => (
-                          <div key={mIdx} style={{ marginBottom: mIdx < preview.messages.length - 1 ? 10 : 0 }}>
-                            <span style={{
-                              fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 99,
-                              background: mIdx === 0 ? 'var(--blue)' : '#f3f4f6',
-                              color: mIdx === 0 ? '#fff' : '#6b7280',
-                            }}>
+                          <div key={mIdx} style={{ marginBottom: mIdx < preview.messages.length - 1 ? 12 : 0 }}>
+                            <span className={`chip ${mIdx === 0 ? 'blue' : 'slate'}`}
+                              style={{ fontSize: 10, fontWeight: 600 }}>
                               {mIdx === 0 ? 'Principal' : `Relance ${mIdx}`}
                             </span>
                             <div style={{
                               marginTop: 6, padding: '10px 12px', borderRadius: 8,
-                              background: '#f8fafc', fontSize: 12, color: '#374151',
-                              whiteSpace: 'pre-wrap', lineHeight: 1.5,
-                              borderLeft: '3px solid var(--blue)',
+                              background: 'hsl(220 22% 98%)',
+                              fontSize: 12.5, color: 'hsl(var(--text))',
+                              whiteSpace: 'pre-wrap', lineHeight: 1.55,
+                              borderLeft: '2.5px solid hsl(var(--accent) / .5)',
                             }}>
                               {rm.rendered}
                             </div>

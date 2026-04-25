@@ -23,6 +23,7 @@ from app.scheduler import (
     resume_campaign_job,
     cancel_campaign_job,
     trigger_campaign_now,
+    get_campaign_next_run_time,
 )
 
 def _lm_key(lm_id: int) -> str:
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/api/lead-magnets", tags=["lead_magnets"])
 
 
 def _to_response(lm: LeadMagnet) -> LeadMagnetResponse:
+    next_run_at = get_campaign_next_run_time(_lm_key(lm.id)) if lm.status == "running" else None
     return LeadMagnetResponse(
         id=lm.id,
         name=lm.name,
@@ -52,6 +54,7 @@ def _to_response(lm: LeadMagnet) -> LeadMagnetResponse:
         total_likes=lm.total_likes or 0,
         error_message=lm.error_message,
         started_at=lm.started_at,
+        next_run_at=next_run_at,
         created_at=lm.created_at,
     )
 
@@ -88,7 +91,8 @@ def create_lead_magnet(
     lm = LeadMagnet(
         user_id=user.id,
         name=body.name,
-        status="pending",
+        status="running",
+        started_at=datetime.utcnow(),
         post_url=body.post_url,
         post_activity_urn=activity_urn,
         keyword=body.keyword,
@@ -102,6 +106,8 @@ def create_lead_magnet(
     db.add(lm)
     db.commit()
     db.refresh(lm)
+
+    schedule_campaign_job(_lm_key(lm.id), "lead_magnet")
     return _to_response(lm)
 
 

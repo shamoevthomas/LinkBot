@@ -43,6 +43,22 @@ export default function LeadMagnetDetailPage() {
   const [lm, setLm] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  // re-render every second so the countdown to next tick stays live
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const countdown = (() => {
+    if (!lm?.next_run_at || lm.status !== 'running') return null;
+    const target = new Date(lm.next_run_at).getTime();
+    const diff = Math.max(0, Math.floor((target - now) / 1000));
+    if (diff <= 0) return 'imminent';
+    const m = Math.floor(diff / 60);
+    const s = diff % 60;
+    return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+  })();
 
   const load = async () => {
     try {
@@ -71,7 +87,12 @@ export default function LeadMagnetDetailPage() {
       else if (action === 'pause') await pauseLeadMagnet(id);
       else if (action === 'resume') await resumeLeadMagnet(id);
       else if (action === 'cancel') await cancelLeadMagnet(id);
-      else if (action === 'trigger') { await triggerLeadMagnet(id); toast.success('Tick lance !'); }
+      else if (action === 'trigger') {
+        // optimistic: zero out the countdown locally; backend sets next_run=now
+        setLm((prev) => prev ? { ...prev, next_run_at: new Date().toISOString() } : prev);
+        await triggerLeadMagnet(id);
+        toast.success('Tick lance !');
+      }
       load();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
@@ -124,6 +145,12 @@ export default function LeadMagnetDetailPage() {
           )}
           {lm.status === 'running' && (
             <>
+              {countdown && (
+                <span className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-xs flex items-center gap-1.5">
+                  <Clock size={12} />
+                  {countdown === 'imminent' ? 'Tick imminent…' : <>Prochaine vérif&nbsp;: <span className="font-mono font-semibold text-gray-800">{countdown}</span></>}
+                </span>
+              )}
               <button onClick={() => handleAction('trigger')} className="px-4 py-2 rounded-xl border border-blue-300 text-blue-700 hover:bg-blue-50 text-sm flex items-center gap-2">
                 <Zap size={14} /> Lancer maintenant
               </button>
