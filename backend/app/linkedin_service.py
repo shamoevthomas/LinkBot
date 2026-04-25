@@ -431,20 +431,31 @@ async def reply_to_comment(
     parent_comment_urn: str,
     reply_text: str,
 ) -> bool:
-    """Reply to a comment on a post. Returns True on success."""
+    """Reply to a comment on a post. Returns True on success.
+
+    LinkedIn closed `/voyager/api/feed/comments` in early 2026 — the route
+    now returns 500 even with mobile UA spoofing, and the new SDUI endpoint
+    requires live browser session state that can't be replayed server-side.
+    So this one action drives a headless Chromium via Playwright. All other
+    actions (like, dm, connect…) still use the fast HTTP path.
+    """
+    li_at = client.client.session.cookies.get("li_at")
+    jsessionid = client.client.session.cookies.get("JSESSIONID")
+    if not li_at or not jsessionid:
+        logger.warning("reply_to_comment: missing cookies on client")
+        return False
+
+    from app.playwright_actions import reply_to_comment_via_browser
     try:
-        success = await asyncio.to_thread(
-            client.reply_to_comment,
-            activity_urn,
-            parent_comment_urn,
-            reply_text,
+        return await reply_to_comment_via_browser(
+            li_at=li_at,
+            jsessionid=jsessionid,
+            activity_urn=activity_urn,
+            parent_comment_urn=parent_comment_urn,
+            reply_text=reply_text,
         )
-        return success
-    except UnauthorizedException:
-        logger.warning("LinkedIn cookies expired during reply_to_comment")
-        raise
     except Exception:
-        logger.exception("Error in reply_to_comment for comment_urn=%s", parent_comment_urn)
+        logger.exception("Error in reply_to_comment (Playwright) for comment_urn=%s", parent_comment_urn)
         raise
 
 
