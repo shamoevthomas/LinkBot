@@ -1,4 +1,7 @@
-FROM python:3.11-slim
+# Pin to bookworm (Debian 12), not trixie (13). Playwright's --with-deps
+# script targets Ubuntu and pulls in legacy font packages (ttf-unifont,
+# ttf-ubuntu-font-family) that exist in bookworm but were removed in trixie.
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
