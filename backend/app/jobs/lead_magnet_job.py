@@ -424,6 +424,8 @@ async def _handle_connected(db, lm, lmc, client):
 
     # 2. Reply to comment
     if not lmc.replied_to_comment and lm.reply_template_connected and lmc.comment_urn:
+        print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment START → {lmc.commenter_name} "
+              f"(urn={lmc.comment_urn[:60]}…)", flush=True)
         try:
             reply_text = _render(lm.reply_template_connected, lmc.commenter_name)
             ok = await reply_to_comment(client, lm.post_activity_urn, lmc.comment_urn, reply_text)
@@ -431,8 +433,13 @@ async def _handle_connected(db, lm, lmc, client):
                 lmc.replied_to_comment = True
                 lm.total_replies_sent = (lm.total_replies_sent or 0) + 1
                 _log_action(db, lm.id, None, "lm_reply_comment", "success")
+                print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment OK → {lmc.commenter_name}", flush=True)
+            else:
+                _log_action(db, lm.id, None, "lm_reply_comment", "failed", "reply_to_comment returned False")
+                print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment FAILED (returned False) → {lmc.commenter_name}", flush=True)
         except Exception as exc:
             _log_action(db, lm.id, None, "lm_reply_comment", "failed", str(exc)[:200])
+            print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment EXC → {lmc.commenter_name}: {exc}", flush=True)
 
     # 3. Send DM
     if not lmc.dm_sent and lm.dm_template:
@@ -501,6 +508,7 @@ async def _handle_not_connected(db, lm, lmc, client):
     # If invitation accepted → treat as connected: reply with connected template + send DM
     if invitation_accepted:
         if not lmc.replied_to_comment and lm.reply_template_connected and lmc.comment_urn:
+            print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment START (post-accept) → {lmc.commenter_name}", flush=True)
             try:
                 reply_text = _render(lm.reply_template_connected, lmc.commenter_name)
                 ok = await reply_to_comment(client, lm.post_activity_urn, lmc.comment_urn, reply_text)
@@ -508,8 +516,13 @@ async def _handle_not_connected(db, lm, lmc, client):
                     lmc.replied_to_comment = True
                     lm.total_replies_sent = (lm.total_replies_sent or 0) + 1
                     _log_action(db, lm.id, None, "lm_reply_comment", "success")
+                    print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment OK (post-accept) → {lmc.commenter_name}", flush=True)
+                else:
+                    _log_action(db, lm.id, None, "lm_reply_comment", "failed", "reply_to_comment returned False")
+                    print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment FAILED (post-accept) → {lmc.commenter_name}", flush=True)
             except Exception as exc:
                 _log_action(db, lm.id, None, "lm_reply_comment", "failed", str(exc)[:200])
+                print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment EXC (post-accept) → {lmc.commenter_name}: {exc}", flush=True)
 
         if not lmc.dm_sent and lm.dm_template:
             try:
@@ -529,6 +542,7 @@ async def _handle_not_connected(db, lm, lmc, client):
 
     # 2. Reply to comment (not connected template)
     if not lmc.replied_to_comment and lm.reply_template_not_connected and lmc.comment_urn:
+        print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment START (not-connected) → {lmc.commenter_name}", flush=True)
         try:
             reply_text = _render(lm.reply_template_not_connected, lmc.commenter_name)
             ok = await reply_to_comment(client, lm.post_activity_urn, lmc.comment_urn, reply_text)
@@ -536,8 +550,13 @@ async def _handle_not_connected(db, lm, lmc, client):
                 lmc.replied_to_comment = True
                 lm.total_replies_sent = (lm.total_replies_sent or 0) + 1
                 _log_action(db, lm.id, None, "lm_reply_comment", "success")
+                print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment OK (not-connected) → {lmc.commenter_name}", flush=True)
+            else:
+                _log_action(db, lm.id, None, "lm_reply_comment", "failed", "reply_to_comment returned False")
+                print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment FAILED (not-connected) → {lmc.commenter_name}", flush=True)
         except Exception as exc:
             _log_action(db, lm.id, None, "lm_reply_comment", "failed", str(exc)[:200])
+            print(f"[LEAD MAGNET] #{lm.id}: reply_to_comment EXC (not-connected) → {lmc.commenter_name}: {exc}", flush=True)
 
     # 3. Send connection request
     try:
