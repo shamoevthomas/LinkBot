@@ -324,10 +324,29 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             try:
                 result = await send_connection_request(client, contact.urn_id)
             except Exception as exc:
-                _log_action(db, campaign_id, contact.id, "connection_request", "failed", str(exc)[:500])
+                err_text = str(exc)
+                is_rate_limited = "FUSE_LIMIT_EXCEEDED" in err_text or "status code 429" in err_text
+                _log_action(db, campaign_id, contact.id, "connection_request", "failed", err_text[:500])
+                if is_rate_limited:
+                    # LinkedIn rate-limited us. Don't burn the contact, just stop this tick.
+                    db.commit()
+                    logger.warning(
+                        "Campaign %d: LinkedIn FUSE_LIMIT_EXCEEDED on contact %d, stopping tick",
+                        campaign_id, contact.id,
+                    )
+                    break
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
-                db.commit()
+                # Mark contact as handled so the loop doesn't retry the same one forever.
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=-1,
+                        main_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue
 
             contact.connection_status = "pending"
