@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 # How long to wait for LinkedIn elements to appear (slow on Render free tier)
 DEFAULT_TIMEOUT_MS = 30000
+# Navigations to LinkedIn post pages can be very slow (heavy SPA hydration).
+NAV_TIMEOUT_MS = 60000
 
 
 def _extract_activity_id(activity_urn: str) -> str:
@@ -100,6 +102,7 @@ async def reply_to_comment_via_browser(
     async with _browser_context(li_at, jsessionid) as context:
         page = await context.new_page()
         page.set_default_timeout(DEFAULT_TIMEOUT_MS)
+        page.set_default_navigation_timeout(NAV_TIMEOUT_MS)
 
         # Authoritative success signal: watch for LinkedIn's createComment
         # SDUI request. Anything else (DOM heuristics) gives false positives
@@ -122,7 +125,14 @@ async def reply_to_comment_via_browser(
 
         page.on("response", on_response)
 
-        await page.goto(url, wait_until="domcontentloaded")
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+        except Exception:
+            # LinkedIn pages sometimes never settle on domcontentloaded under
+            # headless. Fall back to a "commit" wait — the response started,
+            # the JS bundle will hydrate during the explicit waits below.
+            logger.warning("reply_to_comment: domcontentloaded timed out, retrying with wait_until=commit")
+            await page.goto(url, wait_until="commit", timeout=NAV_TIMEOUT_MS)
 
         # Hydration: LinkedIn does its real comment rendering after the SPA
         # boots. Give it time and trigger small scrolls so the comments
