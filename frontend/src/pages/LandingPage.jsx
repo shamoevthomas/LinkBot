@@ -1153,41 +1153,78 @@ export default function LandingPage() {
           <span style={{ color: 'hsl(var(--accent))' }}>libérée</span>.
         </SectionTitle>
 
-        <div className="reveal g-card overflow-hidden" style={{ borderRadius: 20 }}>
-          <div className="grid grid-cols-[1.1fr,1fr,1fr] text-[12px]"
-            style={{ background: 'hsl(220 22% 98%)', borderBottom: '1px solid hsl(var(--border))' }}>
-            <div className="px-5 py-3 font-semibold" style={{ color: 'hsl(var(--muted))' }}>Tâche</div>
-            <div className="px-5 py-3 font-semibold text-center" style={{ color: 'hsl(var(--muted))' }}>Sans Linky</div>
-            <div className="px-5 py-3 font-semibold text-center" style={{ color: 'hsl(var(--accent))' }}>Avec Linky</div>
-          </div>
-          {[
-            { task: 'Détecter les commentaires sur tes posts', before: '2 h · check manuel', after: 'Live · auto' },
-            { task: 'Répondre + envoyer le lead magnet en DM', before: '5 min × N · jamais à temps', after: '< 30 s · auto' },
-            { task: 'Trouver 500 prospects qualifiés',           before: '10 h Sales Nav', after: '30 min' },
-            { task: 'Lancer une campagne Connexion + DM',        before: '5 h · scripts à la main', after: '0 min · 100 % auto' },
-            { task: 'Suivre les leads & relancer',               before: '2 h Excel', after: 'Temps réel · CRM' },
-          ].map((row, i, arr) => (
-            <div key={row.task}
-              className="grid grid-cols-[1.1fr,1fr,1fr] text-[13px] items-center"
-              style={i < arr.length - 1 ? { borderBottom: '1px solid hsl(var(--border))' } : {}}>
-              <div className="px-5 py-4" style={{ color: 'hsl(var(--text))' }}>{row.task}</div>
-              <div className="px-5 py-4 text-center" style={{ color: 'hsl(var(--muted))', textDecoration: 'line-through' }}>
-                {row.before}
+        {(() => {
+          const rows = [
+            { task: 'Détecter les commentaires',          before: '2 h',     beforeNote: 'check manuel',        after: 'Live',     afterNote: 'auto' },
+            { task: 'Répondre + envoyer le lead magnet',  before: '5 min × N', beforeNote: 'jamais à temps',    after: '< 30 s',   afterNote: 'auto' },
+            { task: 'Trouver 500 prospects qualifiés',    before: '10 h',    beforeNote: 'Sales Nav',           after: '30 min',   afterNote: 'IA ciblée' },
+            { task: 'Campagne Connexion + DM',            before: '5 h',     beforeNote: 'scripts à la main',   after: '0 min',    afterNote: '100 % auto' },
+            { task: 'Suivre les leads & relancer',        before: '2 h',     beforeNote: 'Excel',               after: 'Temps réel', afterNote: 'CRM' },
+          ];
+          return (
+            <div className="reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+              {/* Sans Linky */}
+              <div className="g-card" style={{ borderRadius: 20, padding: 28, position: 'relative', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(0 70% 55% / .1)', color: 'hsl(0 70% 55%)' }}>
+                    <Clock size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'hsl(var(--muted))' }}>Sans Linky</div>
+                    <div style={{ fontSize: 17, fontWeight: 600, color: 'hsl(var(--text))' }}>Vos semaines actuelles</div>
+                  </div>
+                </div>
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {rows.map((r) => (
+                    <li key={r.task} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, paddingBottom: 14, borderBottom: '1px solid hsl(var(--border))' }}>
+                      <div style={{ fontSize: 14, color: 'hsl(var(--text))', flex: 1 }}>{r.task}</div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'hsl(0 70% 50%)', textDecoration: 'line-through', textDecorationColor: 'hsl(0 70% 50% / .5)' }}>{r.before}</div>
+                        <div style={{ fontSize: 11, color: 'hsl(var(--muted))', marginTop: 2 }}>{r.beforeNote}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div style={{ marginTop: 22, padding: '14px 16px', borderRadius: 12, background: 'hsl(0 70% 55% / .08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--text))' }}>Total perdu</span>
+                  <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: 'hsl(0 70% 50%)' }}>~ 20 h / sem.</span>
+                </div>
               </div>
-              <div className="px-5 py-4 text-center font-semibold" style={{ color: 'hsl(var(--emerald))' }}>
-                {row.after}
+
+              {/* Avec Linky */}
+              <div className="g-card" style={{ borderRadius: 20, padding: 28, position: 'relative', overflow: 'hidden', border: '1px solid hsl(var(--accent) / .35)', boxShadow: '0 12px 40px -16px hsl(var(--accent) / .35)' }}>
+                <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 80% at 100% 0%, hsl(var(--accent) / .08), transparent 60%)', pointerEvents: 'none' }} />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))' }}>
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'hsl(var(--accent))' }}>Avec Linky</div>
+                    <div style={{ fontSize: 17, fontWeight: 600, color: 'hsl(var(--text))' }}>En pilote automatique</div>
+                  </div>
+                </div>
+                <ul style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {rows.map((r) => (
+                    <li key={r.task} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, paddingBottom: 14, borderBottom: '1px solid hsl(var(--border))' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1 }}>
+                        <CheckCircle2 size={16} style={{ color: 'hsl(var(--emerald))', marginTop: 2, flexShrink: 0 }} />
+                        <div style={{ fontSize: 14, color: 'hsl(var(--text))' }}>{r.task}</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'hsl(var(--emerald))' }}>{r.after}</div>
+                        <div style={{ fontSize: 11, color: 'hsl(var(--muted))', marginTop: 2 }}>{r.afterNote}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div style={{ position: 'relative', marginTop: 22, padding: '14px 16px', borderRadius: 12, background: 'hsl(var(--accent) / .1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--text))' }}>Total économisé</span>
+                  <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: 'hsl(var(--accent))' }}>~ 20 h / sem.</span>
+                </div>
               </div>
             </div>
-          ))}
-          <div className="grid grid-cols-[1.1fr,1fr,1fr] text-[14px] items-center"
-            style={{ background: 'hsl(var(--accent-soft))', borderTop: '1px solid hsl(var(--accent) / .25)' }}>
-            <div className="px-5 py-4 font-semibold">Temps économisé</div>
-            <div className="px-5 py-4" />
-            <div className="px-5 py-4 text-center font-semibold mono" style={{ color: 'hsl(var(--accent))' }}>
-              ~ 20 h / semaine
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </section>
 
       {/* ── SECURITY / TRUST ── */}

