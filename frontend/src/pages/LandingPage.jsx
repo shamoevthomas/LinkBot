@@ -115,6 +115,245 @@ function Stat({ value, label, delay = '' }) {
 }
 
 /**
+ * Scroll-driven reveal: opacity/translate are CONTINUOUSLY tied to the
+ * element's position in the viewport, not toggled on entry. The element
+ * animates progressively as the user scrolls — premium scrubbed feel.
+ */
+function ScrollScrubReveal({ children }) {
+  const ref = useRef(null);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let active = false;
+    let raf = 0;
+
+    const compute = () => {
+      const rect = el.getBoundingClientRect();
+      const winH = window.innerHeight || document.documentElement.clientHeight;
+      // Animation window: starts when element top hits 90% of viewport,
+      // completes when top reaches 35%. Smooth scroll-scrub.
+      const start = winH * 0.9;
+      const end = winH * 0.35;
+      const raw = (start - rect.top) / (start - end);
+      const clamped = Math.max(0, Math.min(1, raw));
+      setProgress(clamped);
+    };
+
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; compute(); });
+    };
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        active = e.isIntersecting;
+        if (active) {
+          window.addEventListener('scroll', onScroll, { passive: true });
+          compute();
+        } else {
+          window.removeEventListener('scroll', onScroll);
+        }
+      });
+    }, { rootMargin: '50% 0px 50% 0px' });
+
+    obs.observe(el);
+    compute();
+
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div ref={ref} style={{
+      opacity: progress,
+      transform: `translateY(${(1 - progress) * 56}px) scale(${0.94 + progress * 0.06})`,
+      willChange: 'opacity, transform',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Mobile hero: a vertical narrative. Each "moment" of the Linky flow reveals as
+ * the user scrolls — détecte → répond → connecte → récolte. Reveal is scroll-
+ * scrubbed (continuous), so the section grows progressively as the user moves.
+ */
+function HeroCardsMobile() {
+  const steps = [
+    {
+      n: '01', label: 'Cherche',
+      title: 'Trouvez les bons profils en 30 minutes.',
+      body: 'Décrivez votre cible — Linky scrappe LinkedIn et constitue une liste de prospects qualifiés, prête à être contactée.',
+      visual: (
+        <div style={{
+          padding: '12px 14px', borderRadius: 12,
+          background: 'hsl(220 30% 98%)', border: '1px solid hsl(var(--border))',
+        }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Search size={13} style={{ color: 'hsl(var(--muted))' }} />
+            <span style={{ fontSize: 11.5, color: 'hsl(var(--muted))', fontFamily: 'ui-monospace, monospace' }}>
+              "Founder · SaaS · France"
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: 'hsl(214 95% 50%)', letterSpacing: '-0.02em', lineHeight: 1 }}>500</div>
+            <div style={{ fontSize: 11.5, color: 'hsl(var(--muted))', lineHeight: 1.3 }}>
+              prospects identifiés<br />
+              <span style={{ color: 'hsl(160 60% 35%)', fontWeight: 500 }}>· prêts à contacter</span>
+            </div>
+          </div>
+        </div>
+      ),
+      stat: 'Recherche LinkedIn ciblée, sans Sales Nav',
+    },
+    {
+      n: '02', label: 'Connecte',
+      title: 'Invitations envoyées au rythme humain.',
+      body: 'Linky envoie 25 invitations/jour avec messages personnalisés par IA, étalées dans la journée — patterns humains, jamais flagué.',
+      visual: (
+        <div className="flex items-center gap-2.5" style={{
+          padding: '12px 14px', borderRadius: 12,
+          background: 'hsl(160 60% 96%)', border: '1px solid hsl(160 60% 80%)',
+        }}>
+          <div style={{ width: 32, height: 32, borderRadius: 9, background: 'hsl(160 70% 92%)', color: 'hsl(160 70% 30%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <UserPlus size={15} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: 'hsl(160 70% 28%)', lineHeight: 1 }}>+544 acceptées</div>
+            <div style={{ fontSize: 11, color: 'hsl(160 30% 35%)', marginTop: 2 }}>sur 14 jours · 0 incident compte</div>
+          </div>
+        </div>
+      ),
+      stat: 'Plages horaires respectées, jitter humain',
+    },
+    {
+      n: '03', label: 'Engage',
+      title: 'DM relancés par IA, jamais oubliés.',
+      body: 'Chaque message est rédigé par l\'IA à partir du profil du contact. Relances automatiques, séquences multi-tour, pause si réponse.',
+      visual: (
+        <div style={{
+          padding: '12px 14px', borderRadius: 12,
+          background: 'hsl(214 100% 97%)', border: '1px solid hsl(214 95% 55% / .25)',
+        }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <Sparkles size={12} style={{ color: 'hsl(214 95% 55%)' }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'hsl(214 95% 45%)' }}>DM personnalisé · IA</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: 'hsl(var(--text))', lineHeight: 1.45 }}>
+            "Salut Marc, vu que tu scales Studio Acme — j'imagine que la prospection LinkedIn doit prendre un temps fou…"
+          </div>
+        </div>
+      ),
+      stat: '42 % taux de réponse moyen',
+    },
+    {
+      n: '04', label: 'Convertit',
+      title: 'Vos posts LinkedIn livrent les lead magnets tout seuls.',
+      body: 'Linky surveille les commentaires de vos posts, répond publiquement, puis envoie le bon ressource en DM — l\'inbound qui tourne sans vous.',
+      visual: (
+        <div style={{
+          padding: '12px 14px', borderRadius: 12,
+          background: 'hsl(220 30% 98%)', border: '1px solid hsl(var(--border))',
+        }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'hsl(270 60% 70%)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 700 }}>ML</div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'hsl(var(--text))' }}>Marie</span>
+            <span style={{ fontSize: 10.5, color: 'hsl(var(--muted))' }}>· commente votre post</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'hsl(var(--text))', lineHeight: 1.4, marginBottom: 8 }}>
+            « Hyper intéressée, je veux le guide 🙏 »
+          </div>
+          <div className="flex items-center gap-1.5" style={{
+            fontSize: 10.5, fontWeight: 600, color: 'hsl(160 60% 35%)',
+            padding: '5px 8px', borderRadius: 6,
+            background: 'hsl(160 60% 94%)', border: '1px solid hsl(160 60% 80%)',
+            display: 'inline-flex', alignSelf: 'flex-start',
+          }}>
+            <Send size={10} /> Guide envoyé en DM · 24 s
+          </div>
+        </div>
+      ),
+      stat: 'Inbound 24h/24, jamais une opportunité ratée',
+    },
+    {
+      n: '05', label: 'Centralise',
+      title: 'Tout votre pipeline LinkedIn, dans un CRM.',
+      body: 'Posts détectés, invitations, conversations, lead magnets, RDV — tout est suivi automatiquement dans Linky. Plus jamais d\'Excel.',
+      visual: (
+        <div style={{
+          position: 'relative', overflow: 'hidden',
+          padding: '18px 16px', borderRadius: 14,
+          background: 'linear-gradient(135deg, #fff 0%, hsl(214 100% 97%) 100%)',
+          border: '1px solid hsl(214 95% 55% / .25)',
+          boxShadow: '0 12px 36px -16px hsl(214 70% 30% / .25)',
+        }}>
+          <div aria-hidden style={{
+            position: 'absolute', top: -30, right: -30,
+            width: 140, height: 140, borderRadius: '50%',
+            background: 'radial-gradient(circle, hsl(214 95% 55% / .15) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }} />
+          <div className="grid grid-cols-2 gap-3" style={{ position: 'relative' }}>
+            <div>
+              <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: 'hsl(214 95% 50%)', letterSpacing: '-0.03em', lineHeight: 1 }}>+20h</div>
+              <div style={{ fontSize: 10.5, color: 'hsl(var(--muted))', marginTop: 4 }}>gagnées / semaine</div>
+            </div>
+            <div>
+              <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: 'hsl(214 95% 50%)', letterSpacing: '-0.03em', lineHeight: 1 }}>+28</div>
+              <div style={{ fontSize: 10.5, color: 'hsl(var(--muted))', marginTop: 4 }}>RDV qualifiés / mois</div>
+            </div>
+          </div>
+        </div>
+      ),
+      stat: 'Lead magnets · Connexions · DM · RDV — un seul endroit',
+    },
+  ];
+
+  return (
+    <div className="mx-auto w-full" style={{ maxWidth: 420, padding: '0 4px' }}>
+      <div className="flex flex-col" style={{ gap: 56 }}>
+        {steps.map((s) => (
+          <ScrollScrubReveal key={s.n}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'hsl(214 95% 55%)', letterSpacing: '0.05em' }}>
+                {s.n}
+              </span>
+              <span style={{ width: 18, height: 1, background: 'hsl(var(--border-strong))' }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'hsl(var(--muted))', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                {s.label}
+              </span>
+            </div>
+            <h3 style={{
+              fontSize: 22, fontWeight: 600, color: 'hsl(var(--text))',
+              letterSpacing: '-0.025em', lineHeight: 1.2, marginBottom: 10,
+            }}>
+              {s.title}
+            </h3>
+            <p style={{
+              fontSize: 14, color: 'hsl(var(--muted))',
+              lineHeight: 1.55, marginBottom: 14,
+            }}>
+              {s.body}
+            </p>
+            {s.visual}
+            <div className="flex items-center gap-1.5 mt-3" style={{ fontSize: 11, color: 'hsl(var(--muted))' }}>
+              <CheckCircle2 size={11} style={{ color: 'hsl(160 60% 45%)' }} />
+              {s.stat}
+            </div>
+          </ScrollScrubReveal>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Hero illustration: floating cards diagramming Linky's lead magnet flow.
  * Post detected → commenter scored → bot replies publicly + DMs the lead magnet
  * → conversion. Connectors are an SVG layer behind the cards.
@@ -472,15 +711,18 @@ export default function LandingPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <LockedCTA variant="link" lockSize={11}
-              style={{
-                fontSize: 13, color: 'hsl(var(--muted))',
-                background: 'none', border: 'none', padding: '6px 10px',
-              }}>
-              Se connecter
-            </LockedCTA>
-            <LockedCTA className="cta-btn" style={{ padding: '8px 18px', fontSize: 13 }}>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="hidden sm:inline-flex">
+              <LockedCTA variant="link" lockSize={11}
+                style={{
+                  fontSize: 13, color: 'hsl(var(--muted))',
+                  background: 'none', border: 'none', padding: '6px 10px',
+                  whiteSpace: 'nowrap',
+                }}>
+                Se connecter
+              </LockedCTA>
+            </span>
+            <LockedCTA className="cta-btn" style={{ padding: '8px 18px', fontSize: 13, whiteSpace: 'nowrap' }}>
               S'inscrire
             </LockedCTA>
           </div>
@@ -498,8 +740,8 @@ export default function LandingPage() {
         }} />
 
         {/* Hero content */}
-        <section className="relative z-10 flex flex-col md:flex-row items-center"
-          style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 20px 60px', gap: 48, minHeight: 'calc(100vh - 120px)' }}>
+        <section className="relative z-10 flex flex-col md:flex-row items-center md:min-h-[calc(100vh-120px)]"
+          style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 20px 60px', gap: 48 }}>
           <div className="animate-fade-rise text-center md:text-left" style={{ flex: 1 }}>
             <div className="chip blue mb-5" style={{ fontSize: 11, padding: '4px 12px' }}>
               <Sparkles size={11} />
@@ -563,15 +805,19 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Hero illustration: floating cards (Linky lead-magnet flow) */}
+          {/* Hero illustration — desktop: floating cards composition.
+              Mobile: simplified vertical stack (same story, readable). */}
           <div
-            className="animate-fade-rise-delay flex"
+            className="animate-fade-rise-delay hidden md:flex"
             style={{
               flex: 1, justifyContent: 'center', alignItems: 'center',
               position: 'relative', overflow: 'visible',
               minHeight: 560, padding: '20px 0',
             }}>
             <HeroCards />
+          </div>
+          <div className="md:hidden w-full" style={{ marginTop: 8 }}>
+            <HeroCardsMobile />
           </div>
         </section>
       </div>

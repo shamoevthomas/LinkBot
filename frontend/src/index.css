@@ -308,4 +308,5 @@ input:focus, select:focus, button:focus, textarea:focus { outline: none; }
 @media (max-width: 768px) {
   .g-card { border-radius: 14px; }
   .cta-btn { border-radius: 14px; }
+
 }
