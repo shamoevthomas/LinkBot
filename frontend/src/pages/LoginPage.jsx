@@ -84,7 +84,9 @@ export default function LoginPage() {
             <div>
               <label className="form-label">Email</label>
               <input
-                type="email"
+                type="text"
+                inputMode="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-sm"
