@@ -455,9 +455,14 @@ def _refresh_linkedin_cache_sync(user_id: int) -> None:
         identity = _fetch_linkedin_identity(u)
         if not identity:
             return
-        u.first_name = u.first_name or identity.get("first_name")
-        u.last_name = u.last_name or identity.get("last_name")
+        # LinkedIn is the source of truth — overwrite typed-in values so a user
+        # can't display "Brad Pitt" while authenticating with someone else's cookies.
+        u.first_name = identity.get("first_name") or u.first_name
+        u.last_name = identity.get("last_name") or u.last_name
         u.linkedin_picture_url = identity.get("picture_url")
+        public_id = identity.get("public_id")
+        if public_id:
+            u.linkedin_profile_url = f"https://www.linkedin.com/in/{public_id}"
         u.linkedin_cached_at = datetime.utcnow()
         db.commit()
     finally:
