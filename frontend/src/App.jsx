@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Each page is its own chunk so the initial bundle only ships the route
@@ -103,6 +104,7 @@ export default function App() {
           style: { fontSize: '14px' },
           success: { iconTheme: { primary: '#057642' } },
         }} />
+        <Analytics />
       </AuthProvider>
     </BrowserRouter>
   );
