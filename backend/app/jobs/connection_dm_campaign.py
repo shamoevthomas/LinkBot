@@ -134,7 +134,17 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     try:
                         success = await send_message(client, contact.urn_id, message_body)
                     except Exception as exc:
+                        from app.utils.rate_limit_cooldown import is_rate_limit_error, trigger_dms_cooldown
                         _log_action(db, campaign_id, contact.id, "dm_send", "failed", str(exc)[:500])
+                        if is_rate_limit_error(exc):
+                            until = trigger_dms_cooldown(db)
+                            cc.status = "envoye"
+                            db.commit()
+                            logger.warning(
+                                "Campaign %d: DM 429 on contact %d, DMs cooldown until %s",
+                                campaign_id, contact.id, until.isoformat(),
+                            )
+                            return
                         cc.status = "envoye"  # still mark as envoye, retry next tick
                         db.commit()
                         continue
@@ -194,7 +204,16 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 try:
                     success = await send_message(client, contact.urn_id, message_body)
                 except Exception as exc:
+                    from app.utils.rate_limit_cooldown import is_rate_limit_error, trigger_dms_cooldown
                     _log_action(db, campaign_id, contact.id, "dm_send", "failed", str(exc)[:500])
+                    if is_rate_limit_error(exc):
+                        until = trigger_dms_cooldown(db)
+                        db.commit()
+                        logger.warning(
+                            "Campaign %d: DM 429 (phase 2) on contact %d, DMs cooldown until %s",
+                            campaign_id, contact.id, until.isoformat(),
+                        )
+                        return
                     continue
 
                 if success:
@@ -328,11 +347,12 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 is_rate_limited = "FUSE_LIMIT_EXCEEDED" in err_text or "status code 429" in err_text
                 _log_action(db, campaign_id, contact.id, "connection_request", "failed", err_text[:500])
                 if is_rate_limited:
-                    # LinkedIn rate-limited us. Don't burn the contact, just stop this tick.
+                    from app.utils.rate_limit_cooldown import trigger_connections_cooldown
+                    until = trigger_connections_cooldown(db)
                     db.commit()
                     logger.warning(
-                        "Campaign %d: LinkedIn FUSE_LIMIT_EXCEEDED on contact %d, stopping tick",
-                        campaign_id, contact.id,
+                        "Campaign %d: LinkedIn FUSE_LIMIT_EXCEEDED on contact %d (connection phase), connections cooldown until %s",
+                        campaign_id, contact.id, until.isoformat(),
                     )
                     break
                 campaign.total_processed = (campaign.total_processed or 0) + 1

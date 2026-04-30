@@ -529,6 +529,13 @@ async def linkedin_profile(
     }
 
 
+@router.get("/rate-limit-status")
+def get_rate_limit_status(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Return active LinkedIn rate-limit cooldowns (account-wide, set on 429)."""
+    from app.utils.rate_limit_cooldown import get_status
+    return get_status(db)
+
+
 @router.get("/notifications")
 def get_notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     cutoff = datetime.utcnow() - timedelta(hours=24)

@@ -184,11 +184,12 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 is_rate_limited = "FUSE_LIMIT_EXCEEDED" in err_text or "status code 429" in err_text
                 _log_action(db, campaign.id, contact.id, "connection_request", "failed", err_text[:500])
                 if is_rate_limited:
-                    # LinkedIn rate-limited us. Don't burn the contact, stop this tick.
+                    from app.utils.rate_limit_cooldown import trigger_connections_cooldown
+                    until = trigger_connections_cooldown(db)
                     db.commit()
                     logger.warning(
-                        "Campaign %d: LinkedIn FUSE_LIMIT_EXCEEDED on contact %d, stopping tick",
-                        campaign_id, contact.id,
+                        "Campaign %d: LinkedIn FUSE_LIMIT_EXCEEDED on contact %d, connections cooldown until %s",
+                        campaign_id, contact.id, until.isoformat(),
                     )
                     break
                 logger.exception(

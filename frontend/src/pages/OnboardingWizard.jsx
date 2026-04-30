@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Users, Check, Shield, Sparkles, Key, ExternalLink } from 'lucide-react';
+import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Check, Shield, Sparkles, Key, ArrowUpRight, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { submitOnboarding } from '../api/user';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -7,8 +8,21 @@ import toast from 'react-hot-toast';
 const JOB_ROLES = ['Sales', 'Marketing', 'Recrutement', 'Business Development', 'Founder / CEO', 'Consultant', 'Autre'];
 const REASONS = ['Génération de leads', 'Networking', 'Recrutement', 'Prospection commerciale', 'Personal branding', 'Autre'];
 
+const STEP_TITLES = [
+  { eyebrow: 'Étape 1 · Profil',  title: 'Faisons connaissance.' },
+  { eyebrow: 'Étape 2 · LinkedIn', title: 'Connectez votre compte.' },
+  { eyebrow: 'Étape 3 · IA',       title: 'Messages personnalisés.' },
+  { eyebrow: 'Étape 4 · Import',   title: 'Tout est prêt.' },
+];
+
 export default function OnboardingWizard() {
-  const { refreshUser } = useAuth();
+  const { refreshUser, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -39,7 +53,7 @@ export default function OnboardingWizard() {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
       await submitOnboarding(fd);
-      toast.success('Configuration terminée ! Import du réseau en cours...');
+      toast.success('Configuration terminée — import du réseau en cours.');
       await refreshUser();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur lors de la configuration');
@@ -48,90 +62,95 @@ export default function OnboardingWizard() {
     }
   };
 
-  const stepLabels = ['Profil', 'LinkedIn', 'IA', 'Import'];
+  const head = STEP_TITLES[step - 1];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, rgba(0,20,40,0.7) 0%, rgba(0,80,180,0.4) 100%)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-      <div className="w-full max-w-lg overflow-hidden" style={{
-        borderRadius: '24px',
-        background: '#fff',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1)',
+      style={{
+        background: 'radial-gradient(120% 80% at 50% 0%, hsl(var(--accent) / .12), transparent 50%), hsl(220 30% 96% / .8)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
       }}>
-        {/* Header */}
-        <div style={{
-          background: 'linear-gradient(135deg, #0066FF 0%, #0084FF 50%, #00A3FF 100%)',
-          padding: '28px 28px 24px',
-          position: 'relative',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px',
-            borderRadius: '50%', background: 'rgba(255,255,255,0.1)',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: '-20px', left: '40%', width: '80px', height: '80px',
-            borderRadius: '50%', background: 'rgba(255,255,255,0.06)',
-          }} />
-
-          <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
-            <img src="/Linky.png" alt="Linky"
-              style={{ width: 40, height: 40, objectFit: 'contain' }} />
-            <div>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Bienvenue sur Linky</h2>
-              <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Configurez votre compte en 4 étapes</p>
+      <div className="g-card" style={{
+        width: '100%', maxWidth: 540,
+        borderRadius: 24,
+        padding: 0,
+        boxShadow: '0 30px 80px -30px hsl(220 40% 20% / .25), 0 4px 12px -4px hsl(220 40% 20% / .08)',
+      }}>
+        {/* Header — clean, accent-light */}
+        <div style={{ padding: '28px 32px 24px', borderBottom: '1px solid hsl(var(--border))' }}>
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2.5">
+              <img src="/Linky.png" alt="Linky" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--text))', letterSpacing: '-0.01em' }}>Linky</span>
             </div>
+            <button onClick={handleLogout} type="button"
+              style={{
+                fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted))',
+                background: 'none', border: 'none', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '6px 10px', borderRadius: 8, transition: 'all .15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--text))'; e.currentTarget.style.background = 'hsl(220 30% 96%)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'hsl(var(--muted))'; e.currentTarget.style.background = 'none'; }}>
+              <LogOut size={13} /> Se déconnecter
+            </button>
           </div>
 
-          {/* Step indicators */}
-          <div className="flex items-center gap-3" style={{ position: 'relative' }}>
+          <div className="eyebrow mb-2">{head.eyebrow}</div>
+          <h2 style={{
+            fontSize: 26, fontWeight: 600, lineHeight: 1.15,
+            color: 'hsl(var(--text))', letterSpacing: '-0.025em',
+          }}>
+            {head.title}
+          </h2>
+
+          {/* Step pills */}
+          <div className="flex items-center gap-1.5 mt-5">
             {[1, 2, 3, 4].map((s) => (
-              <div key={s} className="flex items-center gap-3" style={{ flex: s < 4 ? 1 : 'none' }}>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center text-xs font-bold" style={{
-                    width: '28px', height: '28px', borderRadius: '50%',
-                    background: step >= s ? '#fff' : 'rgba(255,255,255,0.2)',
-                    color: step >= s ? '#0066FF' : 'rgba(255,255,255,0.6)',
-                    transition: 'all 0.3s ease',
-                  }}>
-                    {step > s ? <Check size={14} strokeWidth={3} /> : s}
-                  </div>
-                  <span className="text-xs font-medium hidden sm:block" style={{
-                    color: step >= s ? '#fff' : 'rgba(255,255,255,0.5)',
-                  }}>{stepLabels[s - 1]}</span>
-                </div>
-                {s < 4 && (
-                  <div style={{
-                    flex: 1, height: '2px', borderRadius: '1px',
-                    background: step > s ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.15)',
-                    transition: 'all 0.3s ease',
-                  }} />
-                )}
-              </div>
+              <div key={s} style={{
+                flex: 1, height: 3, borderRadius: 2,
+                background: step >= s ? 'hsl(var(--accent))' : 'hsl(var(--border))',
+                transition: 'background 0.25s ease',
+              }} />
             ))}
           </div>
         </div>
 
-        <div style={{ padding: '28px' }}>
+        {/* Body */}
+        <div style={{ padding: '28px 32px 32px' }}>
           {step === 1 && (
             <div className="space-y-5">
               {/* Photo */}
-              <div className="flex justify-center">
+              <div className="flex justify-center pt-1">
                 <label className="cursor-pointer group">
                   <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
                   {preview ? (
                     <div style={{ position: 'relative' }}>
-                      <img src={preview} alt="Photo" className="w-24 h-24 rounded-full object-cover"
-                        style={{ border: '3px solid var(--blue)', boxShadow: '0 4px 12px rgba(0,132,255,0.25)' }} />
-                      <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Upload size={20} className="text-white" />
+                      <img src={preview} alt="Photo" style={{
+                        width: 88, height: 88, borderRadius: '50%', objectFit: 'cover',
+                        border: '2px solid hsl(var(--accent))',
+                        boxShadow: '0 8px 24px -8px hsl(var(--accent) / .4)',
+                      }} />
+                      <div style={{
+                        position: 'absolute', inset: 0, borderRadius: '50%',
+                        background: 'rgba(0,0,0,.35)', opacity: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'opacity .2s',
+                      }} className="group-hover:opacity-100">
+                        <Upload size={18} color="#fff" />
                       </div>
                     </div>
                   ) : (
-                    <div className="w-24 h-24 rounded-full flex flex-col items-center justify-center transition-all group-hover:border-blue-300 group-hover:bg-blue-50"
-                      style={{ border: '2px dashed #d1d5db', background: '#f9fafb' }}>
-                      <Upload size={22} className="text-gray-400 group-hover:text-blue-400 transition-colors" />
-                      <span className="text-[10px] mt-1.5 text-gray-400 group-hover:text-blue-400 transition-colors font-medium">Ajouter</span>
+                    <div style={{
+                      width: 88, height: 88, borderRadius: '50%',
+                      border: '1.5px dashed hsl(var(--border-strong))',
+                      background: 'hsl(220 30% 98%)',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all .2s',
+                    }}>
+                      <Upload size={18} style={{ color: 'hsl(var(--muted))' }} />
+                      <span style={{ fontSize: 10, marginTop: 4, color: 'hsl(var(--muted))', fontWeight: 500 }}>Photo</span>
                     </div>
                   )}
                 </label>
@@ -139,100 +158,124 @@ export default function OnboardingWizard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Prénom</label>
+                  <label className="form-label">Prénom</label>
                   <input value={form.first_name} onChange={(e) => set('first_name', e.target.value)}
-                    className="input-glass" placeholder="Thomas" />
+                    className="input-sm" placeholder="Thomas" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Nom</label>
+                  <label className="form-label">Nom</label>
                   <input value={form.last_name} onChange={(e) => set('last_name', e.target.value)}
-                    className="input-glass" placeholder="Dupont" />
+                    className="input-sm" placeholder="Dupont" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Votre rôle</label>
-                <select value={form.job_role} onChange={(e) => set('job_role', e.target.value)}
-                  className="input-glass">
-                  <option value="">Sélectionner...</option>
+                <label className="form-label">Votre rôle</label>
+                <select value={form.job_role} onChange={(e) => set('job_role', e.target.value)} className="input-sm">
+                  <option value="">Sélectionner…</option>
                   {JOB_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Pourquoi utiliser Linky ?</label>
-                <select value={form.reason_for_using} onChange={(e) => set('reason_for_using', e.target.value)}
-                  className="input-glass">
-                  <option value="">Sélectionner...</option>
+                <label className="form-label">Pourquoi utiliser Linky&nbsp;?</label>
+                <select value={form.reason_for_using} onChange={(e) => set('reason_for_using', e.target.value)} className="input-sm">
+                  <option value="">Sélectionner…</option>
                   {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>URL de votre profil LinkedIn</label>
+                <label className="form-label">URL de votre profil LinkedIn</label>
                 <input value={form.linkedin_profile_url} onChange={(e) => set('linkedin_profile_url', e.target.value)}
-                  placeholder="https://linkedin.com/in/votre-profil"
-                  className="input-glass" />
+                  placeholder="https://linkedin.com/in/votre-profil" className="input-sm" />
               </div>
 
               <button onClick={() => setStep(2)} disabled={!canStep2}
-                className="cta-btn w-full flex items-center justify-center gap-2 disabled:opacity-40"
-                style={{ padding: '12px 16px', fontSize: '14px', borderRadius: '14px' }}>
-                Suivant <ChevronRight size={18} />
+                className="cta-btn w-full flex items-center justify-center gap-2"
+                style={{ padding: '12px 16px', fontSize: 14, borderRadius: 14, marginTop: 4 }}>
+                Continuer <ChevronRight size={16} />
               </button>
             </div>
           )}
 
           {step === 2 && (
             <div className="space-y-5">
-              <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'rgba(0,132,255,0.06)', border: '1px solid rgba(0,132,255,0.12)' }}>
-                <Shield size={18} style={{ color: 'var(--blue)', flexShrink: 0 }} />
-                <p className="text-xs" style={{ color: 'var(--text2)' }}>
-                  Vos cookies sont stockés de manière sécurisée et ne sont jamais partagés.
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '12px 14px', borderRadius: 12,
+                background: 'hsl(var(--accent-soft))', border: '1px solid hsl(var(--accent) / .2)',
+              }}>
+                <Shield size={16} style={{ color: 'hsl(var(--accent))', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 12.5, color: 'hsl(var(--text))', lineHeight: 1.5, margin: 0 }}>
+                  Vos cookies sont stockés de manière sécurisée et ne quittent jamais votre serveur.
                 </p>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium" style={{ color: 'var(--text2)' }}>Cookie li_at</label>
-                  <button onClick={() => setShowHelp(!showHelp)} className="text-xs flex items-center gap-1 hover:underline" style={{ color: 'var(--blue)' }}>
-                    <HelpCircle size={14} /> {showHelp ? 'Masquer' : 'Comment trouver ?'}
+                  <label className="form-label" style={{ marginBottom: 0 }}>Cookie li_at</label>
+                  <button onClick={() => setShowHelp(!showHelp)} type="button"
+                    style={{ fontSize: 11.5, fontWeight: 500, color: 'hsl(var(--accent))', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
+                    <HelpCircle size={12} /> {showHelp ? 'Masquer' : 'Comment trouver ?'}
                   </button>
                 </div>
                 {showHelp && (
-                  <div className="rounded-xl p-4 mb-3 text-xs space-y-2" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <p className="font-semibold" style={{ color: 'var(--text)', fontSize: '0.8rem' }}>Comment récupérer vos cookies :</p>
-                    <div className="space-y-1.5" style={{ color: 'var(--text2)' }}>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold mr-1.5">1</span>Ouvrez LinkedIn dans Chrome</p>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold mr-1.5">2</span>Appuyez sur <code className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">F12</code> → onglet <strong>Application</strong></p>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold mr-1.5">3</span>Dans Cookies → linkedin.com, cherchez <code className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">li_at</code></p>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold mr-1.5">4</span>Copiez la valeur complète</p>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold mr-1.5">5</span>Faites la même chose pour <code className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">JSESSIONID</code></p>
-                    </div>
+                  <div style={{
+                    padding: 14, marginBottom: 10, borderRadius: 12, fontSize: 12,
+                    background: 'hsl(220 30% 98%)', border: '1px solid hsl(var(--border))',
+                  }}>
+                    <p style={{ fontWeight: 600, color: 'hsl(var(--text))', marginBottom: 6, fontSize: 12 }}>
+                      Comment récupérer vos cookies&nbsp;:
+                    </p>
+                    <ol style={{ color: 'hsl(var(--muted))', display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 0, listStyle: 'none', margin: 0 }}>
+                      {[
+                        ['Ouvrez LinkedIn dans Chrome'],
+                        ['Appuyez sur ', <code key="c" style={{ padding: '1px 6px', borderRadius: 4, background: 'hsl(var(--border))', color: 'hsl(var(--text))', fontSize: 11 }}>F12</code>, ' → onglet ', <strong key="s">Application</strong>],
+                        ['Dans Cookies → linkedin.com, cherchez ', <code key="c" style={{ padding: '1px 6px', borderRadius: 4, background: 'hsl(var(--accent-soft))', color: 'hsl(var(--accent))', fontSize: 11 }}>li_at</code>],
+                        ['Copiez la valeur complète'],
+                        ['Faites pareil pour ', <code key="c" style={{ padding: '1px 6px', borderRadius: 4, background: 'hsl(var(--accent-soft))', color: 'hsl(var(--accent))', fontSize: 11 }}>JSESSIONID</code>],
+                      ].map((parts, i) => (
+                        <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                            background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))',
+                            fontSize: 10, fontWeight: 700, marginTop: 1,
+                          }}>{i + 1}</span>
+                          <span>{parts}</span>
+                        </li>
+                      ))}
+                    </ol>
                   </div>
                 )}
-                <textarea value={form.li_at} onChange={(e) => set('li_at', e.target.value)}
-                  rows={2} placeholder="Collez votre cookie li_at ici..."
-                  className="input-glass" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
+                <textarea value={form.li_at} onChange={(e) => set('li_at', e.target.value)} rows={2}
+                  placeholder="Collez votre cookie li_at ici…"
+                  className="input-sm" style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12, resize: 'vertical' }} />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>JSESSIONID</label>
-                <textarea value={form.jsessionid} onChange={(e) => set('jsessionid', e.target.value)}
-                  rows={2} placeholder='Collez votre JSESSIONID ici (avec les guillemets "ajax:...")'
-                  className="input-glass" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
+                <label className="form-label">JSESSIONID</label>
+                <textarea value={form.jsessionid} onChange={(e) => set('jsessionid', e.target.value)} rows={2}
+                  placeholder='"ajax:1234…"' className="input-sm"
+                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12, resize: 'vertical' }} />
               </div>
 
-              <div className="flex gap-3">
-                <button onClick={() => setStep(1)}
-                  className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl text-sm transition-all hover:bg-gray-50"
-                  style={{ padding: '12px 16px', border: '1px solid #e2e8f0', color: 'var(--text2)', background: '#fff', borderRadius: '14px' }}>
-                  <ChevronLeft size={18} /> Retour
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setStep(1)} type="button"
+                  style={{
+                    flex: 1, padding: '12px 16px', fontSize: 14, fontWeight: 600,
+                    borderRadius: 14, border: '1px solid hsl(var(--border-strong))',
+                    background: '#fff', color: 'hsl(var(--text))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    cursor: 'pointer', transition: 'background .15s',
+                  }}>
+                  <ChevronLeft size={16} /> Retour
                 </button>
                 <button onClick={() => setStep(3)} disabled={!canStep3}
-                  className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
-                  style={{ padding: '12px 16px', fontSize: '14px', borderRadius: '14px' }}>
-                  Suivant <ChevronRight size={18} />
+                  className="cta-btn"
+                  style={{ flex: 1, padding: '12px 16px', fontSize: 14, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  Continuer <ChevronRight size={16} />
                 </button>
               </div>
             </div>
@@ -240,74 +283,101 @@ export default function OnboardingWizard() {
 
           {step === 3 && (
             <div className="space-y-5">
-              <div className="text-center py-2">
-                <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{
-                  background: 'linear-gradient(135deg, rgba(168,85,247,0.1) 0%, rgba(168,85,247,0.05) 100%)',
-                  border: '2px solid rgba(168,85,247,0.15)',
+              <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: 16, margin: '0 auto 14px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'hsl(var(--accent) / .1)', color: 'hsl(var(--accent))',
                 }}>
-                  <Key size={32} style={{ color: '#a855f7' }} />
+                  <Sparkles size={24} />
                 </div>
-                <h3 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Messages 100% personnalisés par IA</h3>
-                <p className="text-sm mt-2 mx-4" style={{ color: 'var(--text3)', lineHeight: 1.6 }}>
-                  Chaque message sera unique, généré par l'IA en fonction du profil LinkedIn de chaque contact.
+                <h3 style={{ fontSize: 18, fontWeight: 600, color: 'hsl(var(--text))', letterSpacing: '-0.015em' }}>
+                  Messages 100&nbsp;% personnalisés.
+                </h3>
+                <p style={{ fontSize: 13, marginTop: 6, color: 'hsl(var(--muted))', lineHeight: 1.55, padding: '0 8px' }}>
+                  L'IA rédige chaque message à partir du profil LinkedIn de la personne.
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 p-3.5 rounded-xl cursor-pointer" onClick={() => { setWantAI(!wantAI); if (wantAI) set('gemini_api_key', ''); }}
-                style={{ background: wantAI ? 'rgba(168,85,247,0.06)' : '#f9fafb', border: wantAI ? '2px solid rgba(168,85,247,0.3)' : '2px solid #e5e7eb', transition: 'all 0.2s ease' }}>
-                <div className="flex items-center justify-center w-5 h-5 rounded-md shrink-0" style={{
-                  background: wantAI ? '#a855f7' : '#fff', border: wantAI ? 'none' : '2px solid #d1d5db', transition: 'all 0.2s ease',
+              <button type="button" onClick={() => { setWantAI(!wantAI); if (wantAI) set('gemini_api_key', ''); }}
+                style={{
+                  width: '100%', padding: '14px 16px', borderRadius: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  background: wantAI ? 'hsl(var(--accent) / .06)' : '#fff',
+                  border: wantAI ? '1.5px solid hsl(var(--accent) / .4)' : '1px solid hsl(var(--border-strong))',
+                  textAlign: 'left', transition: 'all .15s',
                 }}>
-                  {wantAI && <Check size={14} className="text-white" strokeWidth={3} />}
+                <div style={{
+                  width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                  background: wantAI ? 'hsl(var(--accent))' : '#fff',
+                  border: wantAI ? 'none' : '1.5px solid hsl(var(--border-strong))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all .15s',
+                }}>
+                  {wantAI && <Check size={12} color="#fff" strokeWidth={3} />}
                 </div>
-                <div>
-                  <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Oui, je veux des messages IA personnalisés</span>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>Nécessite une clé API Google Gemini (gratuite)</p>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'hsl(var(--text))' }}>Activer la personnalisation IA</div>
+                  <div style={{ fontSize: 11.5, color: 'hsl(var(--muted))', marginTop: 2 }}>Nécessite une clé API Google Gemini (offre gratuite disponible)</div>
                 </div>
-              </div>
+              </button>
 
               {wantAI && (
                 <div className="space-y-4">
-                  <div className="rounded-xl p-4 text-xs space-y-2" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <p className="font-semibold" style={{ color: 'var(--text)', fontSize: '0.8rem' }}>Comment obtenir votre clé API Gemini :</p>
-                    <div className="space-y-1.5" style={{ color: 'var(--text2)' }}>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">1</span>Allez sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline font-medium">aistudio.google.com/apikey</a></p>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">2</span>Connectez-vous avec votre compte Google</p>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">3</span>Cliquez sur <strong>"Create API Key"</strong></p>
-                      <p><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold mr-1.5">4</span>Copiez la clé et collez-la ci-dessous</p>
-                    </div>
+                  <div style={{
+                    padding: 14, borderRadius: 12, fontSize: 12,
+                    background: 'hsl(220 30% 98%)', border: '1px solid hsl(var(--border))',
+                  }}>
+                    <p style={{ fontWeight: 600, color: 'hsl(var(--text))', marginBottom: 6, fontSize: 12 }}>
+                      Obtenir une clé&nbsp;:
+                    </p>
+                    <ol style={{ color: 'hsl(var(--muted))', display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 0, listStyle: 'none', margin: 0 }}>
+                      {[
+                        <>Ouvrez <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"
+                          style={{ color: 'hsl(var(--accent))', textDecoration: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                          aistudio.google.com/apikey <ArrowUpRight size={11} />
+                        </a></>,
+                        <>Connectez-vous avec Google</>,
+                        <>Cliquez sur <strong>Create API Key</strong></>,
+                        <>Collez la clé ci-dessous</>,
+                      ].map((parts, i) => (
+                        <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                            background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))',
+                            fontSize: 10, fontWeight: 700, marginTop: 1,
+                          }}>{i + 1}</span>
+                          <span>{parts}</span>
+                        </li>
+                      ))}
+                    </ol>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text2)' }}>Clé API Gemini</label>
+                    <label className="form-label">Clé API Gemini</label>
                     <input value={form.gemini_api_key} onChange={(e) => set('gemini_api_key', e.target.value)}
-                      placeholder="AIzaSy..."
-                      className="input-glass" style={{ fontFamily: 'monospace', fontSize: '12px' }} />
-                  </div>
-
-                  <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(168,85,247,0.04)', border: '1px solid rgba(168,85,247,0.1)' }}>
-                    <HelpCircle size={14} style={{ color: '#a855f7', flexShrink: 0 }} />
-                    <p className="text-xs" style={{ color: 'var(--text3)' }}>
-                      Besoin d'aide ? Contactez{' '}
-                      <a href="https://www.linkedin.com/in/thomas-shamoev/" target="_blank" rel="noopener noreferrer"
-                        className="font-medium underline" style={{ color: '#a855f7' }}>
-                        Thomas Shamoev sur LinkedIn
-                      </a>
-                    </p>
+                      placeholder="AIzaSy…" className="input-sm"
+                      style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12 }} />
                   </div>
                 </div>
               )}
 
               <div className="flex gap-3 pt-1">
-                <button onClick={() => setStep(2)}
-                  className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl text-sm transition-all hover:bg-gray-50"
-                  style={{ padding: '12px 16px', border: '1px solid #e2e8f0', color: 'var(--text2)', background: '#fff', borderRadius: '14px' }}>
-                  <ChevronLeft size={18} /> Retour
+                <button onClick={() => setStep(2)} type="button"
+                  style={{
+                    flex: 1, padding: '12px 16px', fontSize: 14, fontWeight: 600,
+                    borderRadius: 14, border: '1px solid hsl(var(--border-strong))',
+                    background: '#fff', color: 'hsl(var(--text))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    cursor: 'pointer',
+                  }}>
+                  <ChevronLeft size={16} /> Retour
                 </button>
                 <button onClick={() => setStep(4)} disabled={!canStep4}
-                  className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
-                  style={{ padding: '12px 16px', fontSize: '14px', borderRadius: '14px' }}>
-                  Suivant <ChevronRight size={18} />
+                  className="cta-btn"
+                  style={{ flex: 1, padding: '12px 16px', fontSize: 14, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  Continuer <ChevronRight size={16} />
                 </button>
               </div>
             </div>
@@ -315,52 +385,63 @@ export default function OnboardingWizard() {
 
           {step === 4 && (
             <div className="space-y-5">
-              <div className="text-center py-2">
-                <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{
-                  background: 'linear-gradient(135deg, rgba(0,132,255,0.1) 0%, rgba(0,132,255,0.05) 100%)',
-                  border: '2px solid rgba(0,132,255,0.15)',
+              <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: 16, margin: '0 auto 14px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'hsl(var(--accent) / .1)', color: 'hsl(var(--accent))',
                 }}>
-                  <Sparkles size={32} style={{ color: 'var(--blue)' }} />
+                  <Key size={24} />
                 </div>
-                <h3 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Tout est prêt !</h3>
-                <p className="text-sm mt-2 mx-4" style={{ color: 'var(--text3)', lineHeight: 1.6 }}>
-                  Vos connexions LinkedIn seront importées dans votre CRM <strong style={{ color: 'var(--text2)' }}>"Mon Réseau"</strong> et synchronisées automatiquement.
+                <h3 style={{ fontSize: 18, fontWeight: 600, color: 'hsl(var(--text))', letterSpacing: '-0.015em' }}>
+                  Votre réseau, importé.
+                </h3>
+                <p style={{ fontSize: 13, marginTop: 6, color: 'hsl(var(--muted))', lineHeight: 1.55, padding: '0 16px' }}>
+                  Vos connexions arrivent dans le CRM <strong style={{ color: 'hsl(var(--text))' }}>Mon Réseau</strong> et se mettent à jour toutes les 30 min.
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3.5 rounded-xl" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: '#dcfce7' }}>
-                    <Check size={16} style={{ color: '#16a34a' }} strokeWidth={3} />
+              <div className="space-y-2.5">
+                {[
+                  { title: 'Import automatique', sub: 'Toutes vos connexions, rapatriées en arrière-plan' },
+                  { title: 'Synchronisation continue', sub: 'Mises à jour toutes les 30 minutes' },
+                ].map((row) => (
+                  <div key={row.title} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 14px', borderRadius: 12,
+                    background: 'hsl(220 30% 98%)', border: '1px solid hsl(var(--border))',
+                  }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                      background: 'hsl(var(--accent) / .12)', color: 'hsl(var(--accent))',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Check size={14} strokeWidth={3} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: 'hsl(var(--text))' }}>{row.title}</div>
+                      <div style={{ fontSize: 11.5, color: 'hsl(var(--muted))', marginTop: 1 }}>{row.sub}</div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-sm font-semibold" style={{ color: '#15803d' }}>Import automatique</span>
-                    <p className="text-xs mt-0.5" style={{ color: '#166534' }}>Toutes vos connexions seront importées</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3.5 rounded-xl" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: '#dcfce7' }}>
-                    <Check size={16} style={{ color: '#16a34a' }} strokeWidth={3} />
-                  </div>
-                  <div>
-                    <span className="text-sm font-semibold" style={{ color: '#15803d' }}>Synchronisation continue</span>
-                    <p className="text-xs mt-0.5" style={{ color: '#166534' }}>Mises à jour automatiques toutes les 30 min</p>
-                  </div>
-                </div>
+                ))}
               </div>
 
               <div className="flex gap-3 pt-1">
-                <button onClick={() => setStep(3)}
-                  className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl text-sm transition-all hover:bg-gray-50"
-                  style={{ padding: '12px 16px', border: '1px solid #e2e8f0', color: 'var(--text2)', background: '#fff', borderRadius: '14px' }}>
-                  <ChevronLeft size={18} /> Retour
+                <button onClick={() => setStep(3)} type="button"
+                  style={{
+                    flex: 1, padding: '12px 16px', fontSize: 14, fontWeight: 600,
+                    borderRadius: 14, border: '1px solid hsl(var(--border-strong))',
+                    background: '#fff', color: 'hsl(var(--text))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    cursor: 'pointer',
+                  }}>
+                  <ChevronLeft size={16} /> Retour
                 </button>
                 <button onClick={handleSubmit} disabled={loading}
-                  className="cta-btn flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
-                  style={{ padding: '12px 16px', fontSize: '14px', borderRadius: '14px' }}>
-                  {loading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-                  {loading ? 'Import en cours...' : 'Lancer Linky'}
+                  className="cta-btn"
+                  style={{ flex: 1, padding: '12px 16px', fontSize: 14, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  {loading ? 'Import en cours…' : 'Lancer Linky'}
                 </button>
               </div>
             </div>

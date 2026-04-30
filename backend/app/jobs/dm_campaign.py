@@ -295,6 +295,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
                         continue
 
                 _not_connected = False
+                _rate_limited = False
                 try:
                     success = await send_message(client, contact.urn_id, message_body)
                 except Exception as exc:
@@ -302,6 +303,21 @@ async def run_dm_campaign(campaign_id: int) -> None:
                     success = False
                     if "RECIPIENT_NOT_FIRST_DEGREE_CONNECTION" in str(exc):
                         _not_connected = True
+                    else:
+                        from app.utils.rate_limit_cooldown import is_rate_limit_error
+                        if is_rate_limit_error(exc):
+                            _rate_limited = True
+
+                if _rate_limited:
+                    from app.utils.rate_limit_cooldown import trigger_dms_cooldown
+                    until = trigger_dms_cooldown(db)
+                    _log_action(db, campaign_id, contact.id, "dm_send", "failed", "FUSE_LIMIT_EXCEEDED — DMs cooldown 15h")
+                    db.commit()
+                    print(
+                        f"[DM JOB] Campaign {campaign_id}: 429 on contact {contact.id}, DMs cooldown until {until.isoformat()}",
+                        flush=True,
+                    )
+                    return
 
                 if _not_connected:
                     # Permanent error — mark perdu immediately, skip to next contact

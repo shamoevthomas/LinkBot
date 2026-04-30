@@ -105,6 +105,23 @@ async def _main_loop():
                 if info.get("paused"):
                     continue
                 if now >= info["next_run"]:
+                    # Skip if family is in rate-limit cooldown (lead magnets exempt)
+                    from app.database import SessionLocal
+                    from app.utils.rate_limit_cooldown import is_campaign_blocked
+                    db = SessionLocal()
+                    try:
+                        blocked_family = is_campaign_blocked(db, info["type"])
+                    finally:
+                        db.close()
+                    if blocked_family:
+                        print(
+                            f"[SCHEDULER] Skipping {cid} ({info['type']}): {blocked_family} cooldown active",
+                            flush=True,
+                        )
+                        info["last_run"] = datetime.utcnow()
+                        info["next_run"] = info["last_run"] + timedelta(seconds=300)
+                        continue
+
                     print(f"[SCHEDULER] Firing campaign {cid} ({info['type']})", flush=True)
                     try:
                         # For lead magnets, extract numeric ID from "lm_5" key
