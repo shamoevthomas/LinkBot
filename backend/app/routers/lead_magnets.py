@@ -84,6 +84,9 @@ def create_lead_magnet(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    from app.utils.limits import enforce_lead_magnet_limit
+    enforce_lead_magnet_limit(db, user)
+
     # Extract activity URN from post URL
     activity_urn = extract_activity_urn(body.post_url)
     if not activity_urn:
@@ -220,6 +223,9 @@ def resume_lead_magnet(
         raise HTTPException(status_code=404, detail="Lead magnet introuvable")
     if lm.status != "paused":
         raise HTTPException(status_code=400, detail="Non en pause")
+
+    from app.utils.limits import enforce_lead_magnet_limit
+    enforce_lead_magnet_limit(db, user)
 
     lm.status = "running"
     lm.error_message = None

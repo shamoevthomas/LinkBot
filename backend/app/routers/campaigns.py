@@ -209,6 +209,9 @@ def create_campaign(
     user: User = Depends(get_current_user),
 ):
     """Create a new campaign and start it immediately."""
+    from app.utils.limits import enforce_campaign_limit
+    enforce_campaign_limit(db, user)
+
     # Validate campaign type
     if body.type not in ("search", "dm", "connection", "export"):
         raise HTTPException(
@@ -357,6 +360,9 @@ def create_dm_campaign(
     user: User = Depends(get_current_user),
 ):
     """Create a DM campaign with main message + follow-up messages."""
+    from app.utils.limits import enforce_campaign_limit
+    enforce_campaign_limit(db, user)
+
     # Validate CRM exists and belongs to user
     crm = db.query(CRM).filter(CRM.id == body.crm_id, CRM.user_id == user.id).first()
     if not crm:
@@ -926,6 +932,10 @@ def resume_campaign(
             detail=f"Cannot resume a campaign with status '{campaign.status}'.",
         )
 
+    # Resuming brings the campaign back to running → enforce active cap
+    from app.utils.limits import enforce_campaign_limit
+    enforce_campaign_limit(db, _user)
+
     campaign.status = "running"
     db.commit()
     db.refresh(campaign)
@@ -1015,6 +1025,9 @@ def duplicate_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Create a copy of the campaign with status 'pending'."""
+    from app.utils.limits import enforce_campaign_limit
+    enforce_campaign_limit(db, _user)
+
     original = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not original:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")

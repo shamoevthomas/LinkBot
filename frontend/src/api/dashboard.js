@@ -4,3 +4,4 @@ export const getDashboardStats = () => client.get('/dashboard/stats').then((r) =
 export const getNotifications = () => client.get('/dashboard/notifications').then((r) => r.data);
 export const getLinkedInProfile = () => client.get('/dashboard/linkedin-profile').then((r) => r.data);
 export const getRateLimitStatus = () => client.get('/dashboard/rate-limit-status').then((r) => r.data);
+export const getQuotaStatus = () => client.get('/dashboard/quota-status').then((r) => r.data);

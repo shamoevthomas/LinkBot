@@ -181,6 +181,12 @@ export default function LeadMagnetsPage() {
   const load = () => getLeadMagnets().then(setItems).catch(() => toast.error('Erreur de chargement')).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
+  const [quota, setQuota] = useState(null);
+  const refreshQuota = () => {
+    import('../api/dashboard').then(({ getQuotaStatus }) => getQuotaStatus().then(setQuota).catch(() => {}));
+  };
+  useEffect(() => { refreshQuota(); }, []);
+
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleCreate = async (e) => {
@@ -196,6 +202,7 @@ export default function LeadMagnetsPage() {
       setShowCreate(false);
       setForm({ ...DEFAULT_FORM });
       load();
+      refreshQuota();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
     } finally {
@@ -236,9 +243,23 @@ export default function LeadMagnetsPage() {
             Détectez les commentaires déclencheurs et envoyez automatiquement vos ressources.
           </p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="cta-btn">
-          <Plus size={14} /> Nouveau
-        </button>
+        <div className="flex items-center gap-3">
+          {quota && !quota.unlimited && (
+            <span className="mono text-[12px]" style={{
+              color: quota.lead_magnets_used >= quota.lead_magnets_limit ? 'hsl(var(--rose))' : 'hsl(var(--muted))',
+              fontWeight: 500,
+            }}
+            title={`${quota.lead_magnets_used} / ${quota.lead_magnets_limit} lead magnets actifs (limite beta)`}>
+              {quota.lead_magnets_used}/{quota.lead_magnets_limit} actifs
+            </span>
+          )}
+          <button
+            onClick={() => setShowCreate(true)}
+            disabled={quota && !quota.unlimited && quota.lead_magnets_used >= quota.lead_magnets_limit}
+            className="cta-btn">
+            <Plus size={14} /> Nouveau
+          </button>
+        </div>
       </div>
 
       {/* KPI strip */}

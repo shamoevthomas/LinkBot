@@ -264,12 +264,18 @@ export default function CampaignsPage() {
   const [form, setForm] = useState({ name: '', crm_id: '', source_crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
+  const [quota, setQuota] = useState(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   useEffect(() => {
     client.get('/ai/status').then((r) => setAiAvailable(r.data.available)).catch(() => {});
   }, []);
+
+  const refreshQuota = () => {
+    import('../api/dashboard').then(({ getQuotaStatus }) => getQuotaStatus().then(setQuota).catch(() => {}));
+  };
+  useEffect(() => { refreshQuota(); }, []);
 
   const { data: campaigns = [], isFetching } = useQuery({
     queryKey: ['campaigns', { type: typeFilter !== 'all' ? typeFilter : undefined }],
@@ -347,6 +353,7 @@ export default function CampaignsPage() {
       toast.success('Campagne créée et lancée');
       setShowNew(null);
       invalidate();
+      refreshQuota();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
     } finally { setCreating(false); }
@@ -377,10 +384,23 @@ export default function CampaignsPage() {
             <span className="mono" style={{ fontWeight: 500 }}>{counts.completed}</span> terminée{counts.completed > 1 ? 's' : ''}
           </p>
         </div>
-        <div className="relative">
-          <button onClick={() => setShowDropdown(!showDropdown)} className="cta-btn">
-            <Plus size={14} /> Nouvelle campagne <ChevronDown size={14} />
-          </button>
+        <div className="flex items-center gap-3">
+          {quota && !quota.unlimited && (
+            <span className="mono text-[12px]" style={{
+              color: quota.campaigns_used >= quota.campaigns_limit ? 'hsl(var(--rose))' : 'hsl(var(--muted))',
+              fontWeight: 500,
+            }}
+            title={`${quota.campaigns_used} / ${quota.campaigns_limit} campagnes actives (limite beta)`}>
+              {quota.campaigns_used}/{quota.campaigns_limit} actives
+            </span>
+          )}
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              disabled={quota && !quota.unlimited && quota.campaigns_used >= quota.campaigns_limit}
+              className="cta-btn">
+              <Plus size={14} /> Nouvelle campagne <ChevronDown size={14} />
+            </button>
           {showDropdown && (
             <div className="absolute right-0 mt-2 w-56 py-1 z-10"
               style={{
@@ -409,6 +429,7 @@ export default function CampaignsPage() {
               })}
             </div>
           )}
+          </div>
         </div>
       </div>
 

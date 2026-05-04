@@ -561,6 +561,13 @@ def get_rate_limit_status(db: Session = Depends(get_db), user: User = Depends(ge
     return get_status(db, user.id)
 
 
+@router.get("/quota-status")
+def get_quota_status_endpoint(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Return active campaign / lead magnet usage vs the beta cap."""
+    from app.utils.limits import get_quota_status
+    return get_quota_status(db, user)
+
+
 @router.get("/notifications")
 def get_notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     cutoff = datetime.utcnow() - timedelta(hours=24)
