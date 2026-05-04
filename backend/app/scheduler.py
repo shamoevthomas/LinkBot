@@ -27,6 +27,10 @@ SYNC_CONNECTIONS_INTERVAL = 6 * 3600  # 6 hours
 _last_reply_check: Optional[datetime] = None
 REPLY_CHECK_INTERVAL = 300  # 5 minutes
 
+# Profile picture enrichment (runs every 15 minutes, slow drip)
+_last_enrich_pictures: Optional[datetime] = None
+ENRICH_PICTURES_INTERVAL = 15 * 60  # 15 minutes
+
 
 # ---------------------------------------------------------------------------
 # Campaign job runner
@@ -82,6 +86,17 @@ async def _run_reply_checks():
         logger.exception("Error in reply checker")
 
 
+async def _run_enrich_pictures():
+    """Backfill missing profile pictures (slow drip)."""
+    global _last_enrich_pictures
+    try:
+        from app.jobs.enrich_pictures import run_enrich_pictures
+        await run_enrich_pictures()
+        _last_enrich_pictures = datetime.utcnow()
+    except Exception:
+        logger.exception("Error in enrich pictures")
+
+
 # ---------------------------------------------------------------------------
 # Main background loop
 # ---------------------------------------------------------------------------
@@ -100,29 +115,35 @@ async def _main_loop():
                     (now - _last_reply_check).total_seconds() >= REPLY_CHECK_INTERVAL):
                 await _run_reply_checks()
 
+            # Backfill missing profile pictures (every 15 minutes, slow drip)
+            if (_last_enrich_pictures is None or
+                    (now - _last_enrich_pictures).total_seconds() >= ENRICH_PICTURES_INTERVAL):
+                await _run_enrich_pictures()
+
             # Check each registered campaign
             for cid, info in list(_campaigns.items()):
                 if info.get("paused"):
                     continue
                 if now >= info["next_run"]:
-                    # Skip if family is in rate-limit cooldown (lead magnets exempt)
+                    # Skip if THIS user's family is in rate-limit cooldown (lead magnets exempt)
+                    owner_uid = info.get("user_id")
                     from app.database import SessionLocal
                     from app.utils.rate_limit_cooldown import is_campaign_blocked
                     db = SessionLocal()
                     try:
-                        blocked_family = is_campaign_blocked(db, info["type"])
+                        blocked_family = is_campaign_blocked(db, info["type"], owner_uid)
                     finally:
                         db.close()
                     if blocked_family:
                         print(
-                            f"[SCHEDULER] Skipping {cid} ({info['type']}): {blocked_family} cooldown active",
+                            f"[SCHEDULER] Skipping {cid} ({info['type']}, user={owner_uid}): {blocked_family} cooldown active",
                             flush=True,
                         )
                         info["last_run"] = datetime.utcnow()
                         info["next_run"] = info["last_run"] + timedelta(seconds=300)
                         continue
 
-                    print(f"[SCHEDULER] Firing campaign {cid} ({info['type']})", flush=True)
+                    print(f"[SCHEDULER] Firing campaign {cid} ({info['type']}, user={owner_uid})", flush=True)
                     try:
                         # For lead magnets, extract numeric ID from "lm_5" key
                         tick_id = int(str(cid).replace("lm_", "")) if info["type"] == "lead_magnet" else cid
@@ -132,10 +153,10 @@ async def _main_loop():
 
                     # Dynamic interval: recalculate based on remaining quota & time
                     # Lead magnets use their own fixed check interval
-                    if info["type"] == "lead_magnet":
+                    if info["type"] == "lead_magnet" or owner_uid is None:
                         dynamic_secs = info["interval"]
                     else:
-                        dynamic_secs = _compute_dynamic_interval(info["type"])
+                        dynamic_secs = _compute_dynamic_interval(info["type"], owner_uid)
                     info["last_run"] = datetime.utcnow()
                     info["next_run"] = info["last_run"] + timedelta(seconds=dynamic_secs)
                     print(
@@ -182,21 +203,19 @@ def shutdown_scheduler():
 # Interval calculation
 # ---------------------------------------------------------------------------
 
-def _get_schedule_interval(max_per_day: int) -> int | None:
-    """If schedule is enabled, compute interval from the time window and daily limit."""
+def _get_schedule_interval(max_per_day: int, user_id: int) -> int | None:
+    """If the user's schedule is enabled, compute interval from window and daily limit."""
     from app.database import SessionLocal
-    from app.models import AppSettings
+    from app.utils.settings import get_setting
 
     db = SessionLocal()
     try:
-        enabled = db.query(AppSettings).filter(AppSettings.key == "schedule_enabled").first()
-        if not enabled or enabled.value.lower() != "true":
+        enabled = get_setting(db, user_id, "schedule_enabled", "false")
+        if not enabled or str(enabled).lower() != "true":
             return None
 
-        start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
-        end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
-        start_val = start_row.value if start_row and start_row.value else "08:00"
-        end_val = end_row.value if end_row and end_row.value else "20:00"
+        start_val = get_setting(db, user_id, "schedule_start_hour", "08:00") or "08:00"
+        end_val = get_setting(db, user_id, "schedule_end_hour", "20:00") or "20:00"
 
         start_h, start_m = map(int, start_val.split(":"))
         end_h, end_m = map(int, end_val.split(":"))
@@ -219,8 +238,8 @@ def _get_schedule_interval(max_per_day: int) -> int | None:
         db.close()
 
 
-def _compute_dynamic_interval(campaign_type: str) -> int:
-    """Compute next tick interval so daily limit is always reached.
+def _compute_dynamic_interval(campaign_type: str, user_id: int) -> int:
+    """Compute next tick interval so the user's daily limit is reached.
 
     Formula: remaining_time_in_window / remaining_actions
     If schedule is disabled, distributes over remaining hours until midnight.
@@ -229,7 +248,7 @@ def _compute_dynamic_interval(campaign_type: str) -> int:
     from datetime import datetime as _dt, timezone as _tz
     from zoneinfo import ZoneInfo
     from app.database import SessionLocal
-    from app.models import AppSettings
+    from app.utils.settings import get_setting
 
     db = SessionLocal()
     try:
@@ -241,21 +260,19 @@ def _compute_dynamic_interval(campaign_type: str) -> int:
             limit_key = "max_connections_per_day"
             action_types = ["connection_request"]
 
-        row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
-        raw_limit = int(row.value) if row else 25
-        daily_limit = get_effective_daily_limit(raw_limit, db)
+        raw_limit = int(get_setting(db, user_id, limit_key, "25") or "25")
+        daily_limit = get_effective_daily_limit(raw_limit, user_id, db)
 
-        # 2. How many successful actions done today
-        done_today = get_global_actions_today(action_types, db)
+        # 2. How many successful actions done today (this user)
+        done_today = get_user_actions_today(action_types, user_id, db)
         remaining = daily_limit - done_today
 
         if remaining <= 0:
-            print(f"[SCHEDULER] Dynamic interval: limit reached ({done_today}/{daily_limit}), sleeping 1h", flush=True)
+            print(f"[SCHEDULER] Dynamic interval (user {user_id}): limit reached ({done_today}/{daily_limit}), sleeping 1h", flush=True)
             return 3600
 
         # 3. Remaining time in schedule window (or until midnight)
-        tz_row = db.query(AppSettings).filter(AppSettings.key == "schedule_timezone").first()
-        tz_name = tz_row.value if tz_row and tz_row.value else "Europe/Paris"
+        tz_name = get_setting(db, user_id, "schedule_timezone", "Europe/Paris") or "Europe/Paris"
         try:
             tz = ZoneInfo(tz_name)
         except Exception:
@@ -263,22 +280,18 @@ def _compute_dynamic_interval(campaign_type: str) -> int:
 
         now_local = _dt.now(_tz.utc).astimezone(tz)
 
-        enabled_row = db.query(AppSettings).filter(AppSettings.key == "schedule_enabled").first()
-        schedule_on = enabled_row and enabled_row.value.lower() == "true"
+        schedule_on = (get_setting(db, user_id, "schedule_enabled", "false") or "false").lower() == "true"
 
         if not schedule_on:
             # Schedule disabled — use manual interval settings (user controls timing)
-            min_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_min").first()
-            max_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_max").first()
-            interval_min = int(min_row.value) * 60 if min_row and min_row.value else 120
-            interval_max = int(max_row.value) * 60 if max_row and max_row.value else 300
-            if interval_max < interval_min:
-                interval_max = interval_min
-            return random.randint(interval_min, interval_max)
+            interval_min_v = int(get_setting(db, user_id, "action_interval_min", "2") or "2") * 60
+            interval_max_v = int(get_setting(db, user_id, "action_interval_max", "5") or "5") * 60
+            if interval_max_v < interval_min_v:
+                interval_max_v = interval_min_v
+            return random.randint(interval_min_v, interval_max_v)
 
         # Schedule enabled — dynamic: remaining_time / remaining_actions
-        end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
-        end_val = end_row.value if end_row and end_row.value else "20:00"
+        end_val = get_setting(db, user_id, "schedule_end_hour", "20:00") or "20:00"
         end_h, end_m = map(int, end_val.split(":"))
         end_today = now_local.replace(hour=end_h, minute=end_m, second=0, microsecond=0)
 
@@ -323,7 +336,8 @@ def schedule_campaign_job(
     campaign_id can be int (campaigns) or str like "lm_5" (lead magnets).
     """
     from app.database import SessionLocal
-    from app.models import AppSettings
+    from app.models import LeadMagnet, Campaign
+    from app.utils.settings import get_setting
 
     # Remove existing entry
     _campaigns.pop(campaign_id, None)
@@ -331,30 +345,28 @@ def schedule_campaign_job(
     # Determine interval
     db = SessionLocal()
     try:
+        # Resolve owner user_id (needed for per-user settings + cooldown checks)
         if campaign_type == "lead_magnet":
-            # Lead magnets use their own check interval from the model
-            from app.models import LeadMagnet
-            # Extract numeric ID from "lm_5" key
             lm_id = int(str(campaign_id).replace("lm_", ""))
             lm = db.query(LeadMagnet).filter(LeadMagnet.id == lm_id).first()
+            owner_user_id = lm.user_id if lm else None
             interval = lm.check_interval_seconds if lm else 300
             jitter = 0  # Fixed interval, no jitter
         else:
-            limit_key = "max_dms_per_day" if campaign_type in ("dm", "connection_dm", "search_connection_dm") else "max_connections_per_day"
-            row = db.query(AppSettings).filter(AppSettings.key == limit_key).first()
-            daily_limit = int(row.value) if row else 25
+            c = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+            owner_user_id = c.user_id if c else None
 
-            schedule_interval = _get_schedule_interval(daily_limit)
+            limit_key = "max_dms_per_day" if campaign_type in ("dm", "connection_dm", "search_connection_dm") else "max_connections_per_day"
+            daily_limit = int(get_setting(db, owner_user_id, limit_key, "25") or "25")
+
+            schedule_interval = _get_schedule_interval(daily_limit, owner_user_id) if owner_user_id else None
 
             if schedule_interval:
                 interval = schedule_interval
                 jitter = max(15, int(interval * 0.5))
             else:
-                # Use user-configured interval range (in minutes)
-                min_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_min").first()
-                max_row = db.query(AppSettings).filter(AppSettings.key == "action_interval_max").first()
-                interval_min = int(min_row.value) * 60 if min_row and min_row.value else 120  # 2 min default
-                interval_max = int(max_row.value) * 60 if max_row and max_row.value else 300  # 5 min default
+                interval_min = int(get_setting(db, owner_user_id, "action_interval_min", "2") or "2") * 60
+                interval_max = int(get_setting(db, owner_user_id, "action_interval_max", "5") or "5") * 60
                 if interval_max < interval_min:
                     interval_max = interval_min
                 interval = interval_min
@@ -368,6 +380,7 @@ def schedule_campaign_job(
 
     _campaigns[campaign_id] = {
         "type": campaign_type,
+        "user_id": owner_user_id,
         "interval": interval,
         "jitter": jitter,
         "last_run": None,
@@ -376,7 +389,7 @@ def schedule_campaign_job(
     }
 
     print(
-        f"[SCHEDULER] Registered campaign {campaign_id} ({campaign_type}) "
+        f"[SCHEDULER] Registered campaign {campaign_id} ({campaign_type}, user={owner_user_id}) "
         f"every {interval}s (jitter {jitter}s), first run in {first_delay}s",
         flush=True,
     )
@@ -425,29 +438,27 @@ def get_campaign_next_run_time(campaign_id):
 # Schedule window helpers
 # ---------------------------------------------------------------------------
 
-def is_within_schedule(db_session=None) -> bool:
-    """Check if the current time is within the configured schedule window.
+def is_within_schedule(user_id: int, db_session=None) -> bool:
+    """Check if the current time is within the user's configured schedule window.
 
-    Returns True (allowed) if schedule is disabled or not configured.
-    Uses the configured timezone (defaults to Europe/Paris).
+    Returns True (allowed) if schedule is disabled, not configured, or user_id is None.
+    Uses the user's configured timezone (defaults to Europe/Paris).
     """
     from datetime import datetime as _dt, timezone as _tz
     from zoneinfo import ZoneInfo
     from app.database import SessionLocal
-    from app.models import AppSettings
+    from app.utils.settings import get_setting
 
+    if user_id is None:
+        return True
     db = db_session or SessionLocal()
     try:
-        enabled_row = db.query(AppSettings).filter(AppSettings.key == "schedule_enabled").first()
-        if not enabled_row or enabled_row.value.lower() != "true":
+        enabled = (get_setting(db, user_id, "schedule_enabled", "false") or "false").lower()
+        if enabled != "true":
             return True
 
-        start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
-        end_row = db.query(AppSettings).filter(AppSettings.key == "schedule_end_hour").first()
-
-        # Default to 08:00-20:00 when schedule is enabled but hours not configured
-        start_val = start_row.value if start_row and start_row.value else "08:00"
-        end_val = end_row.value if end_row and end_row.value else "20:00"
+        start_val = get_setting(db, user_id, "schedule_start_hour", "08:00") or "08:00"
+        end_val = get_setting(db, user_id, "schedule_end_hour", "20:00") or "20:00"
 
         try:
             start_h, start_m = map(int, start_val.split(":"))
@@ -455,9 +466,7 @@ def is_within_schedule(db_session=None) -> bool:
         except (ValueError, AttributeError):
             return True
 
-        # Use configured timezone
-        tz_row = db.query(AppSettings).filter(AppSettings.key == "schedule_timezone").first()
-        tz_name = tz_row.value if tz_row and tz_row.value else "Europe/Paris"
+        tz_name = get_setting(db, user_id, "schedule_timezone", "Europe/Paris") or "Europe/Paris"
         try:
             tz = ZoneInfo(tz_name)
         except Exception:
@@ -477,43 +486,35 @@ def is_within_schedule(db_session=None) -> bool:
             db.close()
 
 
-def get_next_schedule_start(db_session=None):
-    """Return the next schedule window start as a timezone-aware UTC datetime.
-
-    If the schedule start is later today, return today at start time.
-    If we're past the window (or in an overnight gap), return tomorrow at start time.
-    """
+def get_next_schedule_start(user_id: int, db_session=None):
+    """Return the next schedule window start (UTC) for a given user."""
     from datetime import datetime as _dt, timedelta, timezone as _tz
     from zoneinfo import ZoneInfo
     from app.database import SessionLocal
-    from app.models import AppSettings
+    from app.utils.settings import get_setting
 
+    if user_id is None:
+        return None
     db = db_session or SessionLocal()
     try:
-        start_row = db.query(AppSettings).filter(AppSettings.key == "schedule_start_hour").first()
-        start_val = start_row.value if start_row and start_row.value else "08:00"
-
+        start_val = get_setting(db, user_id, "schedule_start_hour", "08:00") or "08:00"
         try:
             start_h, start_m = map(int, start_val.split(":"))
         except (ValueError, AttributeError):
             return None
 
-        tz_row = db.query(AppSettings).filter(AppSettings.key == "schedule_timezone").first()
-        tz_name = tz_row.value if tz_row and tz_row.value else "Europe/Paris"
+        tz_name = get_setting(db, user_id, "schedule_timezone", "Europe/Paris") or "Europe/Paris"
         try:
             tz = ZoneInfo(tz_name)
         except Exception:
             tz = ZoneInfo("Europe/Paris")
 
         now = _dt.now(_tz.utc).astimezone(tz)
-        # Build today's start time in the configured timezone
         today_start = now.replace(hour=start_h, minute=start_m, second=0, microsecond=0)
 
         if now < today_start:
-            # Start is later today
             return today_start.astimezone(_tz.utc)
         else:
-            # Start is tomorrow
             return (today_start + timedelta(days=1)).astimezone(_tz.utc)
     except Exception:
         return None
@@ -522,21 +523,28 @@ def get_next_schedule_start(db_session=None):
             db.close()
 
 
-def get_global_actions_today(action_types: list, db_session=None) -> int:
-    """Count today's successful actions across ALL campaigns."""
+def get_user_actions_today(action_types: list, user_id: int, db_session=None) -> int:
+    """Count today's successful actions for ONE user (joined via campaign.user_id)."""
     from datetime import datetime as _dt, date as _date
     from sqlalchemy import func
     from app.database import SessionLocal
-    from app.models import CampaignAction
+    from app.models import CampaignAction, Campaign
 
     db = db_session or SessionLocal()
     try:
         today_start = _dt.combine(_date.today(), _dt.min.time())
-        count = db.query(func.count(CampaignAction.id)).filter(
-            CampaignAction.action_type.in_(action_types),
-            CampaignAction.status == "success",
-            CampaignAction.created_at >= today_start,
-        ).scalar() or 0
+        count = (
+            db.query(func.count(CampaignAction.id))
+            .join(Campaign, CampaignAction.campaign_id == Campaign.id)
+            .filter(
+                CampaignAction.action_type.in_(action_types),
+                CampaignAction.status == "success",
+                CampaignAction.created_at >= today_start,
+                Campaign.user_id == user_id,
+            )
+            .scalar()
+            or 0
+        )
         return count
     except Exception:
         return 0
@@ -545,42 +553,41 @@ def get_global_actions_today(action_types: list, db_session=None) -> int:
             db.close()
 
 
+# Backwards-compat shim: kept for any caller that hasn't migrated yet.
+# Returns 0 if no user_id is given (behaviour change is intentional — global counts
+# leak across users in multi-tenant; we now require an explicit user scope).
+def get_global_actions_today(action_types: list, db_session=None) -> int:
+    return 0
+
+
 WARMUP_MAX_DAYS = 6
 
 
-def get_effective_daily_limit(base_limit: int, db_session=None) -> int:
-    """Apply warmup curve to the base daily limit if warmup is enabled.
-
-    Target is always the user's configured daily limit (base_limit). The warmup
-    duration is clamped to WARMUP_MAX_DAYS so the target is reached within 6 days.
-    """
+def get_effective_daily_limit(base_limit: int, user_id: int, db_session=None) -> int:
+    """Apply the user's warmup curve to the base daily limit if warmup is enabled."""
     from datetime import date as _date
     from app.database import SessionLocal
-    from app.models import AppSettings
+    from app.utils.settings import get_setting
 
+    if user_id is None:
+        return base_limit
     db = db_session or SessionLocal()
     try:
-        enabled_row = db.query(AppSettings).filter(AppSettings.key == "warmup_enabled").first()
-        if not enabled_row or enabled_row.value.lower() != "true":
+        enabled = (get_setting(db, user_id, "warmup_enabled", "false") or "false").lower()
+        if enabled != "true":
             return base_limit
 
-        start_row = db.query(AppSettings).filter(AppSettings.key == "warmup_start_limit").first()
-        days_row = db.query(AppSettings).filter(AppSettings.key == "warmup_days").first()
-        started_row = db.query(AppSettings).filter(AppSettings.key == "warmup_started_at").first()
-
-        start_limit = int(start_row.value) if start_row else 5
-        warmup_days = int(days_row.value) if days_row else WARMUP_MAX_DAYS
+        start_limit = int(get_setting(db, user_id, "warmup_start_limit", "5") or "5")
+        warmup_days = int(get_setting(db, user_id, "warmup_days", str(WARMUP_MAX_DAYS)) or WARMUP_MAX_DAYS)
         warmup_days = max(1, min(warmup_days, WARMUP_MAX_DAYS))
+        started_at_str = get_setting(db, user_id, "warmup_started_at", "")
 
-        # Target is the user's daily limit — no separate target setting.
-        # Clamp start below target so the curve is monotonic non-decreasing.
         if start_limit >= base_limit:
             return base_limit
-
-        if not started_row or not started_row.value:
+        if not started_at_str:
             return base_limit
 
-        started_at = _date.fromisoformat(started_row.value)
+        started_at = _date.fromisoformat(started_at_str)
         elapsed = (_date.today() - started_at).days
 
         if elapsed >= warmup_days:

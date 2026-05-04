@@ -17,7 +17,7 @@ from app.models import Campaign, CampaignAction, CampaignContact, Contact, AppSe
 from app.linkedin_service import get_linkedin_client, send_connection_request, resolve_contact_urn
 from app.utils.template_engine import render_template
 from app.utils.ai_message import generate_personalized_message
-from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
+from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_user_actions_today
 
 logger = logging.getLogger(__name__)
 
@@ -36,18 +36,19 @@ async def run_connection_campaign(campaign_id: int) -> None:
         if campaign.status != "running":
             return
 
-        # --- schedule window ---
-        if not is_within_schedule(db):
+        # --- schedule window (per-user) ---
+        if not is_within_schedule(campaign.user_id, db):
             return
 
-        # --- global daily limit check ---
-        row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
-        raw_limit = int(row.value) if row else 25
-        max_per_day = get_effective_daily_limit(raw_limit, db)
+        # --- per-user daily limit check ---
+        from app.utils.settings import get_setting
+        from app.scheduler import get_user_actions_today
+        raw_limit = int(get_setting(db, campaign.user_id, "max_connections_per_day", "25") or "25")
+        max_per_day = get_effective_daily_limit(raw_limit, campaign.user_id, db)
 
-        global_today = get_global_actions_today(["connection_request"], db)
-        if global_today >= max_per_day:
-            logger.info("Global connection limit reached (%d/%d), skipping campaign %d", global_today, max_per_day, campaign_id)
+        user_today = get_user_actions_today(["connection_request"], campaign.user_id, db)
+        if user_today >= max_per_day:
+            logger.info("User %s connection limit reached (%d/%d), skipping campaign %d", campaign.user_id, user_today, max_per_day, campaign_id)
             return
 
         # --- total target check ---
@@ -79,10 +80,10 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 logger.warning("Campaign %d: hit max_iter=%d, breaking to yield event loop", campaign_id, max_iter)
                 break
 
-            # Check daily limit each iteration
-            global_today = get_global_actions_today(["connection_request"], db)
-            if global_today >= max_per_day:
-                logger.info("Global connection limit reached (%d/%d), stopping campaign %d", global_today, max_per_day, campaign_id)
+            # Check daily limit each iteration (per-user)
+            user_today = get_user_actions_today(["connection_request"], campaign.user_id, db)
+            if user_today >= max_per_day:
+                logger.info("User %s connection limit reached (%d/%d), stopping campaign %d", campaign.user_id, user_today, max_per_day, campaign_id)
                 break
 
             # Check total target
@@ -185,11 +186,11 @@ async def run_connection_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign.id, contact.id, "connection_request", "failed", err_text[:500])
                 if is_rate_limited:
                     from app.utils.rate_limit_cooldown import trigger_connections_cooldown
-                    until = trigger_connections_cooldown(db)
+                    until = trigger_connections_cooldown(db, campaign.user_id)
                     db.commit()
                     logger.warning(
-                        "Campaign %d: LinkedIn FUSE_LIMIT_EXCEEDED on contact %d, connections cooldown until %s",
-                        campaign_id, contact.id, until.isoformat(),
+                        "Campaign %d (user %s): LinkedIn FUSE_LIMIT_EXCEEDED on contact %d, connections cooldown until %s",
+                        campaign_id, campaign.user_id, contact.id, until.isoformat(),
                     )
                     break
                 logger.exception(

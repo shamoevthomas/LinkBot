@@ -67,6 +67,21 @@ async def run_lead_magnet_tick(lead_magnet_id: int) -> None:
         if lm.status != "running":
             return
 
+        # Auto-stop watching after N days from started_at.
+        if lm.watch_duration_days and lm.started_at:
+            from datetime import timedelta
+            expires_at = lm.started_at + timedelta(days=lm.watch_duration_days)
+            if datetime.utcnow() >= expires_at:
+                lm.status = "completed"
+                db.commit()
+                cancel_campaign_job(_lm_key(lead_magnet_id))
+                print(
+                    f"[LEAD MAGNET] #{lead_magnet_id}: watch duration "
+                    f"({lm.watch_duration_days}d) reached, stopped",
+                    flush=True,
+                )
+                return
+
         user = db.query(User).filter(User.id == lm.user_id).first()
         if not user or not user.li_at_cookie or not user.cookies_valid:
             lm.status = "failed"

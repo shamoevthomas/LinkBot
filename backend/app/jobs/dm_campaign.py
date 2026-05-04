@@ -29,7 +29,7 @@ from app.utils.ai_message import (
     generate_compliment, generate_full_personalized_messages, extract_post_texts,
 )
 from sqlalchemy.exc import IntegrityError
-from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
+from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_user_actions_today
 from app.routers.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -50,17 +50,17 @@ async def run_dm_campaign(campaign_id: int) -> None:
         if campaign.status != "running":
             return
 
-        # --- schedule window ---
-        if not is_within_schedule(db):
+        # --- schedule window (per-user) ---
+        if not is_within_schedule(campaign.user_id, db):
             return
 
-        # --- global daily limit ---
-        row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
-        raw_limit = int(row.value) if row else 50
-        max_per_day = get_effective_daily_limit(raw_limit, db)
+        # --- per-user daily limit ---
+        from app.utils.settings import get_setting
+        raw_limit = int(get_setting(db, campaign.user_id, "max_dms_per_day", "50") or "50")
+        max_per_day = get_effective_daily_limit(raw_limit, campaign.user_id, db)
 
         dm_action_types = ["dm_send"]
-        global_today = get_global_actions_today(dm_action_types, db)
+        global_today = get_user_actions_today(dm_action_types, campaign.user_id, db)
 
         # --- get LinkedIn client (from campaign owner) ---
         user = db.query(User).filter(User.id == campaign.user_id).first()
@@ -130,7 +130,7 @@ async def run_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         _consecutive_ai_failures = 0
         _ai_skipped_ids = set()  # contacts skipped due to AI failure (retry next tick)
-        while get_global_actions_today(dm_action_types, db) < max_per_day:
+        while get_user_actions_today(dm_action_types, campaign.user_id, db) < max_per_day:
             total_sent = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
             ).count()
@@ -310,11 +310,11 @@ async def run_dm_campaign(campaign_id: int) -> None:
 
                 if _rate_limited:
                     from app.utils.rate_limit_cooldown import trigger_dms_cooldown
-                    until = trigger_dms_cooldown(db)
+                    until = trigger_dms_cooldown(db, campaign.user_id)
                     _log_action(db, campaign_id, contact.id, "dm_send", "failed", "FUSE_LIMIT_EXCEEDED — DMs cooldown 15h")
                     db.commit()
                     print(
-                        f"[DM JOB] Campaign {campaign_id}: 429 on contact {contact.id}, DMs cooldown until {until.isoformat()}",
+                        f"[DM JOB] Campaign {campaign_id} (user {campaign.user_id}): 429 on contact {contact.id}, DMs cooldown until {until.isoformat()}",
                         flush=True,
                     )
                     return

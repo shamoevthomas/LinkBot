@@ -190,7 +190,11 @@ class ImportJob(Base):
 class AppSettings(Base):
     __tablename__ = "app_settings"
 
-    key = Column(String, primary_key=True)
+    # Per-user settings: user_id=NULL is the global default fallback.
+    # The composite UNIQUE (user_id, key) NULLS NOT DISTINCT is enforced in DB.
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=True)
+    key = Column(String, nullable=False)
     value = Column(Text, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -238,6 +242,8 @@ class LeadMagnet(Base):
     keyword = Column(String, nullable=False)
     check_interval_seconds = Column(Integer, default=300)
     action_interval_seconds = Column(Integer, default=60)
+    # Auto-stop watching the post after N days from started_at. NULL = no expiry.
+    watch_duration_days = Column(Integer, nullable=True)
     dm_template = Column(Text, nullable=False)
     reply_template_connected = Column(Text)
     reply_template_not_connected = Column(Text)

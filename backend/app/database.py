@@ -94,6 +94,17 @@ def _run_migrations():
         except Exception:
             pass  # table may not exist on very fresh installs; create_all will handle it
 
+        # Auto-stop a lead magnet after N days from started_at. NULL = no expiry.
+        try:
+            lm_columns = [c["name"] for c in inspector.get_columns("lead_magnet")]
+            if "watch_duration_days" not in lm_columns:
+                conn.execute(text(
+                    'ALTER TABLE "lead_magnet" ADD COLUMN watch_duration_days INTEGER'
+                ))
+                print("[MIGRATION] Added watch_duration_days to lead_magnet", flush=True)
+        except Exception:
+            pass
+
         # Add cached LinkedIn picture + cached_at to user so the dashboard
         # header doesn't have to round-trip to LinkedIn on every load.
         user_columns = [c["name"] for c in inspector.get_columns("user")]

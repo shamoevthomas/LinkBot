@@ -66,20 +66,19 @@ def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
 _EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0, "demande_envoyee": 0, "failed_no_send": 0}
 
 
-def _compute_limit_info(db: Session) -> dict:
-    """Pre-compute schedule/limit info (same for all campaigns in a single request)."""
-    from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit, get_next_schedule_start
+def _compute_limit_info(db: Session, user_id: int) -> dict:
+    """Pre-compute schedule/limit info for one user (same for all that user's campaigns)."""
+    from app.scheduler import is_within_schedule, get_user_actions_today, get_effective_daily_limit, get_next_schedule_start
+    from app.utils.settings import get_user_settings_dict
 
-    settings = {s.key: s.value for s in db.query(AppSettings).filter(
-        AppSettings.key.in_(["max_dms_per_day", "max_connections_per_day"])
-    ).all()}
+    settings = get_user_settings_dict(db, user_id, keys=["max_dms_per_day", "max_connections_per_day"])
 
-    within_schedule = is_within_schedule(db)
-    dm_limit = get_effective_daily_limit(int(settings.get("max_dms_per_day", 50)), db)
-    dm_used = get_global_actions_today(["dm_send"], db)
-    conn_limit = get_effective_daily_limit(int(settings.get("max_connections_per_day", 25)), db)
-    conn_used = get_global_actions_today(["connection_request"], db)
-    next_schedule_start = get_next_schedule_start(db) if not within_schedule else None
+    within_schedule = is_within_schedule(user_id, db)
+    dm_limit = get_effective_daily_limit(int(settings.get("max_dms_per_day", 50)), user_id, db)
+    dm_used = get_user_actions_today(["dm_send"], user_id, db)
+    conn_limit = get_effective_daily_limit(int(settings.get("max_connections_per_day", 25)), user_id, db)
+    conn_used = get_user_actions_today(["connection_request"], user_id, db)
+    next_schedule_start = get_next_schedule_start(user_id, db) if not within_schedule else None
 
     return {
         "within_schedule": within_schedule,
@@ -118,8 +117,8 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
     next_action_at = None
     paused_reason = None
     if c.status == "running":
-        if limit_info is None and db:
-            limit_info = _compute_limit_info(db)
+        if limit_info is None and db and c.user_id is not None:
+            limit_info = _compute_limit_info(db, c.user_id)
 
         nrt = get_campaign_next_run_time(c.id)
         if nrt:
@@ -199,7 +198,7 @@ def list_campaigns(
         return []
     # Batch: 1 query for all stats + 1 query for settings/limits
     all_stats = _batch_campaign_stats([c.id for c in campaigns], db)
-    limit_info = _compute_limit_info(db)
+    limit_info = _compute_limit_info(db, _user.id)
     return [_campaign_to_response(c, db, stats=all_stats.get(c.id, _EMPTY_STATS), limit_info=limit_info) for c in campaigns]
 
 
@@ -700,7 +699,8 @@ def diagnose_campaign(
     _user: User = Depends(get_current_user),
 ):
     """Return diagnostic info about why a campaign may not be making progress."""
-    from app.scheduler import is_within_schedule, get_global_actions_today, get_effective_daily_limit, _campaigns
+    from app.scheduler import is_within_schedule, get_user_actions_today, get_effective_daily_limit, _campaigns
+    from app.utils.settings import get_setting
 
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
@@ -725,20 +725,20 @@ def diagnose_campaign(
         issues.append("Les cookies LinkedIn sont invalides/expires")
 
     # 3. Check schedule window
-    if not is_within_schedule(db):
+    if not is_within_schedule(_user.id, db):
         issues.append("Hors de la fenetre horaire (schedule_enabled=true)")
 
     # 4. Check daily limits
     dm_types = ["dm_send"] + [f"followup_{i}" for i in range(1, 8)]
     conn_types = ["connection_request"]
 
-    dm_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
-    dm_limit = get_effective_daily_limit(int(dm_row.value) if dm_row else 50, db)
-    dm_used = get_global_actions_today(dm_types, db)
+    dm_value = get_setting(db, _user.id, "max_dms_per_day", "50")
+    dm_limit = get_effective_daily_limit(int(dm_value), _user.id, db)
+    dm_used = get_user_actions_today(dm_types, _user.id, db)
 
-    conn_row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
-    conn_limit = get_effective_daily_limit(int(conn_row.value) if conn_row else 25, db)
-    conn_used = get_global_actions_today(conn_types, db)
+    conn_value = get_setting(db, _user.id, "max_connections_per_day", "25")
+    conn_limit = get_effective_daily_limit(int(conn_value), _user.id, db)
+    conn_used = get_user_actions_today(conn_types, _user.id, db)
 
     if campaign.type in ("dm", "connection_dm", "search_connection_dm") and dm_used >= dm_limit:
         issues.append(f"Limite DM quotidienne atteinte ({dm_used}/{dm_limit})")
@@ -782,7 +782,7 @@ def diagnose_campaign(
         "job_paused": job_paused,
         "next_run_time": str(info["next_run"]) if info else None,
         "cookies_valid": bool(user and user.cookies_valid),
-        "within_schedule": is_within_schedule(db),
+        "within_schedule": is_within_schedule(_user.id, db),
         "dm_limit": f"{dm_used}/{dm_limit}",
         "conn_limit": f"{conn_used}/{conn_limit}",
         "crm_contacts": crm_contact_count,

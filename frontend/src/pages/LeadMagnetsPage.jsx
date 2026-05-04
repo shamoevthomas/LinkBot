@@ -36,12 +36,20 @@ const ACTION_INTERVALS = [
   { value: 300, label: '5 minutes' },
 ];
 
+const WATCH_DURATIONS = [
+  { value: 1,  label: '1 jour' },
+  { value: 3,  label: '3 jours' },
+  { value: 7,  label: '1 semaine' },
+  { value: 30, label: '1 mois (max)' },
+];
+
 const DEFAULT_FORM = {
   name: '',
   post_url: '',
   keyword: '',
   check_interval_seconds: 300,
   action_interval_seconds: 60,
+  watch_duration_days: 7,
   dm_template: '',
   reply_template_connected: '',
   reply_template_not_connected: '',
@@ -320,6 +328,17 @@ export default function LeadMagnetsPage() {
                 {ACTION_INTERVALS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="form-label">Durée de surveillance du post</label>
+            <select className="input-sm" value={form.watch_duration_days}
+              onChange={(e) => set('watch_duration_days', Number(e.target.value))}>
+              {WATCH_DURATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <p className="text-[11px] mt-1.5" style={{ color: 'hsl(var(--muted))' }}>
+              Le lead magnet s'arrête automatiquement après cette durée. Au-delà d'1 mois, l'engagement sur un post LinkedIn devient marginal.
+            </p>
           </div>
 
           <div style={{ height: 1, background: 'hsl(var(--border))', margin: '4px 0' }} />

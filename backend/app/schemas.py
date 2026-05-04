@@ -263,6 +263,7 @@ class LeadMagnetCreate(BaseModel):
     keyword: str
     check_interval_seconds: int = 300
     action_interval_seconds: int = 60
+    watch_duration_days: Optional[int] = None
     dm_template: str
     reply_template_connected: Optional[str] = None
     reply_template_not_connected: Optional[str] = None
@@ -274,6 +275,7 @@ class LeadMagnetUpdate(BaseModel):
     keyword: Optional[str] = None
     check_interval_seconds: Optional[int] = None
     action_interval_seconds: Optional[int] = None
+    watch_duration_days: Optional[int] = None
     dm_template: Optional[str] = None
     reply_template_connected: Optional[str] = None
     reply_template_not_connected: Optional[str] = None
@@ -287,6 +289,7 @@ class LeadMagnetResponse(BaseModel):
     keyword: str
     check_interval_seconds: int
     action_interval_seconds: int
+    watch_duration_days: Optional[int] = None
     dm_template: str
     reply_template_connected: Optional[str] = None
     reply_template_not_connected: Optional[str] = None

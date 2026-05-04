@@ -3,7 +3,7 @@ import asyncio
 import logging
 from datetime import date, datetime, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends
-from sqlalchemy import func, case
+from sqlalchemy import func, case, and_
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
 from app.models import User, CRM, Contact, Campaign, CampaignAction, CampaignContact, AppSettings, Notification
@@ -39,20 +39,18 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
 
     today = date.today()
 
-    # Quotas — load warmup-related settings in the same query
+    # Quotas — load per-user settings (with global default fallback)
     from app.scheduler import get_effective_daily_limit, WARMUP_MAX_DAYS
-    settings_rows = db.query(AppSettings).filter(
-        AppSettings.key.in_([
-            "max_connections_per_day", "max_dms_per_day",
-            "warmup_enabled", "warmup_start_limit", "warmup_days", "warmup_started_at",
-        ])
-    ).all()
-    settings = {s.key: s.value for s in settings_rows}
+    from app.utils.settings import get_user_settings_dict
+    settings = get_user_settings_dict(db, _user.id, keys=[
+        "max_connections_per_day", "max_dms_per_day",
+        "warmup_enabled", "warmup_start_limit", "warmup_days", "warmup_started_at",
+    ])
     base_conn = int(settings.get("max_connections_per_day", 25))
     base_dm = int(settings.get("max_dms_per_day", 50))
     # Effective limit = what the scheduler actually enforces right now (warmup-adjusted)
-    max_conn = get_effective_daily_limit(base_conn, db)
-    max_dm = get_effective_daily_limit(base_dm, db)
+    max_conn = get_effective_daily_limit(base_conn, _user.id, db)
+    max_dm = get_effective_daily_limit(base_dm, _user.id, db)
 
     # Warmup display metadata — only populated when warmup is active AND in progress
     warmup_info = None
@@ -158,6 +156,31 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
         accepted = int(row.accepted or 0)
         global_connection_rate = round(accepted / sent * 100, 1) if sent else 0.0
 
+    # Week-over-week deltas (in percentage points). Compare last 7d vs 7-14d ago.
+    now_dt = datetime.utcnow()
+    week_ago = now_dt - timedelta(days=7)
+    two_weeks_ago = now_dt - timedelta(days=14)
+
+    def _rate_delta(campaign_ids, sent_col, success_col):
+        if not campaign_ids:
+            return None
+        row = db.query(
+            func.sum(case((and_(sent_col >= week_ago, sent_col < now_dt), 1), else_=0)).label("c_sent"),
+            func.sum(case((and_(sent_col >= week_ago, sent_col < now_dt, success_col.isnot(None)), 1), else_=0)).label("c_ok"),
+            func.sum(case((and_(sent_col >= two_weeks_ago, sent_col < week_ago), 1), else_=0)).label("p_sent"),
+            func.sum(case((and_(sent_col >= two_weeks_ago, sent_col < week_ago, success_col.isnot(None)), 1), else_=0)).label("p_ok"),
+        ).filter(CampaignContact.campaign_id.in_(campaign_ids)).one()
+        c_sent = int(row.c_sent or 0)
+        p_sent = int(row.p_sent or 0)
+        if not c_sent and not p_sent:
+            return None
+        cur = round(int(row.c_ok or 0) / c_sent * 100, 1) if c_sent else 0.0
+        prev = round(int(row.p_ok or 0) / p_sent * 100, 1) if p_sent else 0.0
+        return round(cur - prev, 1)
+
+    reply_rate_delta = _rate_delta(dm_campaign_ids, CampaignContact.main_sent_at, CampaignContact.replied_at)
+    connection_rate_delta = _rate_delta(all_conn_ids, CampaignContact.main_sent_at, CampaignContact.connection_accepted_at)
+
     # CRM names for campaign display
     crm_name_by_id = {c.id: c.name for c in db.query(CRM).filter(CRM.user_id == _user.id).all()}
 
@@ -229,6 +252,8 @@ def get_stats(db: Session = Depends(get_db), _user: User = Depends(get_current_u
         "remaining_dms": max(0, max_dm - dm_today),
         "global_reply_rate": global_reply_rate,
         "global_connection_rate": global_connection_rate,
+        "reply_rate_delta": reply_rate_delta,
+        "connection_rate_delta": connection_rate_delta,
         "recent_campaigns": [
             {
                 "id": c.id,
@@ -531,9 +556,9 @@ async def linkedin_profile(
 
 @router.get("/rate-limit-status")
 def get_rate_limit_status(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Return active LinkedIn rate-limit cooldowns (account-wide, set on 429)."""
+    """Return active LinkedIn rate-limit cooldowns for the current user (set on 429)."""
     from app.utils.rate_limit_cooldown import get_status
-    return get_status(db)
+    return get_status(db, user.id)
 
 
 @router.get("/notifications")

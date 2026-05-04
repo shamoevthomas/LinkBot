@@ -113,21 +113,48 @@ function CampaignCard({ c, onOpen, onDelete }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-2 mb-3">
-        {[
-          { l: 'Envoyés', v: c.total_processed ?? 0, tone: 'muted' },
-          { l: 'Acceptés', v: accepted, tone: accepted > 0 ? 'violet' : 'muted' },
-          { l: 'Répondu', v: replied, tone: replied > 0 ? 'emerald' : 'muted' },
-          { l: 'Taux rép.', v: c.reply_rate != null ? `${c.reply_rate}%` : '—', tone: c.reply_rate > 0 ? 'accent' : 'muted' },
-        ].map((m) => (
+      <div className={c.type === 'search' ? 'mb-3' : 'grid grid-cols-4 gap-2 mb-3'}>
+        {(c.type === 'search'
+          ? [
+              { l: 'Profils trouvés', v: c.total_processed ?? 0, tone: (c.total_processed ?? 0) > 0 ? 'accent' : 'muted', solo: true },
+            ]
+          : c.type === 'connection'
+          ? (() => {
+              const sent = c.total_processed ?? 0;       // includes accepted (an accepted request was sent first)
+              const acceptedC = accepted;
+              const rate = sent > 0 ? Math.round((acceptedC / sent) * 100) : 0;
+              return [
+                { l: 'Total',         v: c.total_target ?? '—',           tone: 'muted' },
+                { l: 'Acceptés',      v: acceptedC,                       tone: acceptedC > 0 ? 'violet' : 'muted' },
+                { l: 'Envoyés',       v: sent,                            tone: sent > 0 ? 'accent' : 'muted' },
+                { l: 'Taux conn.',    v: sent > 0 ? `${rate}%` : '—',     tone: rate > 0 ? 'emerald' : 'muted' },
+              ];
+            })()
+          : c.type === 'dm'
+          ? [
+              { l: 'Total',     v: c.total_target ?? '—',                                               tone: 'muted' },
+              { l: 'Envoyés',   v: c.total_processed ?? 0,                                              tone: (c.total_processed ?? 0) > 0 ? 'accent' : 'muted' },
+              { l: 'Réponses',  v: replied,                                                             tone: replied > 0 ? 'emerald' : 'muted' },
+              { l: 'Taux rép.', v: c.reply_rate != null ? `${c.reply_rate}%` : '—',                     tone: c.reply_rate > 0 ? 'violet' : 'muted' },
+            ]
+          : [
+              { l: 'Envoyés', v: c.total_processed ?? 0, tone: 'muted' },
+              { l: 'Acceptés', v: accepted, tone: accepted > 0 ? 'violet' : 'muted' },
+              { l: 'Répondu', v: replied, tone: replied > 0 ? 'emerald' : 'muted' },
+              { l: 'Taux rép.', v: c.reply_rate != null ? `${c.reply_rate}%` : '—', tone: c.reply_rate > 0 ? 'accent' : 'muted' },
+            ]
+        ).map((m) => (
           <div key={m.l}>
-            <div className="mono text-[14px]" style={{
+            <div className={m.solo ? 'mono' : 'mono text-[14px]'} style={{
               color: m.tone === 'muted' ? 'hsl(var(--text))' : `hsl(var(--${m.tone}))`,
               fontWeight: 600,
+              fontSize: m.solo ? 22 : undefined,
+              letterSpacing: m.solo ? '-0.02em' : undefined,
+              lineHeight: m.solo ? 1.1 : undefined,
             }}>
               {m.v}
             </div>
-            <div className="text-[10.5px]" style={{ color: 'hsl(var(--muted))' }}>{m.l}</div>
+            <div className="text-[10.5px]" style={{ color: 'hsl(var(--muted))', marginTop: m.solo ? 2 : 0 }}>{m.l}</div>
           </div>
         ))}
       </div>

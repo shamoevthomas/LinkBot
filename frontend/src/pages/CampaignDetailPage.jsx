@@ -187,7 +187,8 @@ export default function CampaignDetailPage() {
     ];
   } else if (isConnection) {
     STATS = [
-      { label: 'Demandes envoyées', value: contacts.filter((c) => c.status === 'demande_envoyee').length, icon: UserCheck, tone: 'accent' },
+      // "Envoyées" inclut les demandes acceptées — une demande acceptée a forcément été envoyée d'abord.
+      { label: 'Demandes envoyées', value: contacts.filter((c) => c.status === 'demande_envoyee' || c.status === 'reussi').length, icon: UserCheck, tone: 'accent' },
       { label: 'Acceptées', value: contacts.filter((c) => c.status === 'reussi').length, icon: CheckCircle, tone: 'emerald' },
       { label: 'Échouées', value: contacts.filter((c) => c.status === 'perdu').length, icon: AlertCircle, tone: 'rose' },
       { label: 'En attente', value: contacts.filter((c) => c.status === 'pending').length, icon: Clock, tone: 'amber' },

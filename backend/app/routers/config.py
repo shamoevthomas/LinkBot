@@ -27,42 +27,34 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 @router.get("/settings")
 def get_settings(
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Return all application settings as a key-value dict."""
-    rows = db.query(AppSettings).all()
-    return {row.key: row.value for row in rows}
+    """Return current user's settings (merged: global defaults + user overrides)."""
+    from app.utils.settings import get_user_settings_dict
+    return get_user_settings_dict(db, user.id)
 
 
 @router.put("/settings")
 def update_settings(
     body: SettingsUpdate,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Update application settings.  Only non-null fields are written."""
+    """Update the current user's settings. Only non-null fields are written."""
+    from app.utils.settings import set_setting, get_setting, get_user_settings_dict
     updates = body.model_dump(exclude_none=True)
     for key, value in updates.items():
-        row = db.query(AppSettings).filter(AppSettings.key == key).first()
-        if row:
-            row.value = str(value)
-        else:
-            db.add(AppSettings(key=key, value=str(value)))
-    # Auto-set warmup_started_at when warmup is first enabled
+        set_setting(db, user.id, key, str(value))
+
+    # Auto-set warmup_started_at when warmup is first enabled (per-user)
     if "warmup_enabled" in updates and str(updates["warmup_enabled"]).lower() == "true":
-        started = db.query(AppSettings).filter(AppSettings.key == "warmup_started_at").first()
-        if not started or not started.value:
+        existing = get_setting(db, user.id, "warmup_started_at")
+        if not existing:
             from datetime import date
-            today_str = date.today().isoformat()
-            if started:
-                started.value = today_str
-            else:
-                db.add(AppSettings(key="warmup_started_at", value=today_str))
+            set_setting(db, user.id, "warmup_started_at", date.today().isoformat())
 
     db.commit()
-
-    rows = db.query(AppSettings).all()
-    return {row.key: row.value for row in rows}
+    return get_user_settings_dict(db, user.id)
 
 
 # ---------------------------------------------------------------------------

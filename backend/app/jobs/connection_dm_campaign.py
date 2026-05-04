@@ -28,7 +28,7 @@ from app.utils.template_engine import render_template
 from app.utils.ai_message import (
     generate_compliment, generate_full_personalized_messages, extract_post_texts,
 )
-from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_global_actions_today
+from app.scheduler import cancel_campaign_job, is_within_schedule, get_effective_daily_limit, get_user_actions_today
 from app.routers.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -49,19 +49,24 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         if campaign.status != "running":
             return
 
-        # --- schedule window ---
-        if not is_within_schedule(db):
+        # --- schedule window (per-user) ---
+        if not is_within_schedule(campaign.user_id, db):
             return
 
-        # --- global daily limits ---
-        conn_row = db.query(AppSettings).filter(AppSettings.key == "max_connections_per_day").first()
-        conn_limit = get_effective_daily_limit(int(conn_row.value) if conn_row else 25, db)
-        dm_row = db.query(AppSettings).filter(AppSettings.key == "max_dms_per_day").first()
-        dm_limit = get_effective_daily_limit(int(dm_row.value) if dm_row else 50, db)
+        # --- per-user daily limits ---
+        from app.utils.settings import get_setting
+        conn_limit = get_effective_daily_limit(
+            int(get_setting(db, campaign.user_id, "max_connections_per_day", "25") or "25"),
+            campaign.user_id, db,
+        )
+        dm_limit = get_effective_daily_limit(
+            int(get_setting(db, campaign.user_id, "max_dms_per_day", "50") or "50"),
+            campaign.user_id, db,
+        )
 
         dm_action_types = ["dm_send"]
-        global_connections_today = get_global_actions_today(["connection_request"], db)
-        global_dms_today = get_global_actions_today(dm_action_types, db)
+        global_connections_today = get_user_actions_today(["connection_request"], campaign.user_id, db)
+        global_dms_today = get_user_actions_today(dm_action_types, campaign.user_id, db)
 
         # --- get LinkedIn client (from campaign owner) ---
         user = db.query(User).filter(User.id == campaign.user_id).first()
@@ -128,7 +133,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     db.commit()
                     continue  # Not yet time to send DM
 
-                if get_global_actions_today(dm_action_types, db) < dm_limit:
+                if get_user_actions_today(dm_action_types, campaign.user_id, db) < dm_limit:
                     template = campaign.message_template or ""
                     message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                     try:
@@ -137,12 +142,12 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                         from app.utils.rate_limit_cooldown import is_rate_limit_error, trigger_dms_cooldown
                         _log_action(db, campaign_id, contact.id, "dm_send", "failed", str(exc)[:500])
                         if is_rate_limit_error(exc):
-                            until = trigger_dms_cooldown(db)
+                            until = trigger_dms_cooldown(db, campaign.user_id)
                             cc.status = "envoye"
                             db.commit()
                             logger.warning(
-                                "Campaign %d: DM 429 on contact %d, DMs cooldown until %s",
-                                campaign_id, contact.id, until.isoformat(),
+                                "Campaign %d (user %s): DM 429 on contact %d, DMs cooldown until %s",
+                                campaign_id, campaign.user_id, contact.id, until.isoformat(),
                             )
                             return
                         cc.status = "envoye"  # still mark as envoye, retry next tick
@@ -177,7 +182,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 2: Send pending first DMs (accepted but DM not yet sent)
         # =====================================================================
-        if get_global_actions_today(dm_action_types, db) < dm_limit:
+        if get_user_actions_today(dm_action_types, campaign.user_id, db) < dm_limit:
             needs_dm = (
                 db.query(CampaignContact)
                 .filter(
@@ -188,7 +193,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 .all()
             )
             for cc in needs_dm:
-                if get_global_actions_today(dm_action_types, db) >= dm_limit:
+                if get_user_actions_today(dm_action_types, campaign.user_id, db) >= dm_limit:
                     break
                 # Respect dm_delay_hours after connection acceptance
                 if cc.connection_accepted_at:
@@ -207,11 +212,11 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     from app.utils.rate_limit_cooldown import is_rate_limit_error, trigger_dms_cooldown
                     _log_action(db, campaign_id, contact.id, "dm_send", "failed", str(exc)[:500])
                     if is_rate_limit_error(exc):
-                        until = trigger_dms_cooldown(db)
+                        until = trigger_dms_cooldown(db, campaign.user_id)
                         db.commit()
                         logger.warning(
-                            "Campaign %d: DM 429 (phase 2) on contact %d, DMs cooldown until %s",
-                            campaign_id, contact.id, until.isoformat(),
+                            "Campaign %d (user %s): DM 429 (phase 2) on contact %d, DMs cooldown until %s",
+                            campaign_id, campaign.user_id, contact.id, until.isoformat(),
                         )
                         return
                     continue
@@ -269,7 +274,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 6: Send connection request to next unprocessed contact
         # =====================================================================
-        while get_global_actions_today(["connection_request"], db) < conn_limit:
+        while get_user_actions_today(["connection_request"], campaign.user_id, db) < conn_limit:
             total_contacted = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
             ).count()
@@ -348,11 +353,11 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "connection_request", "failed", err_text[:500])
                 if is_rate_limited:
                     from app.utils.rate_limit_cooldown import trigger_connections_cooldown
-                    until = trigger_connections_cooldown(db)
+                    until = trigger_connections_cooldown(db, campaign.user_id)
                     db.commit()
                     logger.warning(
-                        "Campaign %d: LinkedIn FUSE_LIMIT_EXCEEDED on contact %d (connection phase), connections cooldown until %s",
-                        campaign_id, contact.id, until.isoformat(),
+                        "Campaign %d (user %s): LinkedIn FUSE_LIMIT_EXCEEDED on contact %d (connection phase), connections cooldown until %s",
+                        campaign_id, campaign.user_id, contact.id, until.isoformat(),
                     )
                     break
                 campaign.total_processed = (campaign.total_processed or 0) + 1

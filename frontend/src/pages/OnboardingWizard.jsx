@@ -1,18 +1,21 @@
 import { useState } from 'react';
-import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Check, Shield, Sparkles, Key, ArrowUpRight, LogOut } from 'lucide-react';
+import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Check, Shield, Sparkles, Key, ArrowUpRight, LogOut, Clock, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { submitOnboarding } from '../api/user';
+import { updateSettings } from '../api/config';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const JOB_ROLES = ['Sales', 'Marketing', 'Recrutement', 'Business Development', 'Founder / CEO', 'Consultant', 'Autre'];
 const REASONS = ['Génération de leads', 'Networking', 'Recrutement', 'Prospection commerciale', 'Personal branding', 'Autre'];
+const TIMEZONES = ['Europe/Paris', 'Europe/London', 'Europe/Madrid', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles', 'Asia/Dubai', 'Asia/Singapore'];
 
 const STEP_TITLES = [
-  { eyebrow: 'Étape 1 · Profil',  title: 'Faisons connaissance.' },
-  { eyebrow: 'Étape 2 · LinkedIn', title: 'Connectez votre compte.' },
-  { eyebrow: 'Étape 3 · IA',       title: 'Messages personnalisés.' },
-  { eyebrow: 'Étape 4 · Import',   title: 'Tout est prêt.' },
+  { eyebrow: 'Étape 1 · Profil',    title: 'Faisons connaissance.' },
+  { eyebrow: 'Étape 2 · LinkedIn',  title: 'Connectez votre compte.' },
+  { eyebrow: 'Étape 3 · IA',        title: 'Messages personnalisés.' },
+  { eyebrow: 'Étape 4 · Sécurité',  title: 'Protégez votre compte.' },
+  { eyebrow: 'Étape 5 · Import',    title: 'Tout est prêt.' },
 ];
 
 export default function OnboardingWizard() {
@@ -26,14 +29,27 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showWarmupHelp, setShowWarmupHelp] = useState(false);
   const [wantAI, setWantAI] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', job_role: '', reason_for_using: '',
     linkedin_profile_url: '', li_at: '', jsessionid: '', gemini_api_key: '', profile_picture: null,
   });
+  const [settings, setSettings] = useState({
+    max_connections_per_day: 25,
+    max_dms_per_day: 40,
+    schedule_enabled: true,
+    schedule_start_hour: '08:00',
+    schedule_end_hour: '21:30',
+    schedule_timezone: 'Europe/Paris',
+    warmup_enabled: true,
+    warmup_start_limit: 5,
+    warmup_days: 6,
+  });
   const [preview, setPreview] = useState(null);
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+  const setS = (key, val) => setSettings((s) => ({ ...s, [key]: val }));
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -46,6 +62,11 @@ export default function OnboardingWizard() {
   const canStep2 = form.first_name && form.last_name && form.job_role && form.reason_for_using;
   const canStep3 = form.li_at && form.jsessionid;
   const canStep4 = !wantAI || form.gemini_api_key;
+  const canStep5 = (
+    Number(settings.max_connections_per_day) > 0 &&
+    Number(settings.max_dms_per_day) > 0 &&
+    (!settings.schedule_enabled || (settings.schedule_start_hour && settings.schedule_end_hour))
+  );
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -53,6 +74,22 @@ export default function OnboardingWizard() {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
       await submitOnboarding(fd);
+      try {
+        // Best-effort: settings are editable later in Configuration if this fails
+        await updateSettings({
+          max_connections_per_day: Number(settings.max_connections_per_day),
+          max_dms_per_day: Number(settings.max_dms_per_day),
+          schedule_enabled: !!settings.schedule_enabled,
+          schedule_start_hour: settings.schedule_start_hour,
+          schedule_end_hour: settings.schedule_end_hour,
+          schedule_timezone: settings.schedule_timezone,
+          warmup_enabled: !!settings.warmup_enabled,
+          warmup_start_limit: Number(settings.warmup_start_limit),
+          warmup_days: Number(settings.warmup_days),
+        });
+      } catch {
+        toast.error('Paramètres non sauvegardés — modifiables dans Configuration.');
+      }
       toast.success('Configuration terminée — import du réseau en cours.');
       await refreshUser();
     } catch (err) {
@@ -73,6 +110,8 @@ export default function OnboardingWizard() {
       }}>
       <div className="g-card" style={{
         width: '100%', maxWidth: 540,
+        maxHeight: 'calc(100vh - 32px)',
+        overflowY: 'auto',
         borderRadius: 24,
         padding: 0,
         boxShadow: '0 30px 80px -30px hsl(220 40% 20% / .25), 0 4px 12px -4px hsl(220 40% 20% / .08)',
@@ -107,7 +146,7 @@ export default function OnboardingWizard() {
 
           {/* Step pills */}
           <div className="flex items-center gap-1.5 mt-5">
-            {[1, 2, 3, 4].map((s) => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <div key={s} style={{
                 flex: 1, height: 3, borderRadius: 2,
                 background: step >= s ? 'hsl(var(--accent))' : 'hsl(var(--border))',
@@ -391,6 +430,212 @@ export default function OnboardingWizard() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: 'hsl(var(--accent) / .1)', color: 'hsl(var(--accent))',
                 }}>
+                  <Shield size={22} />
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 600, color: 'hsl(var(--text))', letterSpacing: '-0.015em' }}>
+                  Quotas, plage horaire, warm-up.
+                </h3>
+                <p style={{ fontSize: 13, marginTop: 6, color: 'hsl(var(--muted))', lineHeight: 1.55, padding: '0 12px' }}>
+                  Réglages prudents par défaut. Modifiables à tout moment dans Configuration.
+                </p>
+              </div>
+
+              {/* Quotas */}
+              <div style={{
+                padding: 16, borderRadius: 14,
+                background: '#fff', border: '1px solid hsl(var(--border))',
+              }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp size={14} style={{ color: 'hsl(var(--accent))' }} />
+                  <div className="eyebrow" style={{ fontSize: 10, marginBottom: 0 }}>Quotas quotidiens</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="form-label">Max connexions / jour</label>
+                    <input type="number" min={1} max={100}
+                      value={settings.max_connections_per_day}
+                      onChange={(e) => setS('max_connections_per_day', e.target.value)}
+                      className="input-sm" />
+                  </div>
+                  <div>
+                    <label className="form-label">Max messages / jour</label>
+                    <input type="number" min={1} max={200}
+                      value={settings.max_dms_per_day}
+                      onChange={(e) => setS('max_dms_per_day', e.target.value)}
+                      className="input-sm" />
+                  </div>
+                </div>
+                <p style={{ fontSize: 11, color: 'hsl(var(--muted))', marginTop: 10, lineHeight: 1.4 }}>
+                  Recommandé&nbsp;: 25 connexions et 40 messages. LinkedIn flag les comptes au-delà de ~100 invitations / jour.
+                </p>
+              </div>
+
+              {/* Plage horaire */}
+              <div style={{
+                padding: 16, borderRadius: 14,
+                background: '#fff', border: '1px solid hsl(var(--border))',
+              }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Clock size={14} style={{ color: 'hsl(var(--accent))' }} />
+                    <div className="eyebrow" style={{ fontSize: 10, marginBottom: 0 }}>Plage horaire</div>
+                  </div>
+                  <button type="button" onClick={() => setS('schedule_enabled', !settings.schedule_enabled)}
+                    style={{
+                      width: 36, height: 20, borderRadius: 10, padding: 2, cursor: 'pointer',
+                      background: settings.schedule_enabled ? 'hsl(var(--accent))' : 'hsl(var(--border-strong))',
+                      border: 'none', transition: 'background .15s', position: 'relative',
+                    }}
+                    aria-pressed={settings.schedule_enabled}>
+                    <span style={{
+                      display: 'block', width: 16, height: 16, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.2)',
+                      transform: settings.schedule_enabled ? 'translateX(16px)' : 'translateX(0)',
+                      transition: 'transform .15s',
+                    }} />
+                  </button>
+                </div>
+
+                {settings.schedule_enabled ? (
+                  <>
+                    <div className="mb-3">
+                      <label className="form-label">Fuseau horaire</label>
+                      <select value={settings.schedule_timezone}
+                        onChange={(e) => setS('schedule_timezone', e.target.value)} className="input-sm">
+                        {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="form-label">Début</label>
+                        <input type="time" value={settings.schedule_start_hour}
+                          onChange={(e) => setS('schedule_start_hour', e.target.value)} className="input-sm" />
+                      </div>
+                      <div>
+                        <label className="form-label">Fin</label>
+                        <input type="time" value={settings.schedule_end_hour}
+                          onChange={(e) => setS('schedule_end_hour', e.target.value)} className="input-sm" />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: 11, color: 'hsl(var(--muted))', marginTop: 10, lineHeight: 1.4 }}>
+                      Les actions sont étalées dans cette fenêtre, avec un jitter aléatoire entre chaque envoi.
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ fontSize: 12, color: 'hsl(var(--muted))', lineHeight: 1.5 }}>
+                    Les actions tourneront 24h/24 — moins humain, et plus susceptible d'être détecté.
+                  </p>
+                )}
+              </div>
+
+              {/* Warm-up */}
+              <div style={{
+                padding: 16, borderRadius: 14,
+                background: settings.warmup_enabled ? 'hsl(var(--accent) / .04)' : '#fff',
+                border: settings.warmup_enabled ? '1px solid hsl(var(--accent) / .25)' : '1px solid hsl(var(--border))',
+                transition: 'all .15s',
+              }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Shield size={14} style={{ color: 'hsl(var(--accent))' }} />
+                    <div className="eyebrow" style={{ fontSize: 10, marginBottom: 0 }}>Warm-up progressif</div>
+                  </div>
+                  <button type="button" onClick={() => setS('warmup_enabled', !settings.warmup_enabled)}
+                    style={{
+                      width: 36, height: 20, borderRadius: 10, padding: 2, cursor: 'pointer',
+                      background: settings.warmup_enabled ? 'hsl(var(--accent))' : 'hsl(var(--border-strong))',
+                      border: 'none', transition: 'background .15s',
+                    }}
+                    aria-pressed={settings.warmup_enabled}>
+                    <span style={{
+                      display: 'block', width: 16, height: 16, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.2)',
+                      transform: settings.warmup_enabled ? 'translateX(16px)' : 'translateX(0)',
+                      transition: 'transform .15s',
+                    }} />
+                  </button>
+                </div>
+                <p style={{ fontSize: 12.5, color: 'hsl(var(--text))', lineHeight: 1.5 }}>
+                  Démarre à <strong>{settings.warmup_start_limit} actions / jour</strong> et monte progressivement vers votre limite cible sur <strong>{settings.warmup_days} jours</strong>.
+                </p>
+
+                <button type="button" onClick={() => setShowWarmupHelp(!showWarmupHelp)}
+                  style={{
+                    fontSize: 11.5, fontWeight: 500, color: 'hsl(var(--accent))',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 8,
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                  <HelpCircle size={11} /> {showWarmupHelp ? 'Masquer l\'explication' : 'Pourquoi c\'est important ?'}
+                </button>
+
+                {showWarmupHelp && (
+                  <div style={{
+                    marginTop: 10, padding: 12, borderRadius: 10,
+                    background: '#fff', border: '1px solid hsl(var(--border))',
+                  }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: 'hsl(var(--text))', marginBottom: 6 }}>
+                      Pourquoi&nbsp;?
+                    </p>
+                    <p style={{ fontSize: 11.5, color: 'hsl(var(--muted))', lineHeight: 1.55, marginBottom: 10 }}>
+                      LinkedIn surveille les volumes d'activité. Un compte qui passe de 0 à 25 invitations par jour du jour au lendemain envoie un signal anormal — le compte peut être restreint 24h à 7 jours, voire suspendu.
+                    </p>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: 'hsl(var(--text))', marginBottom: 6 }}>
+                      Comment Linky le gère&nbsp;:
+                    </p>
+                    <p style={{ fontSize: 11.5, color: 'hsl(var(--muted))', lineHeight: 1.55 }}>
+                      Linky démarre à 5 actions / jour le premier jour, augmente progressivement chaque jour, et atteint votre limite cible au bout de 6 jours. Le compte "réchauffe" comme un humain qui découvre un nouvel outil — et reste sous le radar.
+                    </p>
+                  </div>
+                )}
+
+                {settings.warmup_enabled && (
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="form-label">Démarrage (actions / jour)</label>
+                      <input type="number" min={1} max={20}
+                        value={settings.warmup_start_limit}
+                        onChange={(e) => setS('warmup_start_limit', e.target.value)}
+                        className="input-sm" />
+                    </div>
+                    <div>
+                      <label className="form-label">Durée (jours, max&nbsp;6)</label>
+                      <input type="number" min={1} max={6}
+                        value={settings.warmup_days}
+                        onChange={(e) => setS('warmup_days', e.target.value)}
+                        className="input-sm" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setStep(3)} type="button"
+                  style={{
+                    flex: 1, padding: '12px 16px', fontSize: 14, fontWeight: 600,
+                    borderRadius: 14, border: '1px solid hsl(var(--border-strong))',
+                    background: '#fff', color: 'hsl(var(--text))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    cursor: 'pointer',
+                  }}>
+                  <ChevronLeft size={16} /> Retour
+                </button>
+                <button onClick={() => setStep(5)} disabled={!canStep5}
+                  className="cta-btn"
+                  style={{ flex: 1, padding: '12px 16px', fontSize: 14, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  Continuer <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-5">
+              <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: 16, margin: '0 auto 14px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'hsl(var(--accent) / .1)', color: 'hsl(var(--accent))',
+                }}>
                   <Key size={24} />
                 </div>
                 <h3 style={{ fontSize: 18, fontWeight: 600, color: 'hsl(var(--text))', letterSpacing: '-0.015em' }}>
@@ -427,7 +672,7 @@ export default function OnboardingWizard() {
               </div>
 
               <div className="flex gap-3 pt-1">
-                <button onClick={() => setStep(3)} type="button"
+                <button onClick={() => setStep(4)} type="button"
                   style={{
                     flex: 1, padding: '12px 16px', fontSize: 14, fontWeight: 600,
                     borderRadius: 14, border: '1px solid hsl(var(--border-strong))',

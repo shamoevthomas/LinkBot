@@ -63,10 +63,13 @@ def seed_db():
             "action_interval_min": "2",
             "action_interval_max": "5",
         }
+        # Seed as global defaults (user_id IS NULL): users inherit unless they override.
         for key, value in defaults.items():
-            existing = db.query(AppSettings).filter(AppSettings.key == key).first()
+            existing = db.query(AppSettings).filter(
+                AppSettings.key == key, AppSettings.user_id.is_(None),
+            ).first()
             if not existing:
-                db.add(AppSettings(key=key, value=value))
+                db.add(AppSettings(key=key, value=value, user_id=None))
 
         # Ensure "Mon Réseau" CRM exists for TEKA user
         if not db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user.id).first():

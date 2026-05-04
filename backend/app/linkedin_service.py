@@ -197,11 +197,39 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
     return None
 
 
+def extract_profile_picture_url(profile: dict) -> Optional[str]:
+    """Combine displayPictureUrl + largest img_* artifact from a get_profile result."""
+    if not profile:
+        return None
+    root = profile.get("displayPictureUrl")
+    if not root:
+        return None
+    img_keys = [k for k in profile.keys() if k.startswith("img_")]
+    if not img_keys:
+        return None
+
+    def _w(k: str) -> int:
+        try:
+            return int(k.split("_")[1])
+        except (ValueError, IndexError):
+            return 0
+
+    img_keys.sort(key=_w, reverse=True)
+    seg = profile.get(img_keys[0])
+    if not seg:
+        return None
+    return f"{root}{seg}"
+
+
 def _update_connection_status(contact, profile: dict) -> None:
-    """Update contact.connection_status from LinkedIn profile data."""
+    """Update contact.connection_status + profile_picture_url from LinkedIn profile data."""
     distance = profile.get("distance")
     if distance:
         contact.connection_status = str(distance)
+    if not contact.profile_picture_url:
+        pic = extract_profile_picture_url(profile)
+        if pic:
+            contact.profile_picture_url = pic
 
 
 # ---------------------------------------------------------------------------
