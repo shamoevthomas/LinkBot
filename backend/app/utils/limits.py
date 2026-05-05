@@ -56,7 +56,20 @@ def count_active_lead_magnets(db: Session, user_id: int) -> int:
     )
 
 
+def enforce_valid_cookies(user: User) -> None:
+    """Block any action that depends on LinkedIn auth if cookies are dead."""
+    if not user.li_at_cookie or not user.jsessionid_cookie or not user.cookies_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Vos cookies LinkedIn sont invalides ou manquants. "
+                "Recollez-les depuis Configuration → Cookies avant de lancer une campagne."
+            ),
+        )
+
+
 def enforce_campaign_limit(db: Session, user: User) -> None:
+    enforce_valid_cookies(user)
     if is_unlimited(user):
         return
     active = count_active_campaigns(db, user.id)
@@ -72,6 +85,7 @@ def enforce_campaign_limit(db: Session, user: User) -> None:
 
 
 def enforce_lead_magnet_limit(db: Session, user: User) -> None:
+    enforce_valid_cookies(user)
     if is_unlimited(user):
         return
     active = count_active_lead_magnets(db, user.id)

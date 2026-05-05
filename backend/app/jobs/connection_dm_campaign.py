@@ -360,6 +360,15 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                         campaign_id, campaign.user_id, contact.id, until.isoformat(),
                     )
                     break
+
+                from app.linkedin_service import is_dead_cookie_error, mark_cookies_invalid
+                if is_dead_cookie_error(exc):
+                    mark_cookies_invalid(campaign.user_id)
+                    campaign.status = "paused"
+                    campaign.error_message = "Cookies LinkedIn invalides — recolle-les dans Configuration."
+                    db.commit()
+                    cancel_campaign_job(campaign_id)
+                    return
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
                 # Mark contact as handled so the loop doesn't retry the same one forever.

@@ -193,6 +193,19 @@ async def run_connection_campaign(campaign_id: int) -> None:
                         campaign_id, campaign.user_id, contact.id, until.isoformat(),
                     )
                     break
+
+                from app.linkedin_service import is_dead_cookie_error, mark_cookies_invalid
+                if is_dead_cookie_error(exc):
+                    mark_cookies_invalid(campaign.user_id)
+                    campaign.status = "paused"
+                    campaign.error_message = "Cookies LinkedIn invalides — recolle-les dans Configuration."
+                    db.commit()
+                    cancel_campaign_job(campaign_id)
+                    logger.warning(
+                        "Campaign %d (user %s): cookies dead, paused. Error: %s",
+                        campaign_id, campaign.user_id, err_text[:120],
+                    )
+                    return
                 logger.exception(
                     "Connection request failed for contact %d in campaign %d",
                     contact.id, campaign_id,

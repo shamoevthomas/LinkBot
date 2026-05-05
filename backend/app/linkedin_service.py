@@ -27,7 +27,10 @@ def get_linkedin_client(li_at: str, jsessionid: str) -> Linkedin:
     """Create and return a configured :class:`Linkedin` client instance.
 
     The JSESSIONID cookie must be wrapped in double-quotes for the Voyager
-    API to accept it.
+    API to accept it. We also clamp every HTTP request to a 30s timeout and
+    cap redirects at 5 — LinkedIn's "Exceeded 30 redirects" pattern (which
+    fires when cookies are dead) used to take 1-3 minutes per call and
+    blocked the scheduler. With max_redirects=5 the same call fails fast.
     """
     raw_jsessionid = jsessionid
     if raw_jsessionid and not raw_jsessionid.startswith('"'):
@@ -39,7 +42,50 @@ def get_linkedin_client(li_at: str, jsessionid: str) -> Linkedin:
     })
 
     client = Linkedin("", "", cookies=cookie_jar)
+
+    # Wrap the underlying session so every voyager call has a strict timeout
+    # and a low redirect cap — fail fast on dead cookies.
+    try:
+        if hasattr(client, "client") and hasattr(client.client, "session"):
+            session = client.client.session
+            session.max_redirects = 5
+            original_request = session.request
+
+            def _request_with_timeout(method, url, **kwargs):
+                kwargs.setdefault("timeout", 30)
+                return original_request(method, url, **kwargs)
+
+            session.request = _request_with_timeout
+    except Exception:
+        logger.exception("Could not patch LinkedIn session timeout")
+
     return client
+
+
+def is_dead_cookie_error(exc: BaseException) -> bool:
+    """Detect the signature LinkedIn returns when cookies are expired/revoked."""
+    msg = str(exc)
+    return (
+        "Exceeded 30 redirects" in msg
+        or "TooManyRedirects" in msg
+        or "Exceeded 5 redirects" in msg  # our new lower cap
+        or isinstance(exc, UnauthorizedException)
+    )
+
+
+def mark_cookies_invalid(user_id: int) -> None:
+    """Flip cookies_valid=False for a user. Safe to call from any thread."""
+    from app.database import SessionLocal
+    from app.models import User
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == user_id).first()
+        if u and u.cookies_valid is not False:
+            u.cookies_valid = False
+            db.commit()
+            logger.warning("Marked cookies invalid for user %d (LinkedIn rejected)", user_id)
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------

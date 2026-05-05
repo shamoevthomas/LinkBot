@@ -31,6 +31,10 @@ REPLY_CHECK_INTERVAL = 300  # 5 minutes
 _last_enrich_pictures: Optional[datetime] = None
 ENRICH_PICTURES_INTERVAL = 15 * 60  # 15 minutes
 
+# Periodic cookie re-validation (runs every 2 hours)
+_last_cookie_check: Optional[datetime] = None
+COOKIE_CHECK_INTERVAL = 2 * 3600  # 2 hours
+
 
 # ---------------------------------------------------------------------------
 # Campaign job runner
@@ -89,12 +93,25 @@ async def _run_reply_checks():
 async def _run_enrich_pictures():
     """Backfill missing profile pictures (slow drip)."""
     global _last_enrich_pictures
+    _last_enrich_pictures = datetime.utcnow()  # mark NOW so we don't re-fire while running
     try:
         from app.jobs.enrich_pictures import run_enrich_pictures
         await run_enrich_pictures()
-        _last_enrich_pictures = datetime.utcnow()
     except Exception:
         logger.exception("Error in enrich pictures")
+
+
+async def _run_cookie_validation():
+    """Periodically re-test every user's LinkedIn cookies. Flips cookies_valid
+    to False if LinkedIn rejects them — surfaces in the dashboard banner so
+    the user knows to recolle leurs cookies."""
+    global _last_cookie_check
+    _last_cookie_check = datetime.utcnow()
+    try:
+        from app.jobs.cookie_validator import run_cookie_validation
+        await run_cookie_validation()
+    except Exception:
+        logger.exception("Error in cookie validation")
 
 
 # ---------------------------------------------------------------------------
@@ -106,19 +123,35 @@ async def _main_loop():
     global _shutdown, _last_reply_check
     print("[SCHEDULER] Main loop started", flush=True)
 
+    # In-flight tasks for the side jobs — we await-fire-and-forget them so a
+    # slow LinkedIn call inside reply_checker / enrich_pictures cannot block
+    # the campaign tick loop.
+    side_tasks: dict[str, asyncio.Task] = {}
+
+    def _spawn_side(name: str, coro_fn):
+        existing = side_tasks.get(name)
+        if existing and not existing.done():
+            return  # still running, don't double-fire
+        side_tasks[name] = asyncio.create_task(coro_fn())
+
     while not _shutdown:
         try:
             now = datetime.utcnow()
 
-            # Check replies (every 5 minutes)
+            # Check replies (every 5 minutes) — non-blocking
             if (_last_reply_check is None or
                     (now - _last_reply_check).total_seconds() >= REPLY_CHECK_INTERVAL):
-                await _run_reply_checks()
+                _spawn_side("reply_check", _run_reply_checks)
 
-            # Backfill missing profile pictures (every 15 minutes, slow drip)
+            # Backfill missing profile pictures (every 15 minutes) — non-blocking
             if (_last_enrich_pictures is None or
                     (now - _last_enrich_pictures).total_seconds() >= ENRICH_PICTURES_INTERVAL):
-                await _run_enrich_pictures()
+                _spawn_side("enrich_pictures", _run_enrich_pictures)
+
+            # Re-validate cookies for all users every 2 hours — non-blocking
+            if (_last_cookie_check is None or
+                    (now - _last_cookie_check).total_seconds() >= COOKIE_CHECK_INTERVAL):
+                _spawn_side("cookie_check", _run_cookie_validation)
 
             # Check each registered campaign
             for cid, info in list(_campaigns.items()):
