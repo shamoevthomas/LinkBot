@@ -1,4 +1,4 @@
-import { Link as RouterLink } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import {
   Users, Rocket, Sparkles, Repeat, Activity, Link as LinkIcon,
@@ -22,44 +22,6 @@ function useReveal() {
   return ref;
 }
 
-function LockedCTA({ children, className, style, lockSize = 13, variant = 'button' }) {
-  const [hover, setHover] = useState(false);
-  const isLink = variant === 'link';
-  return (
-    <span style={{ position: 'relative', display: 'inline-flex' }}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-      <button type="button" disabled className={className}
-        style={{
-          ...style,
-          cursor: 'not-allowed',
-          opacity: isLink ? 0.6 : 0.55,
-          display: 'inline-flex', alignItems: 'center', gap: isLink ? 4 : 6,
-        }}>
-        <Lock size={lockSize} />
-        {children}
-      </button>
-      {hover && (
-        <span role="tooltip" style={{
-          position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'hsl(var(--text))', color: '#fff',
-          padding: '6px 10px', borderRadius: 8,
-          fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap',
-          pointerEvents: 'none', zIndex: 100,
-          boxShadow: '0 4px 16px -4px hsl(220 40% 20% / .35)',
-        }}>
-          Ouvre prochainement en beta
-          <span aria-hidden style={{
-            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-            width: 0, height: 0,
-            borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
-            borderTop: '5px solid hsl(var(--text))',
-          }} />
-        </span>
-      )}
-    </span>
-  );
-}
 
 function SectionTitle({ sub, children }) {
   return (
@@ -643,6 +605,7 @@ function HeroCards() {
 }
 
 export default function LandingPage() {
+  const navigate = useNavigate();
   const page = useReveal();
   const [showTop, setShowTop] = useState(false);
 
@@ -712,19 +675,15 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="hidden sm:inline-flex">
-              <LockedCTA variant="link" lockSize={11}
-                style={{
-                  fontSize: 13, color: 'hsl(var(--muted))',
-                  background: 'none', border: 'none', padding: '6px 10px',
-                  whiteSpace: 'nowrap',
-                }}>
-                Se connecter
-              </LockedCTA>
-            </span>
-            <LockedCTA className="cta-btn" style={{ padding: '8px 18px', fontSize: 13, whiteSpace: 'nowrap' }}>
+            <button onClick={() => navigate('/login')} className="hidden sm:inline-flex transition-colors"
+              style={{ fontSize: 13, color: 'hsl(var(--muted))', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', whiteSpace: 'nowrap' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
+              Se connecter
+            </button>
+            <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '8px 18px', fontSize: 13, whiteSpace: 'nowrap' }}>
               S'inscrire
-            </LockedCTA>
+            </button>
           </div>
         </nav>
       </div>
@@ -780,9 +739,9 @@ export default function LandingPage() {
               ))}
             </div>
             <div className="animate-fade-rise-delay-2 flex flex-wrap items-center gap-3" style={{ marginTop: 32 }}>
-              <LockedCTA className="cta-btn" style={{ padding: '14px 28px', fontSize: 14 }}>
-                Commencer gratuitement
-              </LockedCTA>
+              <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '14px 28px', fontSize: 14 }}>
+                Commencer gratuitement <ArrowRight size={14} />
+              </button>
               <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
                 className="ghost-btn" style={{ padding: '13px 22px', fontSize: 13 }}>
                 Voir les fonctionnalités
@@ -1661,9 +1620,9 @@ export default function LandingPage() {
           <p className="mx-auto mb-8 text-[14.5px] leading-relaxed" style={{ color: 'hsl(var(--muted))', maxWidth: 520 }}>
             Installez Linky, connectez votre compte, et lancez votre première campagne en moins de 5 minutes.
           </p>
-          <LockedCTA className="cta-btn" style={{ padding: '16px 40px', fontSize: 15 }} lockSize={14}>
-            Commencer gratuitement
-          </LockedCTA>
+          <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '16px 40px', fontSize: 15 }}>
+            Commencer gratuitement <ArrowRight size={14} />
+          </button>
         </div>
       </section>
 
