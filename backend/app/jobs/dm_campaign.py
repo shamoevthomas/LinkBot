@@ -264,13 +264,32 @@ async def run_dm_campaign(campaign_id: int) -> None:
             for attempt in range(1, 4):
                 try:
                     message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
+                    # Successful render → reset Gemini auth-failure counter for this user.
+                    if message_body and message_body.strip():
+                        from app.utils.ai_message import record_gemini_success
+                        record_gemini_success(campaign.user_id)
                 except Exception as exc:
-                    from app.utils.ai_message import GeminiAuthError, mark_gemini_key_invalid
+                    from app.utils.ai_message import (
+                        GeminiAuthError, mark_gemini_key_invalid,
+                        record_gemini_auth_failure, should_invalidate_gemini_key,
+                        AUTH_FAILURE_THRESHOLD,
+                    )
                     if isinstance(exc, GeminiAuthError):
-                        mark_gemini_key_invalid(campaign.user_id)
-                        cancel_campaign_job(campaign_id)
-                        print(f"[DM JOB] Campaign {campaign_id}: Gemini key rejected, paused user campaigns", flush=True)
-                        return
+                        record_gemini_auth_failure(campaign.user_id)
+                        if should_invalidate_gemini_key(campaign.user_id):
+                            mark_gemini_key_invalid(campaign.user_id)
+                            cancel_campaign_job(campaign_id)
+                            print(
+                                f"[DM JOB] Campaign {campaign_id}: Gemini key rejected "
+                                f"{AUTH_FAILURE_THRESHOLD}× in a row, paused user campaigns",
+                                flush=True,
+                            )
+                            return
+                        # Below threshold: treat as transient, skip prospect, retry next tick.
+                        last_error = f"Gemini auth glitch: {exc}"
+                        message_body = None
+                        _skip_no_perdu = True
+                        break
                     last_error = f"Render failed: {exc}"
                     message_body = None
 

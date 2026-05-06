@@ -137,12 +137,24 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     template = campaign.message_template or ""
                     try:
                         message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
+                        if message_body and message_body.strip():
+                            from app.utils.ai_message import record_gemini_success
+                            record_gemini_success(campaign.user_id)
                     except Exception as exc:
-                        from app.utils.ai_message import GeminiAuthError, mark_gemini_key_invalid
+                        from app.utils.ai_message import (
+                            GeminiAuthError, mark_gemini_key_invalid,
+                            record_gemini_auth_failure, should_invalidate_gemini_key,
+                        )
                         if isinstance(exc, GeminiAuthError):
-                            mark_gemini_key_invalid(campaign.user_id)
-                            cancel_campaign_job(campaign_id)
-                            return
+                            record_gemini_auth_failure(campaign.user_id)
+                            if should_invalidate_gemini_key(campaign.user_id):
+                                mark_gemini_key_invalid(campaign.user_id)
+                                cancel_campaign_job(campaign_id)
+                                return
+                            # Below threshold: skip this prospect, will retry next tick.
+                            cc.last_checked_at = datetime.utcnow()
+                            db.commit()
+                            continue
                         raise
                     try:
                         success = await send_message(client, contact.urn_id, message_body)

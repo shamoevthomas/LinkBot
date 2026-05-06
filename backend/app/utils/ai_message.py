@@ -71,6 +71,37 @@ class GeminiAuthError(Exception):
     """Raised when Gemini rejects the API key (401/403)."""
 
 
+# ---------------------------------------------------------------------------
+# 3-strike auth-failure tracking — don't trash the key on a single transient
+# error (network blip, content filter on one prospect's headline, etc).
+# In-memory; survives within a process. After a restart we re-count from 0,
+# which is fine: at worst we tolerate 3 more strikes before flagging.
+# ---------------------------------------------------------------------------
+_consecutive_auth_failures: Dict[int, int] = {}
+AUTH_FAILURE_THRESHOLD = 3
+
+
+def record_gemini_auth_failure(user_id: int) -> int:
+    """Increment auth-failure counter. Returns the new count."""
+    if not user_id:
+        return 0
+    _consecutive_auth_failures[user_id] = _consecutive_auth_failures.get(user_id, 0) + 1
+    count = _consecutive_auth_failures[user_id]
+    logger.warning("[GEMINI] Auth failure %d/%d for user %d", count, AUTH_FAILURE_THRESHOLD, user_id)
+    return count
+
+
+def record_gemini_success(user_id: int) -> None:
+    """Reset auth-failure counter after a successful Gemini call."""
+    if user_id and user_id in _consecutive_auth_failures:
+        _consecutive_auth_failures.pop(user_id, None)
+
+
+def should_invalidate_gemini_key(user_id: int) -> bool:
+    """True when consecutive auth failures hit the threshold."""
+    return _consecutive_auth_failures.get(user_id, 0) >= AUTH_FAILURE_THRESHOLD
+
+
 def mark_gemini_key_invalid(user_id: int) -> None:
     """Flag the user's Gemini key as invalid: NULL the key, pause running AI
     campaigns, and drop a Notification so the dashboard surfaces it.
