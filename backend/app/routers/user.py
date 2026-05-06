@@ -16,8 +16,13 @@ from app.storage import upload_file
 router = APIRouter(prefix="/api/user", tags=["user"])
 
 
+def _gemini_key_invalid(db: Session, user_id: int) -> bool:
+    from app.utils.settings import get_setting
+    return (get_setting(db, user_id, "gemini_key_invalid", "false") or "false").lower() == "true"
+
+
 @router.get("/me", response_model=UserResponse)
-def get_me(user: User = Depends(get_current_user)):
+def get_me(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Return the currently authenticated user's profile."""
     return UserResponse(
         id=user.id,
@@ -30,6 +35,7 @@ def get_me(user: User = Depends(get_current_user)):
         linkedin_profile_url=user.linkedin_profile_url,
         cookies_valid=user.cookies_valid or False,
         has_gemini_key=bool(user.gemini_api_key),
+        gemini_key_invalid=_gemini_key_invalid(db, user.id),
         onboarding_completed=user.onboarding_completed or False,
     )
 
@@ -85,6 +91,7 @@ async def update_profile(
         linkedin_profile_url=user.linkedin_profile_url,
         cookies_valid=user.cookies_valid or False,
         has_gemini_key=bool(user.gemini_api_key),
+        gemini_key_invalid=_gemini_key_invalid(db, user.id),
         onboarding_completed=user.onboarding_completed or False,
     )
 
@@ -170,6 +177,11 @@ def update_gemini_key(
             db.commit()
 
     user.gemini_api_key = new_key if new_key else None
+    # If the user provided a fresh valid key, clear the "invalid" flag so the
+    # popup goes away. If they cleared the key (new_key is empty), keep it.
+    if new_key:
+        from app.utils.settings import set_setting
+        set_setting(db, user.id, "gemini_key_invalid", "false")
     db.commit()
 
     return {"ok": True, "has_gemini_key": bool(user.gemini_api_key)}

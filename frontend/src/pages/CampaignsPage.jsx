@@ -6,31 +6,34 @@ import {
   Trash2, Download, Send, Clock, ArrowRight, Loader2, Grid3x3, List, X,
 } from 'lucide-react';
 import { getCampaigns, createCampaign, deleteCampaign } from '../api/campaigns';
-import { getCRMs } from '../api/crm';
+import { getCRMs, createCRM } from '../api/crm';
 import client from '../api/client';
 import PageWrapper from '../components/layout/PageWrapper';
 import Modal from '../components/ui/Modal';
+import CreateCRMModal from '../components/crm/CreateCRMModal';
 import { StatusChip, TypeTag, Progress } from '../components/ui/atoms';
 import { formatServerDate } from '../utils/date';
 import toast from 'react-hot-toast';
 
-const COUNTRIES = [
-  { id: '105015875', name: 'France' },
-  { id: '100565514', name: 'Belgique' },
-  { id: '106693272', name: 'Suisse' },
-  { id: '101174742', name: 'Canada' },
-  { id: '104042105', name: 'Luxembourg' },
-  { id: '100459367', name: 'Monaco' },
-  { id: '102787409', name: 'Maroc' },
-  { id: '102134353', name: 'Tunisie' },
-  { id: '104476498', name: 'Algerie' },
-  { id: '103644278', name: 'Etats-Unis' },
-  { id: '101165590', name: 'Royaume-Uni' },
-  { id: '101282230', name: 'Allemagne' },
-  { id: '105646813', name: 'Espagne' },
-  { id: '103350119', name: 'Italie' },
-  { id: '102890719', name: 'Pays-Bas' },
-  { id: '100364837', name: 'Portugal' },
+// Suggestions cliquables sous le champ texte. Pas exhaustif — les utilisateurs
+// peuvent taper n'importe quel autre lieu, LinkedIn fait le matching côté serveur.
+const LOCATION_SUGGESTIONS = [
+  'France',
+  'Paris',
+  'Île-de-France',
+  'Lyon',
+  'Marseille',
+  'Bordeaux',
+  'Toulouse',
+  'Nantes',
+  'Belgique',
+  'Bruxelles',
+  'Suisse',
+  'Genève',
+  'Maroc',
+  'Casablanca',
+  'Royaume-Uni',
+  'Londres',
 ];
 
 const CAMPAIGN_TYPES = [
@@ -265,6 +268,10 @@ export default function CampaignsPage() {
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [quota, setQuota] = useState(null);
+  // Inline CRM creation. `target` tells us which form field to populate after creation:
+  // either 'crm_id' (destination, default) or 'source_crm_id' (export source).
+  const [showCreateCRM, setShowCreateCRM] = useState(null); // null | 'crm_id' | 'source_crm_id'
+  const [creatingCRM, setCreatingCRM] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -602,31 +609,48 @@ export default function CampaignsPage() {
                   className="input-sm" placeholder="Ex: Marketing Manager Paris" />
               </div>
               <div>
-                <label className="form-label">Pays (optionnel)</label>
-                <select value="" onChange={(e) => {
-                    if (e.target.value && !form.search_regions.includes(e.target.value)) {
-                      set('search_regions', [...form.search_regions, e.target.value]);
+                <label className="form-label">Localisation(s) (optionnel)</label>
+                <input
+                  type="text"
+                  className="input-sm"
+                  placeholder="Tapez une ville, région ou pays puis Entrée — ex: Lyon"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const v = e.target.value.trim();
+                      if (v && !form.search_regions.includes(v)) {
+                        set('search_regions', [...form.search_regions, v]);
+                      }
+                      e.target.value = '';
                     }
-                  }} className="input-sm">
-                  <option value="">Tous les pays</option>
-                  {COUNTRIES.filter((c) => !form.search_regions.includes(c.id)).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                  }}
+                />
                 {form.search_regions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {form.search_regions.map((id) => {
-                      const country = COUNTRIES.find((c) => c.id === id);
-                      return (
-                        <span key={id} className="chip blue" style={{ cursor: 'pointer' }}>
-                          {country?.name || id}
-                          <button type="button" onClick={() => set('search_regions', form.search_regions.filter((r) => r !== id))}
-                            style={{ marginLeft: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit' }}>×</button>
-                        </span>
-                      );
-                    })}
+                    {form.search_regions.map((loc) => (
+                      <span key={loc} className="chip blue" style={{ cursor: 'default' }}>
+                        {loc}
+                        <button type="button"
+                          onClick={() => set('search_regions', form.search_regions.filter((r) => r !== loc))}
+                          style={{ marginLeft: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit' }}>×</button>
+                      </span>
+                    ))}
                   </div>
                 )}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[11px] mr-1" style={{ color: 'hsl(var(--muted))' }}>Suggestions :</span>
+                  {LOCATION_SUGGESTIONS.filter((s) => !form.search_regions.includes(s)).map((s) => (
+                    <button key={s} type="button"
+                      onClick={() => set('search_regions', [...form.search_regions, s])}
+                      className="chip slate"
+                      style={{ cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}>
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] mt-1.5" style={{ color: 'hsl(var(--muted))' }}>
+                  Cumulez plusieurs localisations pour élargir la recherche. LinkedIn fait la correspondance automatiquement.
+                </p>
               </div>
             </>
           )}
@@ -644,10 +668,13 @@ export default function CampaignsPage() {
               </p>
               <div>
                 <label className="form-label">CRM source</label>
-                <select value={form.source_crm_id} onChange={(e) => set('source_crm_id', e.target.value)}
-                  className="input-sm" required>
+                <select value={form.source_crm_id} onChange={(e) => {
+                    if (e.target.value === '__new__') { setShowCreateCRM('source_crm_id'); return; }
+                    set('source_crm_id', e.target.value);
+                  }} className="input-sm" required>
                   <option value="">Sélectionner le CRM source...</option>
                   {crms.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
+                  <option value="__new__">+ Créer un nouveau CRM…</option>
                 </select>
               </div>
               <div>
@@ -660,12 +687,15 @@ export default function CampaignsPage() {
 
           <div>
             <label className="form-label">CRM de destination</label>
-            <select value={form.crm_id} onChange={(e) => set('crm_id', e.target.value)}
-              className="input-sm" required>
+            <select value={form.crm_id} onChange={(e) => {
+                if (e.target.value === '__new__') { setShowCreateCRM('crm_id'); return; }
+                set('crm_id', e.target.value);
+              }} className="input-sm" required>
               <option value="">Sélectionner un CRM...</option>
               {crms
                 .filter((c) => showNew !== 'export' || String(c.id) !== String(form.source_crm_id))
                 .map((c) => <option key={c.id} value={c.id}>{c.name} ({c.contact_count} contacts)</option>)}
+              <option value="__new__">+ Créer un nouveau CRM…</option>
             </select>
           </div>
 
@@ -778,6 +808,27 @@ export default function CampaignsPage() {
           </div>
         </form>
       </Modal>
+
+      <CreateCRMModal
+        open={!!showCreateCRM}
+        creating={creatingCRM}
+        onClose={() => setShowCreateCRM(null)}
+        onCreate={async (data) => {
+          setCreatingCRM(true);
+          try {
+            const newCrm = await createCRM(data);
+            const refreshed = await getCRMs();
+            setCrms(refreshed);
+            // Select the newly created CRM in the right field
+            if (showCreateCRM === 'source_crm_id') set('source_crm_id', String(newCrm.id));
+            else set('crm_id', String(newCrm.id));
+            toast.success('CRM créé');
+            setShowCreateCRM(null);
+          } catch (err) {
+            toast.error(err.response?.data?.detail || 'Erreur lors de la création du CRM');
+          } finally { setCreatingCRM(false); }
+        }}
+      />
     </PageWrapper>
   );
 }

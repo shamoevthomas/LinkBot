@@ -32,6 +32,18 @@ from app.scheduler import (
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 
+def _dumps_locations(locations) -> Optional[str]:
+    """Serialize the list of free-text location names to a JSON array.
+    Returns None when the list is empty so the column stays NULL."""
+    import json
+    if not locations:
+        return None
+    cleaned = [str(x).strip() for x in locations if str(x).strip()]
+    if not cleaned:
+        return None
+    return json.dumps(cleaned, ensure_ascii=False)
+
+
 # ---------------------------------------------------------------------------
 # Batch helpers — avoid N+1 queries
 # ---------------------------------------------------------------------------
@@ -314,7 +326,7 @@ def create_campaign(
         message_template=body.message_template,
         use_ai=body.use_ai,
         total_target=total_target,
-        search_regions=",".join(body.search_regions) if body.search_regions else None,
+        search_regions=_dumps_locations(body.search_regions),
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -418,7 +430,7 @@ def create_dm_campaign(
             user_id=user.id,
             keywords=body.keywords,
             total_target=total_target,
-            search_regions=",".join(body.search_regions) if body.search_regions else None,
+            search_regions=_dumps_locations(body.search_regions),
             started_at=datetime.utcnow(),
         )
         db.add(search_campaign)
@@ -441,7 +453,7 @@ def create_dm_campaign(
             total_target=total_target,
             dm_delay_hours=body.dm_delay_hours,
             fallback_message=body.fallback_message,
-            search_regions=",".join(body.search_regions) if body.search_regions else None,
+            search_regions=_dumps_locations(body.search_regions),
             started_at=datetime.utcnow(),
         )
         db.add(campaign)
@@ -482,7 +494,7 @@ def create_dm_campaign(
         total_target=total_target,
         dm_delay_hours=body.dm_delay_hours if body.is_connection_dm else 0,
         fallback_message=body.fallback_message,
-        search_regions=",".join(body.search_regions) if body.search_regions else None,
+        search_regions=_dumps_locations(body.search_regions),
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -546,54 +558,116 @@ async def preview_personalization(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Generate fully personalized message previews for the first 3 contacts of a CRM.
+    """Generate fully personalized message previews for the first 3 contacts.
 
-    Fetches each contact's full LinkedIn profile + posts, then uses AI to
-    generate the entire message(s) from scratch.
+    Two modes:
+    - CRM mode (crm_id): use 3 oldest contacts in the given CRM.
+    - Live-search mode (keywords + search_regions): mini LinkedIn search,
+      use 3 first hits. Used by search-based campaigns whose destination
+      CRM is empty at creation time.
+
+    Fetches each profile + posts then asks AI to generate the message(s).
     """
     import asyncio
-    from app.linkedin_service import get_linkedin_client, get_profile, get_profile_posts
+    from app.linkedin_service import (
+        get_linkedin_client, get_profile, get_profile_posts,
+        search_people, resolve_geo_urn,
+    )
     from app.utils.ai_message import generate_full_personalized_messages, extract_post_texts
-
-    crm = db.query(CRM).filter(CRM.id == body.crm_id, CRM.user_id == user.id).first()
-    if not crm:
-        raise HTTPException(status_code=404, detail="CRM not found")
 
     if not user.li_at_cookie or not user.cookies_valid:
         raise HTTPException(status_code=400, detail="Valid LinkedIn cookies required")
 
-    contacts = (
-        db.query(Contact)
-        .filter(Contact.crm_id == body.crm_id)
-        .order_by(Contact.added_at.asc())
-        .limit(3)
-        .all()
-    )
-    if not contacts:
-        raise HTTPException(status_code=400, detail="No contacts in this CRM")
-
     client = get_linkedin_client(user.li_at_cookie, user.jsessionid_cookie)
-    previews = []
 
-    for contact in contacts:
+    # Decide which mode we're in
+    if body.crm_id:
+        crm = db.query(CRM).filter(CRM.id == body.crm_id, CRM.user_id == user.id).first()
+        if not crm:
+            raise HTTPException(status_code=404, detail="CRM not found")
+        contacts = (
+            db.query(Contact)
+            .filter(Contact.crm_id == body.crm_id)
+            .order_by(Contact.added_at.asc())
+            .limit(3)
+            .all()
+        )
+        if not contacts:
+            raise HTTPException(status_code=400, detail="No contacts in this CRM")
+
+        # Adapt to a uniform list of dicts
+        candidates = [
+            {
+                "id": c.id,
+                "urn_id": c.urn_id,
+                "first_name": c.first_name,
+                "last_name": c.last_name,
+                "headline": c.headline,
+                "location": c.location,
+                "profile_picture_url": c.profile_picture_url,
+            }
+            for c in contacts
+        ]
+    elif body.keywords or body.search_regions:
+        # Live-search preview (search_connection_dm campaign before search phase runs)
+        resolved = []
+        for loc in (body.search_regions or []):
+            if loc.isdigit():
+                resolved.append(loc)
+                continue
+            urn = resolve_geo_urn(loc, user.li_at_cookie, user.jsessionid_cookie or "")
+            if urn:
+                resolved.append(urn)
+
+        try:
+            results = await search_people(
+                client,
+                keywords=body.keywords or "",
+                limit=3,
+                offset=0,
+                regions=resolved or None,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"LinkedIn search failed: {exc}")
+        if not results:
+            raise HTTPException(status_code=400, detail="Aucun profil trouvé pour ces critères. Ajustez keywords ou localisation.")
+
+        candidates = []
+        for p in results[:3]:
+            name = (p.get("name") or "").split(" ", 1)
+            candidates.append({
+                "id": None,
+                "urn_id": p.get("urn_id"),
+                "first_name": name[0] if name else "",
+                "last_name": name[1] if len(name) > 1 else "",
+                "headline": p.get("jobtitle"),
+                "location": p.get("location"),
+                "profile_picture_url": p.get("picture_url"),
+            })
+    else:
+        raise HTTPException(status_code=400, detail="Provide either crm_id or keywords")
+
+    previews = []
+    for c in candidates:
         contact_data = {
-            "first_name": contact.first_name,
-            "last_name": contact.last_name,
-            "headline": contact.headline,
-            "location": contact.location,
+            "first_name": c["first_name"],
+            "last_name": c["last_name"],
+            "headline": c["headline"],
+            "location": c["location"],
         }
 
         profile_data = None
         recent_posts = None
-        try:
-            profile_data = await get_profile(client, urn_id=contact.urn_id)
-        except Exception:
-            pass
-        try:
-            raw_posts = await get_profile_posts(client, urn_id=contact.urn_id, post_count=3)
-            recent_posts = extract_post_texts(raw_posts) if raw_posts else None
-        except Exception:
-            pass
+        if c.get("urn_id"):
+            try:
+                profile_data = await get_profile(client, urn_id=c["urn_id"])
+            except Exception:
+                pass
+            try:
+                raw_posts = await get_profile_posts(client, urn_id=c["urn_id"], post_count=3)
+                recent_posts = extract_post_texts(raw_posts) if raw_posts else None
+            except Exception:
+                pass
 
         rendered_messages = await asyncio.to_thread(
             generate_full_personalized_messages,
@@ -609,11 +683,11 @@ async def preview_personalization(
 
         previews.append({
             "contact": {
-                "id": contact.id,
-                "first_name": contact.first_name,
-                "last_name": contact.last_name,
-                "headline": contact.headline,
-                "profile_picture_url": contact.profile_picture_url,
+                "id": c["id"],
+                "first_name": c["first_name"],
+                "last_name": c["last_name"],
+                "headline": c["headline"],
+                "profile_picture_url": c["profile_picture_url"],
             },
             "messages": rendered_messages,
         })

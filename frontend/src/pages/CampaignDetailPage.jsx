@@ -3,13 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Pause, Play, XCircle, CheckCircle, AlertCircle, Clock, Zap,
   X, ExternalLink, MessageSquare, UserX, UserCheck, Copy, Timer, List,
-  Columns3, Pencil, Check, RotateCcw, Settings, Eye, Send, Loader2,
+  Columns3, Pencil, Check, RotateCcw, Settings, Eye, Send, Loader2, Trash2,
 } from 'lucide-react';
 import {
   getCampaign, getCampaignMessages, updateCampaign, startCampaign,
   pauseCampaign, resumeCampaign, cancelCampaign, duplicateCampaign,
   runCampaignNow, getCampaignActions, getCampaignContacts, updateContactStatus,
-  retryFromAction,
+  retryFromAction, deleteCampaign,
 } from '../api/campaigns';
 import PageWrapper from '../components/layout/PageWrapper';
 import ContactCardModal from '../components/ContactCardModal';
@@ -122,6 +122,16 @@ export default function CampaignDetailPage() {
   const handleCancel = async () => {
     if (!confirm('Annuler cette campagne ?')) return;
     await cancelCampaign(id); toast.success('Campagne annulée'); load();
+  };
+  const handleDelete = async () => {
+    if (!confirm('Supprimer définitivement cette campagne ? Cette action est irréversible (les actions, messages et contacts liés à la campagne sont aussi effacés).')) return;
+    try {
+      await deleteCampaign(id);
+      toast.success('Campagne supprimée');
+      navigate('/dashboard/campaigns');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de la suppression');
+    }
   };
   const handleDuplicate = async () => {
     try {
@@ -294,6 +304,10 @@ export default function CampaignDetailPage() {
           )}
           <button onClick={handleDuplicate} className="ghost-btn">
             <Copy size={14} /> Dupliquer
+          </button>
+          <button onClick={handleDelete} className="ghost-btn"
+            style={{ color: 'hsl(352 72% 48%)', background: 'hsl(352 90% 97%)', borderColor: 'hsl(352 85% 88%)' }}>
+            <Trash2 size={14} /> Supprimer
           </button>
         </div>
       </div>

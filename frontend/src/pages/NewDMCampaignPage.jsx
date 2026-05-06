@@ -161,20 +161,33 @@ export default function NewDMCampaignPage() {
   };
 
   const generatePreviews = async () => {
-    if (!crmId) return toast.error('Selectionne un CRM');
     if (!aiPrompt.trim()) return toast.error('Donne des instructions a l\'IA');
+    // For search-based campaigns the destination CRM is still empty when
+    // generating previews, so we ask the backend to do a live LinkedIn search
+    // using the keywords + locations the user already typed.
+    const isSearchMode = !!searchConnectionDMConfig;
+    if (!isSearchMode && !crmId) return toast.error('Selectionne un CRM');
+    if (isSearchMode && !searchConnectionDMConfig.keywords?.trim()) {
+      return toast.error('Aucun mot-clé pour la recherche — repasse à l\'étape précédente');
+    }
     setPreviewLoading(true);
     try {
       const fullPrompt = [aiPrompt, extraInstructions].filter(Boolean).join('\n\nConsignes supplementaires:\n');
-      const { data } = await client.post('/campaigns/preview-personalization', {
-        crm_id: parseInt(crmId),
+      const payload = {
         ai_prompt: fullPrompt,
         context_text: contextText,
         followup_count: followupCount,
         followup_delays: followupDelays,
-      });
+      };
+      if (isSearchMode) {
+        payload.keywords = searchConnectionDMConfig.keywords;
+        payload.search_regions = searchConnectionDMConfig.search_regions || [];
+      } else {
+        payload.crm_id = parseInt(crmId);
+      }
+      const { data } = await client.post('/campaigns/preview-personalization', payload);
       setPreviews(data.previews);
-      toast.success(`Apercu genere pour ${data.previews.length} contacts`);
+      toast.success(`Aperçu généré sur ${data.previews.length} profils${isSearchMode ? ' (recherche live)' : ''}`);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
     } finally { setPreviewLoading(false); }

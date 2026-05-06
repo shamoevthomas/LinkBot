@@ -28,6 +28,9 @@ class UserResponse(BaseModel):
     linkedin_profile_url: Optional[str] = None
     cookies_valid: bool
     has_gemini_key: bool = False
+    # True only when an existing Gemini key was rejected by Google (3 strikes)
+    # — distinguishes "user never set a key" from "user's key got revoked".
+    gemini_key_invalid: bool = False
     onboarding_completed: bool
 
 class CookiesUpdate(BaseModel):
@@ -136,11 +139,16 @@ class GenerateCampaignMessagesRequest(BaseModel):
     followup_delays: List[int] = []  # days for each follow-up
 
 class PreviewFullPersonalizationRequest(BaseModel):
-    crm_id: int
+    # Either crm_id (existing CRM with contacts) or live_search params (for
+    # search-based campaigns where the CRM hasn't been populated yet).
+    crm_id: Optional[int] = None
     ai_prompt: str = ""
     context_text: str = ""
     followup_count: int = 0
     followup_delays: List[int] = []
+    # Live-search preview: do a mini LinkedIn search and use the first 3 hits.
+    keywords: Optional[str] = None
+    search_regions: Optional[List[str]] = None
 
 class CampaignResponse(BaseModel):
     id: int

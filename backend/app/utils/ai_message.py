@@ -103,11 +103,13 @@ def should_invalidate_gemini_key(user_id: int) -> bool:
 
 
 def mark_gemini_key_invalid(user_id: int) -> None:
-    """Flag the user's Gemini key as invalid: NULL the key, pause running AI
-    campaigns, and drop a Notification so the dashboard surfaces it.
+    """Flag the user's Gemini key as invalid: NULL the key, set the
+    'gemini_key_invalid' AppSettings flag (drives the dashboard popup),
+    pause running AI campaigns, and drop a Notification.
     Safe to call from any campaign job — uses its own DB session."""
     from app.database import SessionLocal
     from app.models import User, Campaign, Notification
+    from app.utils.settings import set_setting
     db = SessionLocal()
     try:
         u = db.query(User).filter(User.id == user_id).first()
@@ -115,6 +117,8 @@ def mark_gemini_key_invalid(user_id: int) -> None:
             return
         if u.gemini_api_key:
             u.gemini_api_key = None
+        # Trigger the GeminiBlockerModal on the user's dashboard
+        set_setting(db, user_id, "gemini_key_invalid", "true")
         # Pause running campaigns that depend on AI
         running_ai = db.query(Campaign).filter(
             Campaign.user_id == user_id,

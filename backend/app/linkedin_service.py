@@ -7,6 +7,7 @@ Every public function that hits the LinkedIn API is async and delegates to
 
 import asyncio
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -112,17 +113,73 @@ async def validate_cookies(li_at: str, jsessionid: str) -> bool:
 # People search
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Free-text location → LinkedIn geoUrn resolver
+#
+# LinkedIn's people-search filter only accepts geoUrn IDs (e.g. "102596514"
+# for Mulhouse). The classic typeahead endpoints are gated by rotating
+# GraphQL queryIds we can't reliably reach. But the public jobs-search HTML
+# page resolves "?location=<text>" server-side and exposes the URN as
+# `urn:li:fsd_geo:<id>` in the response body.
+# This is hacky but stable — it's a documented public URL, not an API.
+# ---------------------------------------------------------------------------
+_geo_urn_cache: Dict[str, str] = {}
+_GEO_URN_PATTERN = re.compile(r"urn:li:fsd_geo:(\d+)")
+
+
+def resolve_geo_urn(name: str, li_at: str, jsessionid: str) -> Optional[str]:
+    """Resolve a free-text location ("Mulhouse", "Île-de-France", "Lyon") to
+    a LinkedIn geoUrn ID by scraping the public jobs-search page. Cached.
+    Returns None if no URN could be extracted.
+    """
+    if not name:
+        return None
+    key = name.strip().lower()
+    if not key:
+        return None
+    if key in _geo_urn_cache:
+        return _geo_urn_cache[key]
+    if not li_at:
+        return None
+    try:
+        sess = requests.Session()
+        raw_jsessionid = jsessionid or ""
+        if raw_jsessionid and not raw_jsessionid.startswith('"'):
+            raw_jsessionid = f'"{raw_jsessionid}"'
+        sess.cookies.update({"li_at": li_at, "JSESSIONID": raw_jsessionid})
+        sess.headers.update({
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/145.0.0.0",
+        })
+        url = f"https://www.linkedin.com/jobs/search/?keywords=&location={requests.utils.quote(name)}"
+        resp = sess.get(url, timeout=15, allow_redirects=True)
+        if resp.status_code != 200:
+            return None
+        match = _GEO_URN_PATTERN.search(resp.text)
+        if match:
+            urn = match.group(1)
+            _geo_urn_cache[key] = urn
+            return urn
+    except Exception:
+        logger.exception("resolve_geo_urn failed for %r", name)
+    return None
+
+
 async def search_people(
     client: Linkedin,
     keywords: str,
     limit: int = 10,
     offset: int = 0,
     regions: Optional[List[str]] = None,
+    location_name: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Search for people on LinkedIn.
 
     Returns a list of minimal profile dicts with keys such as ``urn_id``,
     ``name``, ``jobtitle``, ``location``, ``distance``, ``navigation_url``.
+
+    Pass either ``regions`` (list of LinkedIn geoUrn IDs, the precise way) OR
+    ``location_name`` (free-text string like "Lyon" or "Île-de-France" — uses
+    LinkedIn's locationFallback so the engine fuzzy-matches server-side).
     """
     try:
         kwargs = dict(
@@ -132,6 +189,8 @@ async def search_people(
         )
         if regions:
             kwargs["regions"] = regions
+        if location_name:
+            kwargs["location_name"] = location_name
         results = await asyncio.to_thread(
             client.search_people,
             **kwargs,

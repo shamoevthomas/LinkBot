@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { updateCookies, getCookiesStatus, updateGeminiKey } from '../api/user';
 import { getSettings, updateSettings, importConnections, importCSV, getLogs, getImportStatus } from '../api/config';
-import { getCRMs } from '../api/crm';
+import { getCRMs, createCRM } from '../api/crm';
+import CreateCRMModal from '../components/crm/CreateCRMModal';
 import { getBlacklist, addToBlacklist, removeFromBlacklist } from '../api/blacklist';
 import { useAuth } from '../context/AuthContext';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -73,7 +74,7 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, loading, handleImportCSV }) {
+function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, loading, handleImportCSV, onCreateCRMRequest }) {
   const [copied, setCopied] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -120,9 +121,13 @@ function CsvImportSection({ csvCrmId, setCsvCrmId, csvFile, setCsvFile, crms, lo
       <div className="space-y-3">
         <div>
           <label className="form-label">CRM destination</label>
-          <select value={csvCrmId} onChange={(e) => setCsvCrmId(e.target.value)} className="input-sm">
+          <select value={csvCrmId} onChange={(e) => {
+              if (e.target.value === '__new__') { onCreateCRMRequest && onCreateCRMRequest('csv'); return; }
+              setCsvCrmId(e.target.value);
+            }} className="input-sm">
             <option value="">Sélectionner un CRM…</option>
             {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="__new__">+ Créer un nouveau CRM…</option>
           </select>
         </div>
         <label
@@ -182,6 +187,9 @@ export default function ConfigPage() {
   const [importStatus, setImportStatus] = useState(null);
   const [csvCrmId, setCsvCrmId] = useState('');
   const [csvFile, setCsvFile] = useState(null);
+  // Inline CRM creation: which dropdown triggered it ('linkedin' or 'csv')
+  const [showCreateCRM, setShowCreateCRM] = useState(null);
+  const [creatingCRM, setCreatingCRM] = useState(false);
 
   const [blacklistItems, setBlacklistItems] = useState([]);
   const [blacklistTotal, setBlacklistTotal] = useState(0);
@@ -472,10 +480,13 @@ export default function ConfigPage() {
               <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
                 <div>
                   <label className="form-label">CRM destination</label>
-                  <select value={importCrmId} onChange={(e) => setImportCrmId(e.target.value)}
-                    disabled={importStatus?.status === 'running'} className="input-sm">
+                  <select value={importCrmId} onChange={(e) => {
+                      if (e.target.value === '__new__') { setShowCreateCRM('linkedin'); return; }
+                      setImportCrmId(e.target.value);
+                    }} disabled={importStatus?.status === 'running'} className="input-sm">
                     <option value="">Sélectionner un CRM…</option>
                     {crms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="__new__">+ Créer un nouveau CRM…</option>
                   </select>
                 </div>
                 <button onClick={handleImportConnections}
@@ -493,6 +504,7 @@ export default function ConfigPage() {
               csvCrmId={csvCrmId} setCsvCrmId={setCsvCrmId}
               csvFile={csvFile} setCsvFile={setCsvFile}
               crms={crms} loading={loading} handleImportCSV={handleImportCSV}
+              onCreateCRMRequest={(src) => setShowCreateCRM(src)}
             />
           </div>
         </div>
@@ -877,6 +889,27 @@ export default function ConfigPage() {
           )}
         </div>
       )}
+
+      <CreateCRMModal
+        open={!!showCreateCRM}
+        creating={creatingCRM}
+        onClose={() => setShowCreateCRM(null)}
+        onCreate={async (data) => {
+          setCreatingCRM(true);
+          try {
+            const newCrm = await createCRM(data);
+            const refreshed = await getCRMs();
+            setCrms(refreshed);
+            // Select the new CRM in whichever dropdown triggered the modal
+            if (showCreateCRM === 'linkedin') setImportCrmId(String(newCrm.id));
+            else if (showCreateCRM === 'csv') setCsvCrmId(String(newCrm.id));
+            toast.success('CRM créé');
+            setShowCreateCRM(null);
+          } catch (err) {
+            toast.error(err.response?.data?.detail || 'Erreur lors de la création du CRM');
+          } finally { setCreatingCRM(false); }
+        }}
+      />
     </PageWrapper>
   );
 }

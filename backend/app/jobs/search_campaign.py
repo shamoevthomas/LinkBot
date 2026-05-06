@@ -6,13 +6,14 @@ associated CRM, and completes immediately.  No tick-based batching —
 the entire search runs in one go.
 """
 
+import json
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.database import SessionLocal
 from app.models import Campaign, CampaignAction, Contact, User, Blacklist
-from app.linkedin_service import get_linkedin_client, search_people
+from app.linkedin_service import get_linkedin_client, search_people, resolve_geo_urn
 from app.scheduler import cancel_campaign_job
 from app.routers.notifications import create_notification
 
@@ -20,6 +21,24 @@ logger = logging.getLogger(__name__)
 
 # LinkedIn returns max 10 per page
 _PAGE_SIZE = 10
+
+
+def _parse_search_locations(raw: str | None) -> list[str]:
+    """Read campaign.search_regions which can be either:
+    - JSON array of free-text locations (new): '["Lyon", "Île-de-France"]'
+    - Comma-separated geoUrn IDs (legacy): "105015875,100565514"
+    Returns the list of strings (each item may be free-text OR a geoUrn).
+    """
+    if not raw:
+        return []
+    s = raw.strip()
+    if s.startswith("["):
+        try:
+            arr = json.loads(s)
+            return [str(x).strip() for x in arr if str(x).strip()]
+        except Exception:
+            pass
+    return [x.strip() for x in s.split(",") if x.strip()]
 
 
 async def run_search_campaign(campaign_id: int) -> None:
@@ -51,32 +70,60 @@ async def run_search_campaign(campaign_id: int) -> None:
         offset = campaign.search_offset or 0
         added = 0
         skipped = 0
-        regions = campaign.search_regions.split(",") if campaign.search_regions else None
+        # search_regions is stored as JSON array of free-text location names
+        # ("Lyon", "Île-de-France"...) OR legacy comma-CSV of geoUrns.
+        raw_locations = _parse_search_locations(campaign.search_regions)
 
-        print(f"[SEARCH JOB] Campaign {campaign_id}: keywords={campaign.keywords!r}, target={target}, regions={regions}", flush=True)
+        # Resolve each free-text entry to a LinkedIn geoUrn. Numeric strings
+        # are kept as-is (legacy geoUrn format). Names that fail to resolve
+        # are dropped with a warning — the search still runs on whatever
+        # resolved successfully (or all locations if none).
+        resolved_geos: list[str] = []
+        unresolved: list[str] = []
+        for loc in raw_locations:
+            if loc.isdigit():
+                resolved_geos.append(loc)
+                continue
+            urn = resolve_geo_urn(loc, user.li_at_cookie, user.jsessionid_cookie or "")
+            if urn:
+                resolved_geos.append(urn)
+                print(f"[SEARCH JOB] Campaign {campaign_id}: resolved {loc!r} → geoUrn {urn}", flush=True)
+            else:
+                unresolved.append(loc)
+                print(f"[SEARCH JOB] Campaign {campaign_id}: could NOT resolve {loc!r} to a geoUrn — skipping this location", flush=True)
 
-        # Loop through pages until we reach target or exhaust results
+        if unresolved and not resolved_geos:
+            campaign.error_message = f"Aucune des localisations n'a pu être résolue: {unresolved}"
+
+        print(f"[SEARCH JOB] Campaign {campaign_id}: keywords={campaign.keywords!r}, target={target}, geoUrns={resolved_geos}", flush=True)
+
+        # Empty list means no location filter — single search pass.
+        # Multiple URNs are passed together (LinkedIn search_people accepts a list and ORs them).
+        seen_urns: set = set()
+        loc_offset = offset
+
         while added < target:
             batch = min(_PAGE_SIZE, target - added)
             try:
-                results = await search_people(
-                    client,
-                    keywords=campaign.keywords or "",
-                    limit=batch,
-                    offset=offset,
-                    regions=regions,
-                )
-                print(f"[SEARCH JOB] Campaign {campaign_id}: offset={offset}, batch={batch}, got {len(results)} results", flush=True)
+                search_kwargs = {
+                    "keywords": campaign.keywords or "",
+                    "limit": batch,
+                    "offset": loc_offset,
+                }
+                if resolved_geos:
+                    search_kwargs["regions"] = resolved_geos
+                results = await search_people(client, **search_kwargs)
+                print(f"[SEARCH JOB] Campaign {campaign_id}: offset={loc_offset}, batch={batch}, got {len(results)} results", flush=True)
             except Exception as exc:
-                logger.exception("Search failed for campaign %d at offset %d", campaign_id, offset)
-                campaign.error_message = f"Search error at offset {offset}: {str(exc)[:300]}"
-                # Keep what we found so far, don't fail the whole campaign
+                logger.exception("Search failed for campaign %d", campaign_id)
+                campaign.error_message = f"Search error: {str(exc)[:300]}"
                 break
 
             if not results:
                 break
 
-            offset += len(results)
+            loc_offset += len(results)
+            offset = loc_offset
 
             for person in results:
                 urn_id = person.get("urn_id")
@@ -84,6 +131,10 @@ async def run_search_campaign(campaign_id: int) -> None:
                     skipped += 1
                     _log_action(db, campaign.id, None, "search_add", "skipped", "No urn_id in result")
                     continue
+
+                if urn_id in seen_urns:
+                    continue
+                seen_urns.add(urn_id)
 
                 existing = db.query(Contact).filter(
                     Contact.crm_id == campaign.crm_id,
