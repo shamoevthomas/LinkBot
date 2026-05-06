@@ -142,10 +142,29 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                             record_gemini_success(campaign.user_id)
                     except Exception as exc:
                         from app.utils.ai_message import (
-                            GeminiAuthError, mark_gemini_key_invalid,
+                            GeminiAuthError, GeminiOverloadedError, mark_gemini_key_invalid,
                             record_gemini_auth_failure, should_invalidate_gemini_key,
                         )
-                        if isinstance(exc, GeminiAuthError):
+                        if isinstance(exc, GeminiOverloadedError):
+                            fallback = (campaign.fallback_message or "").strip()
+                            if fallback:
+                                _contact_vars = {
+                                    "first_name": contact.first_name,
+                                    "last_name": contact.last_name,
+                                    "headline": contact.headline,
+                                    "location": contact.location,
+                                }
+                                message_body = render_template(fallback, _contact_vars)
+                                logger.info(
+                                    "Campaign %d (user %s): Gemini overloaded on contact %d → fallback message",
+                                    campaign_id, campaign.user_id, contact.id,
+                                )
+                                # Fall through to send
+                            else:
+                                cc.last_checked_at = datetime.utcnow()
+                                db.commit()
+                                continue
+                        elif isinstance(exc, GeminiAuthError):
                             record_gemini_auth_failure(campaign.user_id)
                             if should_invalidate_gemini_key(campaign.user_id):
                                 mark_gemini_key_invalid(campaign.user_id)
@@ -242,7 +261,35 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     continue
 
                 template = campaign.message_template or ""
-                message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
+                try:
+                    message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
+                except Exception as exc:
+                    from app.utils.ai_message import GeminiAuthError, GeminiOverloadedError
+                    if isinstance(exc, (GeminiAuthError, GeminiOverloadedError)):
+                        fallback = (campaign.fallback_message or "").strip()
+                        if not fallback:
+                            logger.warning(
+                                "Campaign %d (user %s): Gemini unavailable on contact %d (phase 2), no fallback — skipping",
+                                campaign_id, campaign.user_id, contact.id,
+                            )
+                            continue
+                        _contact_vars = {
+                            "first_name": contact.first_name,
+                            "last_name": contact.last_name,
+                            "headline": contact.headline,
+                            "location": contact.location,
+                        }
+                        message_body = render_template(fallback, _contact_vars)
+                        logger.info(
+                            "Campaign %d (user %s): Gemini glitch on contact %d (phase 2) → fallback",
+                            campaign_id, campaign.user_id, contact.id,
+                        )
+                    else:
+                        logger.warning(
+                            "Campaign %d (user %s): render failed on contact %d (phase 2): %s",
+                            campaign_id, campaign.user_id, contact.id, exc,
+                        )
+                        continue
                 try:
                     success = await send_message(client, contact.urn_id, message_body)
                 except Exception as exc:

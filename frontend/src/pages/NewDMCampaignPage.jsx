@@ -189,7 +189,20 @@ export default function NewDMCampaignPage() {
       setPreviews(data.previews);
       toast.success(`Aperçu généré sur ${data.previews.length} profils${isSearchMode ? ' (recherche live)' : ''}`);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Erreur');
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+      if (status === 503) {
+        // Gemini overloaded — surface the cause + reassure that fallbacks
+        // will be used during the campaign while Google recovers.
+        toast.error(
+          'Gemini est temporairement surchargé côté Google. Tes campagnes IA continueront avec le message fallback en attendant — réessaie l\'aperçu dans 1-2 min.',
+          { duration: 8000 }
+        );
+      } else if (detail) {
+        toast.error(detail);
+      } else {
+        toast.error('Erreur de génération');
+      }
     } finally { setPreviewLoading(false); }
   };
 

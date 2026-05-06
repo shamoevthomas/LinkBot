@@ -166,10 +166,21 @@ async def run_connection_campaign(campaign_id: int) -> None:
                     "location": contact.location,
                 }
                 if campaign.use_ai and user.gemini_api_key:
-                    ai_msg = await asyncio.to_thread(
-                        generate_personalized_message, campaign.message_template, contact_data, 300,
-                        None, None, user.gemini_api_key,
-                    )
+                    try:
+                        ai_msg = await asyncio.to_thread(
+                            generate_personalized_message, campaign.message_template, contact_data, 300,
+                            None, None, user.gemini_api_key,
+                        )
+                    except Exception as exc:
+                        from app.utils.ai_message import GeminiAuthError, GeminiOverloadedError
+                        if isinstance(exc, (GeminiAuthError, GeminiOverloadedError)):
+                            logger.info(
+                                "Campaign %d: Gemini unavailable on contact %d, falling back to plain template",
+                                campaign.id, contact.id,
+                            )
+                            ai_msg = None
+                        else:
+                            raise
                     message = ai_msg if ai_msg else render_template(campaign.message_template, contact_data)
                 else:
                     message = render_template(campaign.message_template, contact_data)

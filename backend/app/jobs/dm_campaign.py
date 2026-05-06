@@ -270,11 +270,33 @@ async def run_dm_campaign(campaign_id: int) -> None:
                         record_gemini_success(campaign.user_id)
                 except Exception as exc:
                     from app.utils.ai_message import (
-                        GeminiAuthError, mark_gemini_key_invalid,
+                        GeminiAuthError, GeminiOverloadedError, mark_gemini_key_invalid,
                         record_gemini_auth_failure, should_invalidate_gemini_key,
                         AUTH_FAILURE_THRESHOLD,
                     )
-                    if isinstance(exc, GeminiAuthError):
+                    if isinstance(exc, GeminiOverloadedError):
+                        # Gemini is overloaded (503). Use the fallback message if
+                        # configured so the campaign keeps moving; otherwise skip
+                        # the prospect without marking perdu (we'll retry next tick).
+                        if main_fallback and main_fallback.strip():
+                            _contact_vars = {
+                                "first_name": contact.first_name,
+                                "last_name": contact.last_name,
+                                "headline": contact.headline,
+                                "location": contact.location,
+                            }
+                            message_body = render_template(main_fallback, _contact_vars)
+                            print(
+                                f"[DM JOB] Campaign {campaign_id}: Gemini overloaded on contact {contact.id}, sending fallback message",
+                                flush=True,
+                            )
+                            # Fall through to send
+                        else:
+                            last_error = f"Gemini overloaded (no fallback): {exc}"
+                            message_body = None
+                            _skip_no_perdu = True
+                            break
+                    elif isinstance(exc, GeminiAuthError):
                         record_gemini_auth_failure(campaign.user_id)
                         if should_invalidate_gemini_key(campaign.user_id):
                             mark_gemini_key_invalid(campaign.user_id)
@@ -699,8 +721,8 @@ async def _render_message(campaign, template, contact, client, api_key=""):
             # GeminiAuthError must bubble up so the campaign job can apply
             # the 3-strike rule and use the fallback message. Any other
             # transient AI error silently falls through to the template.
-            from app.utils.ai_message import GeminiAuthError
-            if isinstance(exc, GeminiAuthError):
+            from app.utils.ai_message import GeminiAuthError, GeminiOverloadedError
+            if isinstance(exc, (GeminiAuthError, GeminiOverloadedError)):
                 raise
             logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
         # Don't send the __FULL_AI__ placeholder as an actual message
@@ -728,8 +750,8 @@ async def _render_message(campaign, template, contact, client, api_key=""):
                 api_key,
             )
         except Exception as exc:
-            from app.utils.ai_message import GeminiAuthError
-            if isinstance(exc, GeminiAuthError):
+            from app.utils.ai_message import GeminiAuthError, GeminiOverloadedError
+            if isinstance(exc, (GeminiAuthError, GeminiOverloadedError)):
                 raise
             logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)
             compliment = ""

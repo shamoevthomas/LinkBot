@@ -6,6 +6,7 @@ associated CRM, and completes immediately.  No tick-based batching —
 the entire search runs in one go.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -84,7 +85,9 @@ async def run_search_campaign(campaign_id: int) -> None:
             if loc.isdigit():
                 resolved_geos.append(loc)
                 continue
-            urn = resolve_geo_urn(loc, user.li_at_cookie, user.jsessionid_cookie or "")
+            urn = await asyncio.to_thread(
+                resolve_geo_urn, loc, user.li_at_cookie, user.jsessionid_cookie or ""
+            )
             if urn:
                 resolved_geos.append(urn)
                 print(f"[SEARCH JOB] Campaign {campaign_id}: resolved {loc!r} → geoUrn {urn}", flush=True)

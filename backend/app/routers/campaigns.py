@@ -615,7 +615,9 @@ async def preview_personalization(
             if loc.isdigit():
                 resolved.append(loc)
                 continue
-            urn = resolve_geo_urn(loc, user.li_at_cookie, user.jsessionid_cookie or "")
+            urn = await asyncio.to_thread(
+                resolve_geo_urn, loc, user.li_at_cookie, user.jsessionid_cookie or ""
+            )
             if urn:
                 resolved.append(urn)
 
@@ -669,17 +671,29 @@ async def preview_personalization(
             except Exception:
                 pass
 
-        rendered_messages = await asyncio.to_thread(
-            generate_full_personalized_messages,
-            contact_data,
-            profile_data,
-            recent_posts,
-            body.context_text,
-            body.ai_prompt,
-            body.followup_count,
-            body.followup_delays,
-            user.gemini_api_key or "",
-        )
+        from app.utils.ai_message import GeminiAuthError, GeminiOverloadedError
+        try:
+            rendered_messages = await asyncio.to_thread(
+                generate_full_personalized_messages,
+                contact_data,
+                profile_data,
+                recent_posts,
+                body.context_text,
+                body.ai_prompt,
+                body.followup_count,
+                body.followup_delays,
+                user.gemini_api_key or "",
+            )
+        except GeminiOverloadedError:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini est temporairement surchargé. Réessayez dans 1-2 minutes.",
+            )
+        except GeminiAuthError:
+            raise HTTPException(
+                status_code=400,
+                detail="Clé Gemini invalide. Mettez-la à jour dans Configuration.",
+            )
 
         previews.append({
             "contact": {

@@ -71,6 +71,10 @@ class GeminiAuthError(Exception):
     """Raised when Gemini rejects the API key (401/403)."""
 
 
+class GeminiOverloadedError(Exception):
+    """Raised when Gemini is overloaded (503) after all retries exhausted."""
+
+
 # ---------------------------------------------------------------------------
 # 3-strike auth-failure tracking — don't trash the key on a single transient
 # error (network blip, content filter on one prospect's headline, etc).
@@ -169,6 +173,10 @@ def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> reque
             time.sleep(wait)
             continue
         return resp
+    # Exhausted retries on 503 — surface a typed error so callers can return a
+    # clean 503 to the UI instead of a generic 500.
+    if resp.status_code == 503:
+        raise GeminiOverloadedError("Gemini is overloaded (503) after 3 retries")
     return resp
 
 
@@ -389,6 +397,8 @@ EXEMPLES DE BON RESULTAT:
 
         return compliment
 
+    except (GeminiAuthError, GeminiOverloadedError):
+        raise
     except Exception:
         logger.exception("Error generating compliment with Gemini")
         return ""
@@ -448,6 +458,8 @@ REGLES:
 
         return message.strip()
 
+    except (GeminiAuthError, GeminiOverloadedError):
+        raise
     except Exception:
         logger.exception("Error generating AI message with Gemini")
         return ""
@@ -562,6 +574,8 @@ CONTENT:
         messages.sort(key=lambda m: m["sequence"])
         return messages if messages else [{"sequence": 0, "rendered": "", "delay_days": 0}]
 
+    except (GeminiAuthError, GeminiOverloadedError):
+        raise
     except Exception:
         logger.exception("Error generating full personalized messages")
         return [{"sequence": 0, "rendered": "", "delay_days": 0}]
@@ -677,6 +691,8 @@ Write ONLY the formatted messages, nothing else."""
 
         return messages
 
+    except (GeminiAuthError, GeminiOverloadedError):
+        raise
     except Exception:
         logger.exception("Error generating campaign messages with Gemini")
         return []
