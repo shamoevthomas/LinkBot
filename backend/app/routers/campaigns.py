@@ -683,6 +683,7 @@ async def preview_personalization(
                 body.followup_count,
                 body.followup_delays,
                 user.gemini_api_key or "",
+                True,  # fail_fast: previews shouldn't keep the user waiting 30+s
             )
         except GeminiOverloadedError:
             raise HTTPException(

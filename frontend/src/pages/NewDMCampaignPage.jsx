@@ -185,7 +185,9 @@ export default function NewDMCampaignPage() {
       } else {
         payload.crm_id = parseInt(crmId);
       }
-      const { data } = await client.post('/campaigns/preview-personalization', payload);
+      // Preview can take 30-60s (LinkedIn profile fetches + AI generation),
+      // override the default 15s axios timeout so we don't abort early.
+      const { data } = await client.post('/campaigns/preview-personalization', payload, { timeout: 90000 });
       setPreviews(data.previews);
       toast.success(`Aperçu généré sur ${data.previews.length} profils${isSearchMode ? ' (recherche live)' : ''}`);
     } catch (err) {

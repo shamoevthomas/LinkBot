@@ -144,16 +144,27 @@ def mark_gemini_key_invalid(user_id: int) -> None:
         db.close()
 
 
-def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> requests.Response:
-    """POST to Gemini with rate limiting and retry on 429/503 (up to 3 attempts).
+def _gemini_post(
+    json_body: dict,
+    timeout: int = 30,
+    api_key: str = "",
+    fail_fast: bool = False,
+) -> requests.Response:
+    """POST to Gemini with rate limiting and retry on 429/503.
+
+    fail_fast=True: 1 attempt only, no retry on 503 (used for interactive
+    previews where the user is waiting and would rather see a fast error
+    than a 30-60s spinner). Default False = up to 3 attempts.
 
     Raises GeminiAuthError on 401/403 so callers can mark the user's key invalid
-    and surface a banner in the UI.
+    and surface a banner in the UI. Raises GeminiOverloadedError when 503 retries
+    are exhausted (or immediately if fail_fast=True).
     """
     if not api_key:
         raise ValueError("Gemini API key missing: user must configure their own key in settings")
     key = api_key
-    for attempt in range(3):
+    max_attempts = 1 if fail_fast else 3
+    for attempt in range(max_attempts):
         _wait_for_rate_limit()
         resp = requests.post(
             f"{GEMINI_URL}?key={key}",
@@ -163,11 +174,15 @@ def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> reque
         if resp.status_code in (400, 401, 403):
             raise GeminiAuthError(f"Gemini rejected the API key (HTTP {resp.status_code})")
         if resp.status_code == 429:
+            if fail_fast:
+                break
             wait = 10 if attempt == 0 else 20
             logger.info(f"[GEMINI] 429 received, retrying in {wait}s (attempt {attempt + 1}/3)")
             time.sleep(wait)
             continue
         if resp.status_code == 503:
+            if fail_fast:
+                break
             wait = 5 * (attempt + 1)  # 5s, 10s, 15s
             logger.info(f"[GEMINI] 503 received, retrying in {wait}s (attempt {attempt + 1}/3)")
             time.sleep(wait)
@@ -176,7 +191,7 @@ def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> reque
     # Exhausted retries on 503 — surface a typed error so callers can return a
     # clean 503 to the UI instead of a generic 500.
     if resp.status_code == 503:
-        raise GeminiOverloadedError("Gemini is overloaded (503) after 3 retries")
+        raise GeminiOverloadedError("Gemini is overloaded (503)")
     return resp
 
 
@@ -478,6 +493,7 @@ def generate_full_personalized_messages(
     followup_count: int = 0,
     followup_delays: Optional[List[int]] = None,
     api_key: str = "",
+    fail_fast: bool = False,
 ) -> List[Dict[str, Any]]:
     """Generate complete message(s) from scratch for one contact.
 
@@ -539,7 +555,7 @@ CONTENT:
                         "Tu suis les instructions de l'utilisateur. Tu reponds uniquement avec les messages formates."
                     )}]
                 },
-            }, timeout=45, api_key=api_key)
+            }, timeout=45, api_key=api_key, fail_fast=fail_fast)
         resp.raise_for_status()
         data = resp.json()
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
