@@ -36,13 +36,42 @@ def validate_gemini_key(api_key: str, timeout: int = 10) -> dict:
 
     if resp.status_code == 200:
         return {"valid": True, "reason": "ok"}
-    if resp.status_code in (400, 401, 403):
-        # 400 invalid argument when the key is malformed; 401/403 unauthorized.
+    if resp.status_code in (401, 403):
         return {"valid": False, "reason": "invalid_key"}
+    if resp.status_code == 400:
+        # 400 INVALID_ARGUMENT can mean either a bad key OR a bad prompt /
+        # content policy hit. Only flag the key invalid when Google's error
+        # message explicitly says so.
+        if _is_invalid_key_error(resp):
+            return {"valid": False, "reason": "invalid_key"}
+        # Otherwise it's a transient request issue — accept the key.
+        return {"valid": True, "reason": "ok"}
     if resp.status_code == 429:
         # Key works but quota already burned — tell the user, don't reject.
         return {"valid": True, "reason": "quota_exceeded"}
+    if resp.status_code >= 500:
+        # Gemini is down. Not the user's fault — accept the key.
+        return {"valid": True, "reason": "gemini_unavailable"}
     return {"valid": False, "reason": f"http_{resp.status_code}"}
+
+
+def _is_invalid_key_error(resp) -> bool:
+    """Inspect a Gemini 400 response to tell key-related errors apart from
+    transient prompt/content issues. Returns True only when Google's message
+    explicitly mentions the API key being invalid."""
+    try:
+        body = resp.json()
+    except Exception:
+        return False
+    err = (body or {}).get("error", {}) if isinstance(body, dict) else {}
+    msg = (err.get("message") or "").lower()
+    status = (err.get("status") or "").upper()
+    # Real auth signals from Google
+    if "api key not valid" in msg or "api_key_invalid" in msg:
+        return True
+    if status == "UNAUTHENTICATED" or status == "PERMISSION_DENIED":
+        return True
+    return False
 
 # ---------------------------------------------------------------------------
 # Rate limiter — 14 RPM max to stay safely under Google free tier (15 RPM)
@@ -171,8 +200,20 @@ def _gemini_post(
             json=json_body,
             timeout=timeout,
         )
-        if resp.status_code in (400, 401, 403):
+        if resp.status_code in (401, 403):
             raise GeminiAuthError(f"Gemini rejected the API key (HTTP {resp.status_code})")
+        if resp.status_code == 400:
+            # 400 INVALID_ARGUMENT can be many things — only blame the user's
+            # key when Google's error message explicitly says it's invalid.
+            # Otherwise let the call fall through to the generic exception
+            # path so the campaign uses its fallback message and we DON'T
+            # strike the user's key for what is likely a Gemini bug.
+            if _is_invalid_key_error(resp):
+                raise GeminiAuthError("Gemini rejected the API key (400 INVALID_ARGUMENT)")
+            # Surface as a generic HTTPError; callers' generic except branch
+            # will fall back to the template / fallback message.
+            resp.raise_for_status()
+            return resp
         if resp.status_code == 429:
             if fail_fast:
                 break
@@ -180,18 +221,20 @@ def _gemini_post(
             logger.info(f"[GEMINI] 429 received, retrying in {wait}s (attempt {attempt + 1}/3)")
             time.sleep(wait)
             continue
-        if resp.status_code == 503:
+        if resp.status_code >= 500:
+            # 500/502/503/504 are all Gemini-side issues — never the user's key.
             if fail_fast:
                 break
             wait = 5 * (attempt + 1)  # 5s, 10s, 15s
-            logger.info(f"[GEMINI] 503 received, retrying in {wait}s (attempt {attempt + 1}/3)")
+            logger.info(f"[GEMINI] {resp.status_code} received, retrying in {wait}s (attempt {attempt + 1}/3)")
             time.sleep(wait)
             continue
         return resp
-    # Exhausted retries on 503 — surface a typed error so callers can return a
-    # clean 503 to the UI instead of a generic 500.
-    if resp.status_code == 503:
-        raise GeminiOverloadedError("Gemini is overloaded (503)")
+    # Exhausted retries on 5xx — surface a typed error so callers can return a
+    # clean 503 to the UI instead of a generic 500, and so they DON'T count
+    # this as a strike against the user's key.
+    if resp.status_code >= 500:
+        raise GeminiOverloadedError(f"Gemini is unavailable (HTTP {resp.status_code})")
     return resp
 
 
