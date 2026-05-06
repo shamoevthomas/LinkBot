@@ -135,7 +135,15 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
 
                 if get_user_actions_today(dm_action_types, campaign.user_id, db) < dm_limit:
                     template = campaign.message_template or ""
-                    message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
+                    try:
+                        message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
+                    except Exception as exc:
+                        from app.utils.ai_message import GeminiAuthError, mark_gemini_key_invalid
+                        if isinstance(exc, GeminiAuthError):
+                            mark_gemini_key_invalid(campaign.user_id)
+                            cancel_campaign_job(campaign_id)
+                            return
+                        raise
                     try:
                         success = await send_message(client, contact.urn_id, message_body)
                     except Exception as exc:

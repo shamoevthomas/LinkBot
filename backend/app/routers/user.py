@@ -113,14 +113,42 @@ async def update_cookies(
     return CookiesStatus(valid=valid)
 
 
+@router.post("/validate-gemini-key")
+def validate_gemini_key_endpoint(
+    body: dict,
+    _user: User = Depends(get_current_user),
+):
+    """Test a Gemini API key without storing it. Used by onboarding + Configuration
+    to give immediate feedback before the user submits."""
+    from app.utils.ai_message import validate_gemini_key
+    key = (body.get("gemini_api_key") or "").strip()
+    return validate_gemini_key(key)
+
+
 @router.put("/gemini-key")
 def update_gemini_key(
     body: dict,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Update the user's Gemini API key. Auto-pauses all running AI campaigns."""
+    """Update the user's Gemini API key. Validates against Google before saving,
+    rejects with 400 if the key is malformed/unauthorized. Auto-pauses all running
+    AI campaigns when a different key is set (since templates may have been tuned
+    around the old key's behavior)."""
+    from app.utils.ai_message import validate_gemini_key as _gemini_validate
     new_key = (body.get("gemini_api_key") or "").strip()
+
+    if new_key:
+        result = _gemini_validate(new_key)
+        if not result["valid"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Clé Gemini invalide. Vérifiez-la sur "
+                    "https://aistudio.google.com/apikey et recollez-la."
+                ),
+            )
+        # If key is valid but quota exceeded, store it but warn the caller.
 
     # Auto-pause running campaigns that use AI
     if user.gemini_api_key and new_key != user.gemini_api_key:

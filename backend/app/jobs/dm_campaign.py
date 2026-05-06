@@ -265,6 +265,12 @@ async def run_dm_campaign(campaign_id: int) -> None:
                 try:
                     message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                 except Exception as exc:
+                    from app.utils.ai_message import GeminiAuthError, mark_gemini_key_invalid
+                    if isinstance(exc, GeminiAuthError):
+                        mark_gemini_key_invalid(campaign.user_id)
+                        cancel_campaign_job(campaign_id)
+                        print(f"[DM JOB] Campaign {campaign_id}: Gemini key rejected, paused user campaigns", flush=True)
+                        return
                     last_error = f"Render failed: {exc}"
                     message_body = None
 

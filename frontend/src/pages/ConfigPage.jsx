@@ -696,11 +696,12 @@ export default function ConfigPage() {
                   setGeminiSaving(true);
                   try {
                     await updateGeminiKey(geminiKey.trim());
-                    toast.success('Clé API Gemini mise à jour');
+                    toast.success('Clé API Gemini validée et sauvegardée');
                     setGeminiKey('');
                     refreshUser();
-                  } catch { toast.error('Erreur'); }
-                  finally { setGeminiSaving(false); }
+                  } catch (err) {
+                    toast.error(err.response?.data?.detail || 'Erreur lors de la validation de la clé');
+                  } finally { setGeminiSaving(false); }
                 }} disabled={geminiSaving || !geminiKey.trim()} className="cta-btn">
                   {geminiSaving ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
                   Sauvegarder la clé

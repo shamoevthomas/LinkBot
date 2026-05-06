@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Upload, ChevronRight, ChevronLeft, HelpCircle, Check, Shield, Sparkles, Key, ArrowUpRight, LogOut, Clock, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { submitOnboarding } from '../api/user';
+import { submitOnboarding, validateGeminiKey } from '../api/user';
 import { updateSettings } from '../api/config';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -413,7 +413,24 @@ export default function OnboardingWizard() {
                   }}>
                   <ChevronLeft size={16} /> Retour
                 </button>
-                <button onClick={() => setStep(4)} disabled={!canStep4}
+                <button onClick={async () => {
+                    if (wantAI && form.gemini_api_key) {
+                      try {
+                        const r = await validateGeminiKey(form.gemini_api_key);
+                        if (!r.valid) {
+                          toast.error("Clé Gemini invalide. Vérifiez-la sur aistudio.google.com/apikey.");
+                          return;
+                        }
+                        if (r.reason === 'quota_exceeded') {
+                          toast("⚠️ Clé valide mais quota gratuit déjà atteint pour aujourd'hui.", { icon: '⚠️' });
+                        }
+                      } catch (err) {
+                        toast.error(err.response?.data?.detail || "Impossible de tester la clé Gemini.");
+                        return;
+                      }
+                    }
+                    setStep(4);
+                  }} disabled={!canStep4}
                   className="cta-btn"
                   style={{ flex: 1, padding: '12px 16px', fontSize: 14, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                   Continuer <ChevronRight size={16} />

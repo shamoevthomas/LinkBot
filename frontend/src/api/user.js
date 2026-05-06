@@ -20,3 +20,6 @@ export const updateProfile = (formData) =>
 
 export const updateGeminiKey = (gemini_api_key) =>
   client.put('/user/gemini-key', { gemini_api_key }).then((r) => r.data);
+
+export const validateGeminiKey = (gemini_api_key) =>
+  client.post('/user/validate-gemini-key', { gemini_api_key }).then((r) => r.data);

@@ -57,6 +57,18 @@ async def complete_onboarding(
     user.linkedin_profile_url = linkedin_profile_url or user.linkedin_profile_url
     user.profile_picture_path = picture_path
     if gemini_api_key.strip():
+        # Validate the Gemini key before persisting — reject the whole onboarding
+        # if it's malformed/unauthorized so the user fixes it now.
+        from app.utils.ai_message import validate_gemini_key as _gemini_validate
+        result = _gemini_validate(gemini_api_key.strip())
+        if not result["valid"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Clé Gemini invalide. Vérifiez-la sur "
+                    "https://aistudio.google.com/apikey et recommencez."
+                ),
+            )
         user.gemini_api_key = gemini_api_key.strip()
     user.onboarding_completed = True
 

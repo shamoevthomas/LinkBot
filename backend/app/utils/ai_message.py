@@ -13,6 +13,37 @@ logger = logging.getLogger(__name__)
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
+
+def validate_gemini_key(api_key: str, timeout: int = 10) -> dict:
+    """Test a Gemini API key with a minimal call. Returns
+        {"valid": bool, "reason": str}.
+    Doesn't consume meaningful quota — uses a 5-token max prompt.
+    """
+    api_key = (api_key or "").strip()
+    if not api_key:
+        return {"valid": False, "reason": "empty"}
+    try:
+        resp = requests.post(
+            f"{GEMINI_URL}?key={api_key}",
+            json={
+                "contents": [{"parts": [{"text": "ping"}]}],
+                "generationConfig": {"maxOutputTokens": 5, "temperature": 0},
+            },
+            timeout=timeout,
+        )
+    except requests.RequestException as exc:
+        return {"valid": False, "reason": f"network: {exc}"}
+
+    if resp.status_code == 200:
+        return {"valid": True, "reason": "ok"}
+    if resp.status_code in (400, 401, 403):
+        # 400 invalid argument when the key is malformed; 401/403 unauthorized.
+        return {"valid": False, "reason": "invalid_key"}
+    if resp.status_code == 429:
+        # Key works but quota already burned — tell the user, don't reject.
+        return {"valid": True, "reason": "quota_exceeded"}
+    return {"valid": False, "reason": f"http_{resp.status_code}"}
+
 # ---------------------------------------------------------------------------
 # Rate limiter — 14 RPM max to stay safely under Google free tier (15 RPM)
 # ---------------------------------------------------------------------------
@@ -36,8 +67,50 @@ def _wait_for_rate_limit():
         _request_timestamps.append(time.monotonic())
 
 
+class GeminiAuthError(Exception):
+    """Raised when Gemini rejects the API key (401/403)."""
+
+
+def mark_gemini_key_invalid(user_id: int) -> None:
+    """Flag the user's Gemini key as invalid: NULL the key, pause running AI
+    campaigns, and drop a Notification so the dashboard surfaces it.
+    Safe to call from any campaign job — uses its own DB session."""
+    from app.database import SessionLocal
+    from app.models import User, Campaign, Notification
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == user_id).first()
+        if not u:
+            return
+        if u.gemini_api_key:
+            u.gemini_api_key = None
+        # Pause running campaigns that depend on AI
+        running_ai = db.query(Campaign).filter(
+            Campaign.user_id == user_id,
+            Campaign.status == "running",
+            Campaign.use_ai == True,  # noqa: E712
+        ).all()
+        for c in running_ai:
+            c.status = "paused"
+            c.error_message = "Clé Gemini invalide — recollez-la dans Configuration."
+        db.add(Notification(
+            user_id=user_id,
+            type="warning",
+            title="Clé Gemini invalide",
+            message="Google a rejeté votre clé. Recollez-la dans Configuration → IA pour reprendre vos campagnes IA.",
+            read=False,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+
 def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> requests.Response:
-    """POST to Gemini with rate limiting and retry on 429/503 (up to 3 attempts)."""
+    """POST to Gemini with rate limiting and retry on 429/503 (up to 3 attempts).
+
+    Raises GeminiAuthError on 401/403 so callers can mark the user's key invalid
+    and surface a banner in the UI.
+    """
     if not api_key:
         raise ValueError("Gemini API key missing: user must configure their own key in settings")
     key = api_key
@@ -48,6 +121,8 @@ def _gemini_post(json_body: dict, timeout: int = 30, api_key: str = "") -> reque
             json=json_body,
             timeout=timeout,
         )
+        if resp.status_code in (400, 401, 403):
+            raise GeminiAuthError(f"Gemini rejected the API key (HTTP {resp.status_code})")
         if resp.status_code == 429:
             wait = 10 if attempt == 0 else 20
             logger.info(f"[GEMINI] 429 received, retrying in {wait}s (attempt {attempt + 1}/3)")
