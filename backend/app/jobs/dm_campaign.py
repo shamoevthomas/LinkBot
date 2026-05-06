@@ -285,13 +285,30 @@ async def run_dm_campaign(campaign_id: int) -> None:
                                 flush=True,
                             )
                             return
-                        # Below threshold: treat as transient, skip prospect, retry next tick.
-                        last_error = f"Gemini auth glitch: {exc}"
+                        # Below the strike threshold: send the fallback message
+                        # if the user provided one, so the campaign keeps moving.
+                        # If no fallback, we have to skip the prospect.
+                        if main_fallback and main_fallback.strip():
+                            _contact_vars = {
+                                "first_name": contact.first_name,
+                                "last_name": contact.last_name,
+                                "headline": contact.headline,
+                                "location": contact.location,
+                            }
+                            message_body = render_template(main_fallback, _contact_vars)
+                            print(
+                                f"[DM JOB] Campaign {campaign_id}: Gemini auth glitch on contact {contact.id}, sending fallback message",
+                                flush=True,
+                            )
+                            # Fall through to send message_body
+                        else:
+                            last_error = f"Gemini auth glitch (no fallback): {exc}"
+                            message_body = None
+                            _skip_no_perdu = True
+                            break
+                    else:
+                        last_error = f"Render failed: {exc}"
                         message_body = None
-                        _skip_no_perdu = True
-                        break
-                    last_error = f"Render failed: {exc}"
-                    message_body = None
 
                 if not message_body or not message_body.strip():
                     last_error = last_error or "Empty message (AI generation failed)"
@@ -679,6 +696,12 @@ async def _render_message(campaign, template, contact, client, api_key=""):
             if msgs and msgs[0].get("rendered"):
                 return msgs[0]["rendered"]
         except Exception as exc:
+            # GeminiAuthError must bubble up so the campaign job can apply
+            # the 3-strike rule and use the fallback message. Any other
+            # transient AI error silently falls through to the template.
+            from app.utils.ai_message import GeminiAuthError
+            if isinstance(exc, GeminiAuthError):
+                raise
             logger.warning("AI generation failed for contact %s, falling back to template: %s", contact.urn_id, exc)
         # Don't send the __FULL_AI__ placeholder as an actual message
         if template and template.strip() != "__FULL_AI__":
@@ -705,6 +728,9 @@ async def _render_message(campaign, template, contact, client, api_key=""):
                 api_key,
             )
         except Exception as exc:
+            from app.utils.ai_message import GeminiAuthError
+            if isinstance(exc, GeminiAuthError):
+                raise
             logger.warning("AI compliment failed for contact %s, using empty: %s", contact.urn_id, exc)
             compliment = ""
         contact_data["compliment"] = compliment

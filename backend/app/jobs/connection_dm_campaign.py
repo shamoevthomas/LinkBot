@@ -151,11 +151,28 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                                 mark_gemini_key_invalid(campaign.user_id)
                                 cancel_campaign_job(campaign_id)
                                 return
-                            # Below threshold: skip this prospect, will retry next tick.
-                            cc.last_checked_at = datetime.utcnow()
-                            db.commit()
-                            continue
-                        raise
+                            # Below threshold: send the fallback message if the user
+                            # provided one, otherwise skip this prospect.
+                            fallback = (campaign.fallback_message or "").strip()
+                            if fallback:
+                                _contact_vars = {
+                                    "first_name": contact.first_name,
+                                    "last_name": contact.last_name,
+                                    "headline": contact.headline,
+                                    "location": contact.location,
+                                }
+                                message_body = render_template(fallback, _contact_vars)
+                                logger.info(
+                                    "Campaign %d (user %s): Gemini glitch on contact %d → fallback message",
+                                    campaign_id, campaign.user_id, contact.id,
+                                )
+                                # Fall through to the send_message call below
+                            else:
+                                cc.last_checked_at = datetime.utcnow()
+                                db.commit()
+                                continue
+                        else:
+                            raise
                     try:
                         success = await send_message(client, contact.urn_id, message_body)
                     except Exception as exc:
