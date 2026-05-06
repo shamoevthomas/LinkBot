@@ -192,7 +192,7 @@ def _gemini_post(
     if not api_key:
         raise ValueError("Gemini API key missing: user must configure their own key in settings")
     key = api_key
-    max_attempts = 1 if fail_fast else 3
+    max_attempts = 2 if fail_fast else 3
     for attempt in range(max_attempts):
         _wait_for_rate_limit()
         resp = requests.post(
@@ -223,10 +223,11 @@ def _gemini_post(
             continue
         if resp.status_code >= 500:
             # 500/502/503/504 are all Gemini-side issues — never the user's key.
-            if fail_fast:
+            if attempt >= max_attempts - 1:
                 break
-            wait = 5 * (attempt + 1)  # 5s, 10s, 15s
-            logger.info(f"[GEMINI] {resp.status_code} received, retrying in {wait}s (attempt {attempt + 1}/3)")
+            # Short backoff for fail_fast (interactive previews), longer for jobs.
+            wait = 2 if fail_fast else 5 * (attempt + 1)
+            logger.info(f"[GEMINI] {resp.status_code} received, retrying in {wait}s (attempt {attempt + 1}/{max_attempts})")
             time.sleep(wait)
             continue
         return resp
