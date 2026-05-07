@@ -135,41 +135,23 @@ async def run_search_campaign(campaign_id: int) -> None:
 
         print(f"[SEARCH JOB] Campaign {campaign_id}: keywords={campaign.keywords!r}, target={target}, geoUrns={resolved_geos}", flush=True)
 
-        # Empty list means no location filter — single search pass.
-        # Multiple URNs are passed together (LinkedIn search_people accepts a list and ORs them).
+        # ----- Per-city distribution with overflow ------------------------
+        # When the user provides N cities for a target of T prospects we want
+        # ~T/N from each city. If a city runs dry before hitting its share,
+        # the remaining demand spills over to the cities that still have
+        # results — so we always end up at T (or as close as LinkedIn allows).
+        # ------------------------------------------------------------------
         seen_urns: set = set()
-        loc_offset = offset
 
-        while added < target:
-            batch = min(_PAGE_SIZE, target - added)
-            try:
-                search_kwargs = {
-                    "keywords": campaign.keywords or "",
-                    "limit": batch,
-                    "offset": loc_offset,
-                }
-                if resolved_geos:
-                    search_kwargs["regions"] = resolved_geos
-                results = await search_people(client, **search_kwargs)
-                print(f"[SEARCH JOB] Campaign {campaign_id}: offset={loc_offset}, batch={batch}, got {len(results)} results", flush=True)
-            except Exception as exc:
-                logger.exception("Search failed for campaign %d", campaign_id)
-                campaign.error_message = f"Search error: {str(exc)[:300]}"
-                break
-
-            if not results:
-                break
-
-            loc_offset += len(results)
-            offset = loc_offset
-
+        async def _ingest_results(results: list) -> int:
+            """Insert results as Contacts; return how many NEW (added) rows."""
+            new_added = 0
             for person in results:
                 urn_id = person.get("urn_id")
                 if not urn_id:
-                    skipped += 1
+                    nonlocal_skipped[0] += 1
                     _log_action(db, campaign.id, None, "search_add", "skipped", "No urn_id in result")
                     continue
-
                 if urn_id in seen_urns:
                     continue
                 seen_urns.add(urn_id)
@@ -178,14 +160,12 @@ async def run_search_campaign(campaign_id: int) -> None:
                     Contact.crm_id == campaign.crm_id,
                     Contact.urn_id == urn_id,
                 ).first()
-
                 if existing:
-                    skipped += 1
+                    nonlocal_skipped[0] += 1
                     _log_action(db, campaign.id, existing.id, "search_add", "skipped", "Duplicate")
                     continue
-
                 if db.query(Blacklist).filter(Blacklist.urn_id == urn_id, Blacklist.user_id == campaign.user_id).first():
-                    skipped += 1
+                    nonlocal_skipped[0] += 1
                     _log_action(db, campaign.id, None, "search_add", "skipped", "Blacklisted")
                     continue
 
@@ -208,12 +188,110 @@ async def run_search_campaign(campaign_id: int) -> None:
                 )
                 db.add(contact)
                 db.flush()
-
                 _log_action(db, campaign.id, contact.id, "search_add", "success")
-                added += 1
+                new_added += 1
+            return new_added
 
-                if added >= target:
+        # Use a single-element list so the inner closure can mutate skip count
+        # without rebinding the outer name.
+        nonlocal_skipped = [skipped]
+
+        async def _search_one(geo_urn: str | None, page_offset: int, want: int) -> list:
+            """Single search_people call. geo_urn=None means no filter."""
+            kwargs = {
+                "keywords": campaign.keywords or "",
+                "limit": min(_PAGE_SIZE, want),
+                "offset": page_offset,
+            }
+            if geo_urn is not None:
+                kwargs["regions"] = [geo_urn]
+            try:
+                res = await search_people(client, **kwargs)
+            except Exception as exc:
+                logger.exception("Search failed for campaign %d (geo=%s)", campaign_id, geo_urn)
+                campaign.error_message = f"Search error: {str(exc)[:300]}"
+                return []
+            print(
+                f"[SEARCH JOB] Campaign {campaign_id}: geo={geo_urn or 'none'} "
+                f"offset={page_offset}, want={want}, got={len(res)}",
+                flush=True,
+            )
+            return res
+
+        # No location filter → single-pass paginate until target or empty.
+        if not resolved_geos:
+            page_offset = offset
+            while added < target:
+                results = await _search_one(None, page_offset, target - added)
+                if not results:
                     break
+                page_offset += len(results)
+                offset = page_offset
+                added += await _ingest_results(results)
+        else:
+            # Per-city quotas. Use ceil so small remainders don't shortchange
+            # any city (we'll cap at target globally below).
+            n_cities = len(resolved_geos)
+            base_quota = -(-target // n_cities)  # ceil divide
+            per_city_added: dict[str, int] = {g: 0 for g in resolved_geos}
+            per_city_offset: dict[str, int] = {g: 0 for g in resolved_geos}
+            exhausted: set[str] = set()
+
+            # ---- Pass 1: each city up to its base quota ------------------
+            for geo in resolved_geos:
+                while per_city_added[geo] < base_quota and added < target:
+                    want = min(base_quota - per_city_added[geo], target - added)
+                    results = await _search_one(geo, per_city_offset[geo], want)
+                    if not results:
+                        exhausted.add(geo)
+                        break
+                    per_city_offset[geo] += len(results)
+                    new = await _ingest_results(results)
+                    per_city_added[geo] += new
+                    added += new
+                    # If LinkedIn returned fewer than asked, this city has no
+                    # more matching profiles past this offset.
+                    if len(results) < want:
+                        exhausted.add(geo)
+                        break
+
+            # ---- Pass 2: overflow — redistribute deficit across cities --
+            # Round-robin so cities share the leftover demand fairly. Stop
+            # when target hit OR every remaining city is exhausted.
+            while added < target and len(exhausted) < n_cities:
+                progress_this_round = False
+                for geo in resolved_geos:
+                    if added >= target:
+                        break
+                    if geo in exhausted:
+                        continue
+                    want = min(_PAGE_SIZE, target - added)
+                    results = await _search_one(geo, per_city_offset[geo], want)
+                    if not results:
+                        exhausted.add(geo)
+                        continue
+                    per_city_offset[geo] += len(results)
+                    new = await _ingest_results(results)
+                    per_city_added[geo] += new
+                    added += new
+                    progress_this_round = True
+                    if len(results) < want:
+                        exhausted.add(geo)
+                if not progress_this_round:
+                    break
+
+            # Persist the largest offset so a future re-run resumes roughly
+            # past what we've already pulled (cosmetic — search jobs are
+            # one-shot today).
+            offset = max(per_city_offset.values(), default=offset)
+
+            print(
+                f"[SEARCH JOB] Campaign {campaign_id}: per-city result "
+                + ", ".join(f"{g}={per_city_added[g]}" for g in resolved_geos),
+                flush=True,
+            )
+
+        skipped = nonlocal_skipped[0]
 
         # Update counters and complete
         campaign.search_offset = offset
