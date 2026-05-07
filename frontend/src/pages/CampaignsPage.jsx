@@ -265,6 +265,10 @@ export default function CampaignsPage() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [crms, setCrms] = useState([]);
   const [form, setForm] = useState({ name: '', crm_id: '', source_crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
+  // Pending text in the location input — committed to form.search_regions on Enter,
+  // blur, or form submit. Without this, users who type a city and click "Lancer la
+  // campagne" without pressing Enter would lose their location filter silently.
+  const [locationInput, setLocationInput] = useState('');
   const [creating, setCreating] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [quota, setQuota] = useState(null);
@@ -340,16 +344,35 @@ export default function CampaignsPage() {
   const openNew = async (type) => {
     setCrms(await getCRMs());
     setForm({ name: '', crm_id: '', source_crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
+    setLocationInput('');
     setShowNew(type);
     setShowDropdown(false);
   };
 
+  // Flush any pending text from the location input into form.search_regions
+  // and return the resulting list. Use this whenever we're about to consume
+  // search_regions (form submit, "Configurer les DMs" navigation).
+  const flushPendingLocation = () => {
+    const pending = locationInput.trim();
+    if (!pending) return form.search_regions;
+    if (form.search_regions.includes(pending)) {
+      setLocationInput('');
+      return form.search_regions;
+    }
+    const next = [...form.search_regions, pending];
+    setForm((f) => ({ ...f, search_regions: next }));
+    setLocationInput('');
+    return next;
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
+    const regions = flushPendingLocation();
     setCreating(true);
     try {
       await createCampaign({
         ...form,
+        search_regions: regions,
         type: showNew,
         crm_id: form.crm_id ? parseInt(form.crm_id) : null,
         source_crm_id: form.source_crm_id ? parseInt(form.source_crm_id) : null,
@@ -359,6 +382,7 @@ export default function CampaignsPage() {
       });
       toast.success('Campagne créée et lancée');
       setShowNew(null);
+      setLocationInput('');
       invalidate();
       refreshQuota();
     } catch (err) {
@@ -610,21 +634,30 @@ export default function CampaignsPage() {
               </div>
               <div>
                 <label className="form-label">Localisation(s) (optionnel)</label>
-                <input
-                  type="text"
-                  className="input-sm"
-                  placeholder="Tapez une ville, région ou pays puis Entrée — ex: Lyon"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const v = e.target.value.trim();
-                      if (v && !form.search_regions.includes(v)) {
-                        set('search_regions', [...form.search_regions, v]);
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="input-sm"
+                    style={{ flex: 1 }}
+                    value={locationInput}
+                    onChange={(e) => setLocationInput(e.target.value)}
+                    placeholder="Tapez une ville, région ou pays — ex: Mulhouse"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        flushPendingLocation();
                       }
-                      e.target.value = '';
-                    }
-                  }}
-                />
+                    }}
+                    onBlur={() => flushPendingLocation()}
+                  />
+                  <button type="button"
+                    onClick={() => flushPendingLocation()}
+                    disabled={!locationInput.trim()}
+                    className="ghost-btn"
+                    style={{ padding: '0 14px', fontSize: 13 }}>
+                    + Ajouter
+                  </button>
+                </div>
                 {form.search_regions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {form.search_regions.map((loc) => (
@@ -773,7 +806,7 @@ export default function CampaignsPage() {
           )}
 
           <div className="flex items-center gap-2 pt-2">
-            <button type="button" onClick={() => setShowNew(null)} className="ghost-btn flex-1">
+            <button type="button" onClick={() => { setShowNew(null); setLocationInput(''); }} className="ghost-btn flex-1">
               Annuler
             </button>
             {((showNew === 'connection' && form.withDM) || (showNew === 'search' && form.autoConnectDM)) ? (
@@ -781,13 +814,15 @@ export default function CampaignsPage() {
                 if (!form.name.trim()) return toast.error('Donne un nom à la campagne');
                 if (!form.crm_id) return toast.error('Sélectionne un CRM');
                 if (showNew === 'search' && !form.keywords?.trim()) return toast.error('Ajoute des mots-clés');
+                const regions = flushPendingLocation();
                 setShowNew(null);
+                setLocationInput('');
                 if (showNew === 'search' && form.autoConnectDM) {
                   navigate('/dashboard/campaigns/new-dm', {
                     state: { searchConnectionDMConfig: {
                       name: form.name, keywords: form.keywords,
                       crm_id: parseInt(form.crm_id), total_target: parseInt(form.total_target) || 100,
-                      search_regions: form.search_regions,
+                      search_regions: regions,
                     } },
                   });
                 } else {

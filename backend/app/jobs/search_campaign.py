@@ -95,8 +95,43 @@ async def run_search_campaign(campaign_id: int) -> None:
                 unresolved.append(loc)
                 print(f"[SEARCH JOB] Campaign {campaign_id}: could NOT resolve {loc!r} to a geoUrn — skipping this location", flush=True)
 
-        if unresolved and not resolved_geos:
-            campaign.error_message = f"Aucune des localisations n'a pu être résolue: {unresolved}"
+        # If the user specified locations but NONE resolved, abort the campaign
+        # rather than running unfiltered (which silently returns random profiles
+        # and misleads the user into thinking the location filter worked).
+        if raw_locations and not resolved_geos:
+            campaign.status = "paused"
+            campaign.error_message = (
+                f"Localisation(s) introuvable(s) sur LinkedIn: {', '.join(unresolved)}. "
+                "Vérifie l'orthographe ou choisis une suggestion."
+            )
+            db.commit()
+            cancel_campaign_job(campaign_id)
+            try:
+                create_notification(
+                    db, user.id,
+                    title="Localisation introuvable",
+                    message=(
+                        f"La campagne « {campaign.name} » a été mise en pause car aucune "
+                        f"des localisations ({', '.join(unresolved)}) n'a pu être résolue "
+                        "sur LinkedIn. Modifie la campagne et corrige l'orthographe."
+                    ),
+                    type="campaign_error",
+                )
+            except Exception:
+                logger.exception("Failed to create notification for unresolved locations")
+            print(
+                f"[SEARCH JOB] Campaign {campaign_id}: aborted — none of {unresolved} resolved",
+                flush=True,
+            )
+            return
+
+        # Partial failure: some resolved, some didn't — proceed with what we have
+        # but warn via error_message so it surfaces in the campaign detail page.
+        if unresolved:
+            campaign.error_message = (
+                f"Localisations ignorées (introuvables): {', '.join(unresolved)}"
+            )
+            db.commit()
 
         print(f"[SEARCH JOB] Campaign {campaign_id}: keywords={campaign.keywords!r}, target={target}, geoUrns={resolved_geos}", flush=True)
 
