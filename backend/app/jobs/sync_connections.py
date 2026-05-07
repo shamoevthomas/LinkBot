@@ -59,9 +59,16 @@ async def sync_new_connections() -> None:
     try:
         users = db.query(User).filter(User.cookies_valid == True, User.li_at_cookie.isnot(None)).all()
         for user in users:
-            # Proactive cookie validation
-            valid = await validate_cookies(user.li_at_cookie, user.jsessionid_cookie)
-            if not valid:
+            # Proactive cookie validation. Tri-state result:
+            #   True  → proceed
+            #   False → cookies definitely dead, pause campaigns
+            #   None  → transient (redirect glitch / network), skip user this
+            #           tick without flipping cookies_valid.
+            result = await validate_cookies(user.li_at_cookie, user.jsessionid_cookie)
+            if result is None:
+                logger.info("Cookies validation transient for user %d, skipping this tick", user.id)
+                continue
+            if result is False:
                 logger.warning("Cookies expired for user %d, pausing campaigns", user.id)
                 user.cookies_valid = False
                 create_notification(db, user.id, "cookies_expired",

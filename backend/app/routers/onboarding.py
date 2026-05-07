@@ -41,10 +41,15 @@ async def complete_onboarding(
         content = await profile_picture.read()
         picture_path = upload_file(content, profile_picture.filename)
 
-    # Validate LinkedIn cookies if both are provided
+    # Validate LinkedIn cookies if both are provided.
+    # validate_cookies returns True / False / None (transient). On transient,
+    # be optimistic — the periodic validator will catch truly dead sessions.
     cookies_valid = user.cookies_valid or False
     if li_at and jsessionid:
-        cookies_valid = await validate_cookies(li_at, jsessionid)
+        result = await validate_cookies(li_at, jsessionid)
+        if result is None:
+            result = await validate_cookies(li_at, jsessionid)
+        cookies_valid = True if result is None else bool(result)
         user.li_at_cookie = li_at
         user.jsessionid_cookie = jsessionid
         user.cookies_valid = cookies_valid

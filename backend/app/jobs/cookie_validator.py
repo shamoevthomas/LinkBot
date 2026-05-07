@@ -29,21 +29,31 @@ async def run_cookie_validation() -> None:
         db = SessionLocal()
         try:
             try:
-                ok = await validate_cookies(user.li_at_cookie, user.jsessionid_cookie or "")
+                result = await validate_cookies(user.li_at_cookie, user.jsessionid_cookie or "")
             except Exception:
                 logger.exception("cookie_validator: error testing user %d", user.id)
-                ok = False
+                result = None
 
             # Re-fetch to update with the latest record
             u = db.query(User).filter(User.id == user.id).first()
             if u is None:
                 continue
-            if bool(u.cookies_valid) != ok:
-                u.cookies_valid = ok
+            # result is True (valid), False (definitely invalid), or None (transient).
+            # NEVER flip cookies_valid on None — LinkedIn occasionally returns
+            # transient redirect glitches even for healthy sessions, and logging
+            # users out on those would force them into a paste-recheck loop.
+            if result is None:
+                logger.info(
+                    "cookie_validator: user %d transient validation error — leaving cookies_valid=%s",
+                    user.id, bool(u.cookies_valid),
+                )
+                continue
+            if bool(u.cookies_valid) != result:
+                u.cookies_valid = result
                 db.commit()
                 logger.info(
                     "cookie_validator: user %d cookies_valid -> %s",
-                    user.id, ok,
+                    user.id, result,
                 )
         finally:
             db.close()

@@ -103,21 +103,30 @@ async def update_cookies(
     user: User = Depends(get_current_user),
 ):
     """Update the user's LinkedIn session cookies and validate them."""
-    valid = await validate_cookies(body.li_at, body.jsessionid)
+    # validate_cookies returns True / False / None (transient).
+    # Retry once on transient before declaring failure: a single redirect
+    # glitch shouldn't make the user think their cookies are bad.
+    result = await validate_cookies(body.li_at, body.jsessionid)
+    if result is None:
+        result = await validate_cookies(body.li_at, body.jsessionid)
 
     user.li_at_cookie = body.li_at
     user.jsessionid_cookie = body.jsessionid
-    user.cookies_valid = valid
+    # On persistent transient (still None after retry) treat as valid —
+    # the periodic validator will catch a truly dead session, but we don't
+    # want to lock the user out because LinkedIn was flaky for a few seconds.
+    cookies_valid = True if result is None else bool(result)
+    user.cookies_valid = cookies_valid
     db.commit()
     db.refresh(user)
 
-    if not valid:
+    if result is False:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="LinkedIn cookies are invalid or expired. They have been saved but marked as invalid.",
         )
 
-    return CookiesStatus(valid=valid)
+    return CookiesStatus(valid=cookies_valid)
 
 
 @router.post("/validate-gemini-key")

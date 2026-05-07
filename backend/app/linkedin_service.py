@@ -93,20 +93,35 @@ def mark_cookies_invalid(user_id: int) -> None:
 # Cookie validation
 # ---------------------------------------------------------------------------
 
-async def validate_cookies(li_at: str, jsessionid: str) -> bool:
+async def validate_cookies(li_at: str, jsessionid: str) -> Optional[bool]:
     """Test whether the supplied cookies are still valid.
 
-    Returns ``True`` when LinkedIn accepts the session, ``False`` otherwise.
+    Returns:
+        True  — LinkedIn returned the user's profile, cookies definitely OK.
+        False — LinkedIn explicitly rejected them (UnauthorizedException).
+        None  — Transient/network error (TooManyRedirects, timeout, connection
+                reset, etc.). Caller should NOT flip cookies_valid on this —
+                a redirect glitch can hit perfectly valid cookies and we don't
+                want to logout the user on every flaky LinkedIn response.
     """
+    import requests as _req
     try:
         client = get_linkedin_client(li_at, jsessionid)
         profile = await asyncio.to_thread(client.get_user_profile, False)
         return bool(profile)
     except UnauthorizedException:
         return False
+    except _req.exceptions.TooManyRedirects:
+        # LinkedIn occasionally bounces even valid sessions through a redirect
+        # loop (login → home → login). Treat as transient.
+        logger.warning("validate_cookies: TooManyRedirects (transient)")
+        return None
+    except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
+        logger.warning("validate_cookies: network error (transient)")
+        return None
     except Exception:
         logger.exception("Unexpected error while validating LinkedIn cookies")
-        return False
+        return None
 
 
 # ---------------------------------------------------------------------------
