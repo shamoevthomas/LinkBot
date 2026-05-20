@@ -241,6 +241,12 @@ async def run_search_campaign(campaign_id: int) -> None:
             for geo in resolved_geos:
                 while per_city_added[geo] < base_quota and added < target:
                     want = min(base_quota - per_city_added[geo], target - added)
+                    # _search_one caps its request to _PAGE_SIZE — compare
+                    # short-page detection against the size actually sent,
+                    # not the city's remaining demand, or a single full
+                    # page (_PAGE_SIZE results vs want=300) wrongly marks
+                    # the city as exhausted.
+                    batch_size = min(_PAGE_SIZE, want)
                     results = await _search_one(geo, per_city_offset[geo], want)
                     if not results:
                         exhausted.add(geo)
@@ -249,9 +255,7 @@ async def run_search_campaign(campaign_id: int) -> None:
                     new = await _ingest_results(results)
                     per_city_added[geo] += new
                     added += new
-                    # If LinkedIn returned fewer than asked, this city has no
-                    # more matching profiles past this offset.
-                    if len(results) < want:
+                    if len(results) < batch_size:
                         exhausted.add(geo)
                         break
 
