@@ -109,15 +109,12 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
 
             cc.last_checked_at = datetime.utcnow()
 
-            # Check if connection was accepted by fetching profile
-            accepted = False
-            try:
-                profile = await get_profile(client, urn_id=contact.urn_id)
-                distance = profile.get("distance", 0)
-                if distance == 1 or str(profile.get("connectionDistance", "")).startswith("DISTANCE_1"):
-                    accepted = True
-            except Exception:
-                pass
+            # `sync_connections` is the source of truth for acceptance: it
+            # pulls the user's real LinkedIn connections list and flips
+            # contact.connection_status to "connected". get_profile() does
+            # not surface connection distance, so polling it here was a
+            # no-op that left every invitation stuck in en_attente.
+            accepted = (contact.connection_status == "connected")
 
             if accepted:
                 contact.connection_status = "connected"

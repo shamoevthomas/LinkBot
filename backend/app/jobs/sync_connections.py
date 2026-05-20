@@ -20,7 +20,14 @@ logger = logging.getLogger(__name__)
 
 
 def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> int:
-    """Update CampaignContact records from 'demande_envoyee' to 'reussi' for accepted connections."""
+    """Mark campaign_contact records as accepted for newly-connected URNs.
+
+    Two cases handled:
+    - 'demande_envoyee' (pure connection campaigns): flip to 'reussi'.
+    - 'en_attente' (connection_dm campaigns): keep the status so the
+      connection_dm tick still picks the row up to send the DM, but stamp
+      connection_accepted_at so the dm_delay_hours gate works.
+    """
     if not connected_urns:
         return 0
 
@@ -38,16 +45,17 @@ def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> i
     if not contact_ids:
         return 0
 
-    # Find pending connection CampaignContact records
     pending_ccs = db.query(CampaignContact).filter(
         CampaignContact.contact_id.in_(contact_ids),
-        CampaignContact.status == "demande_envoyee",
+        CampaignContact.status.in_(("demande_envoyee", "en_attente")),
+        CampaignContact.connection_accepted_at.is_(None),
     ).all()
 
     now = datetime.utcnow()
     for cc in pending_ccs:
-        cc.status = "reussi"
         cc.connection_accepted_at = now
+        if cc.status == "demande_envoyee":
+            cc.status = "reussi"
 
     return len(pending_ccs)
 
