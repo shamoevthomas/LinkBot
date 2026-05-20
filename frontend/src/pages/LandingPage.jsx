@@ -1,4 +1,4 @@
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import {
   Users, Rocket, Sparkles, Repeat, Activity, Link as LinkIcon,
@@ -6,6 +6,15 @@ import {
   Target, UserCircle, Send, Calendar, ArrowRight, ArrowUp,
   Eye, Mail, MessageCircle, TrendingUp, Lock, Clock, CheckCircle2,
 } from 'lucide-react';
+
+// Onboarding is closed: disable login/signup CTAs without removing them
+// from the layout so the page still reads naturally.
+const AUTH_DISABLED_STYLE = {
+  opacity: 0.45,
+  filter: 'grayscale(1)',
+  cursor: 'not-allowed',
+  pointerEvents: 'none',
+};
 
 function useReveal() {
   const ref = useRef(null);
@@ -605,7 +614,6 @@ function HeroCards() {
 }
 
 export default function LandingPage() {
-  const navigate = useNavigate();
   const page = useReveal();
   const [showTop, setShowTop] = useState(false);
 
@@ -675,13 +683,11 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => navigate('/login')} className="hidden sm:inline-flex transition-colors"
-              style={{ fontSize: 13, color: 'hsl(var(--muted))', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', whiteSpace: 'nowrap' }}
-              onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--text))'}
-              onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--muted))'}>
+            <button disabled aria-disabled="true" tabIndex={-1} className="hidden sm:inline-flex transition-colors"
+              style={{ fontSize: 13, color: 'hsl(var(--muted))', background: 'none', border: 'none', padding: '6px 10px', whiteSpace: 'nowrap', ...AUTH_DISABLED_STYLE }}>
               Se connecter
             </button>
-            <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '8px 18px', fontSize: 13, whiteSpace: 'nowrap' }}>
+            <button disabled aria-disabled="true" tabIndex={-1} className="cta-btn" style={{ padding: '8px 18px', fontSize: 13, whiteSpace: 'nowrap', ...AUTH_DISABLED_STYLE }}>
               S'inscrire
             </button>
           </div>
@@ -739,7 +745,7 @@ export default function LandingPage() {
               ))}
             </div>
             <div className="animate-fade-rise-delay-2 flex flex-wrap items-center gap-3" style={{ marginTop: 32 }}>
-              <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '14px 28px', fontSize: 14 }}>
+              <button disabled aria-disabled="true" tabIndex={-1} className="cta-btn" style={{ padding: '14px 28px', fontSize: 14, ...AUTH_DISABLED_STYLE }}>
                 Commencer gratuitement <ArrowRight size={14} />
               </button>
               <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
@@ -1620,7 +1626,7 @@ export default function LandingPage() {
           <p className="mx-auto mb-8 text-[14.5px] leading-relaxed" style={{ color: 'hsl(var(--muted))', maxWidth: 520 }}>
             Installez Linky, connectez votre compte, et lancez votre première campagne en moins de 5 minutes.
           </p>
-          <button onClick={() => navigate('/register')} className="cta-btn" style={{ padding: '16px 40px', fontSize: 15 }}>
+          <button disabled aria-disabled="true" tabIndex={-1} className="cta-btn" style={{ padding: '16px 40px', fontSize: 15, ...AUTH_DISABLED_STYLE }}>
             Commencer gratuitement <ArrowRight size={14} />
           </button>
         </div>
