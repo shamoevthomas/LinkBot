@@ -343,7 +343,7 @@ export default function CampaignsPage() {
 
   const openNew = async (type) => {
     setCrms(await getCRMs());
-    setForm({ name: '', crm_id: '', source_crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [] });
+    setForm({ name: '', crm_id: '', source_crm_id: '', keywords: '', message_template: '', use_ai: false, total_target: 100, withDM: false, autoConnect: false, autoConnectDM: false, search_regions: [], exclude_connected: true });
     setLocationInput('');
     setShowNew(type);
     setShowDropdown(false);
@@ -764,6 +764,23 @@ export default function CampaignsPage() {
           )}
 
           {showNew === 'search' && (
+            <label className="flex items-center justify-between gap-3 p-3 rounded-lg cursor-pointer"
+              style={{ background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))' }}>
+              <div className="flex items-start gap-3">
+                <input type="checkbox" checked={form.exclude_connected}
+                  onChange={(e) => set('exclude_connected', e.target.checked)}
+                  style={{ marginTop: 2 }} />
+                <div>
+                  <span className="text-[13px] font-medium">Exclure les contacts déjà connectés</span>
+                  <p className="text-[11px]" style={{ color: 'hsl(var(--muted))' }}>
+                    Ignore les profils en relation de 1er degré et ceux à qui tu as déjà envoyé une invitation via Linky (en attente de réponse).
+                  </p>
+                </div>
+              </div>
+            </label>
+          )}
+
+          {showNew === 'search' && (
             <label className="flex items-center gap-3 p-3 rounded-lg cursor-pointer"
               style={{ background: form.autoConnectDM ? 'hsl(220 20% 97%)' : 'hsl(var(--accent-soft))', border: `1px solid ${form.autoConnectDM ? 'hsl(var(--border))' : 'hsl(var(--accent) / .25)'}` }}>
               <input type="checkbox" checked={form.autoConnect} disabled={form.autoConnectDM}
@@ -823,6 +840,7 @@ export default function CampaignsPage() {
                       name: form.name, keywords: form.keywords,
                       crm_id: parseInt(form.crm_id), total_target: parseInt(form.total_target) || 100,
                       search_regions: regions,
+                      exclude_connected: form.exclude_connected,
                     } },
                   });
                 } else {

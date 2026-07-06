@@ -113,6 +113,9 @@ class Campaign(Base):
     search_regions = Column(Text)  # comma-separated geo URN IDs for LinkedIn search
     dm_delay_hours = Column(Integer, default=0)
     fallback_message = Column(Text)
+    # Skip already-connected prospects (LinkedIn DISTANCE_1) and those with a
+    # Linky-sent invitation still pending. Applies to search-type campaigns.
+    exclude_connected = Column(Boolean, default=True)
 
     user = relationship("User", backref="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign", cascade="all, delete-orphan")
@@ -126,6 +129,8 @@ class CampaignAction(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     campaign_id = Column(Integer, ForeignKey("campaign.id", ondelete="CASCADE"))
     lead_magnet_id = Column(Integer, ForeignKey("lead_magnet.id", ondelete="CASCADE"))
+    # Set when the action came from the Continuous Connection module (not a campaign).
+    continuous_connection_id = Column(Integer, ForeignKey("continuous_connection.id", ondelete="CASCADE"))
     contact_id = Column(Integer, ForeignKey("contact.id", ondelete="SET NULL"))
     action_type = Column(String, nullable=False)
     status = Column(String, nullable=False)  # success, failed, skipped
@@ -291,6 +296,35 @@ class LeadMagnetContact(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     lead_magnet = relationship("LeadMagnet", back_populates="contacts")
+
+
+class ContinuousConnection(Base):
+    """Per-user "always-on" connection sender.
+
+    When the user's daily connection quota isn't consumed by their active
+    connection campaigns, this module tops up the quota by searching LinkedIn
+    for the configured keywords/regions and firing plain (note-less) invites
+    to matching profiles. One config per user (user_id UNIQUE).
+    """
+    __tablename__ = "continuous_connection"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, unique=True)
+    enabled = Column(Boolean, default=False)
+    # JSON array of keyword strings; the job picks one at random each tick.
+    keywords = Column(Text, default="[]")
+    # JSON array of free-text location names, resolved to geoUrns at runtime.
+    search_regions = Column(Text)
+    # CRM where captured profiles are stored ("Connexion Continue" — auto-created on first save).
+    crm_id = Column(Integer, ForeignKey("crm.id", ondelete="SET NULL"), nullable=True)
+    total_sent = Column(Integer, default=0)
+    last_run_at = Column(DateTime)
+    last_error = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", backref="continuous_connection")
+    crm = relationship("CRM")
 
 
 class Notification(Base):

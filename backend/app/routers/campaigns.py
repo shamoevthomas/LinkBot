@@ -327,6 +327,7 @@ def create_campaign(
         use_ai=body.use_ai,
         total_target=total_target,
         search_regions=_dumps_locations(body.search_regions),
+        exclude_connected=body.exclude_connected,
         started_at=datetime.utcnow(),
     )
     db.add(campaign)
@@ -431,6 +432,7 @@ def create_dm_campaign(
             keywords=body.keywords,
             total_target=total_target,
             search_regions=_dumps_locations(body.search_regions),
+            exclude_connected=body.exclude_connected,
             started_at=datetime.utcnow(),
         )
         db.add(search_campaign)

@@ -16,7 +16,7 @@ class Base(DeclarativeBase):
 
 
 def init_db():
-    from app.models import User, CRM, Contact, Campaign, CampaignAction, AppSettings, Notification, LeadMagnet, LeadMagnetContact  # noqa: F401
+    from app.models import User, CRM, Contact, Campaign, CampaignAction, AppSettings, Notification, LeadMagnet, LeadMagnetContact, ContinuousConnection  # noqa: F401
     Base.metadata.create_all(bind=engine)
     _run_migrations()
 
@@ -51,6 +51,13 @@ def _run_migrations():
             conn.execute(text('ALTER TABLE "campaign" ADD COLUMN fallback_message TEXT'))
             print("[MIGRATION] Added fallback_message to campaign", flush=True)
 
+        # Add exclude_connected column to campaign — search-type campaigns skip
+        # already-connected prospects and Linky-sent pending invitations.
+        if "exclude_connected" not in campaign_columns:
+            default_clause = "BOOLEAN DEFAULT TRUE" if is_pg else "BOOLEAN DEFAULT 1"
+            conn.execute(text(f'ALTER TABLE "campaign" ADD COLUMN exclude_connected {default_clause}'))
+            print("[MIGRATION] Added exclude_connected to campaign", flush=True)
+
         # Add source_crm_id column to campaign (for export campaigns)
         if "source_crm_id" not in campaign_columns:
             conn.execute(text('ALTER TABLE "campaign" ADD COLUMN source_crm_id INTEGER REFERENCES "crm"(id)'))
@@ -81,6 +88,13 @@ def _run_migrations():
         if "lead_magnet_id" not in action_columns:
             conn.execute(text('ALTER TABLE "campaign_action" ADD COLUMN lead_magnet_id INTEGER'))
             print("[MIGRATION] Added lead_magnet_id to campaign_action", flush=True)
+
+        # Add continuous_connection_id column to campaign_action so Continuous
+        # Connection module actions count toward the daily quota alongside
+        # regular campaign actions. NULL for regular campaign or lead-magnet actions.
+        if "continuous_connection_id" not in action_columns:
+            conn.execute(text('ALTER TABLE "campaign_action" ADD COLUMN continuous_connection_id INTEGER'))
+            print("[MIGRATION] Added continuous_connection_id to campaign_action", flush=True)
 
         # Add manually_replied column to lead_magnet_contact so the bot can
         # back off completely on leads the user has already replied to by hand.

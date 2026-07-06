@@ -16,7 +16,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.database import SessionLocal
-from app.models import Campaign, CampaignAction, Contact, User, Blacklist
+from app.models import Campaign, CampaignAction, CampaignContact, Contact, CRM, User, Blacklist
 from app.linkedin_service import get_linkedin_client, search_people
 from app.scheduler import cancel_campaign_job
 
@@ -78,6 +78,30 @@ async def _run_search_phase(campaign_id: int) -> None:
         skipped = 0
         regions = campaign.search_regions.split(",") if campaign.search_regions else None
 
+        # Pre-build the "already-connected or invit-pending" URN set once.
+        excluded_urns: set[str] = set()
+        if campaign.exclude_connected:
+            user_crm_ids = [r[0] for r in db.query(CRM.id).filter(CRM.user_id == campaign.user_id).all()]
+            if user_crm_ids:
+                connected_rows = db.query(Contact.urn_id).filter(
+                    Contact.crm_id.in_(user_crm_ids),
+                    Contact.urn_id.isnot(None),
+                    Contact.connection_status == "DISTANCE_1",
+                ).all()
+                excluded_urns.update(r[0] for r in connected_rows)
+                pending_rows = (
+                    db.query(Contact.urn_id)
+                    .join(CampaignContact, CampaignContact.contact_id == Contact.id)
+                    .join(Campaign, CampaignContact.campaign_id == Campaign.id)
+                    .filter(
+                        Campaign.user_id == campaign.user_id,
+                        CampaignContact.status.in_(("demande_envoyee", "en_attente")),
+                        Contact.urn_id.isnot(None),
+                    )
+                    .all()
+                )
+                excluded_urns.update(r[0] for r in pending_rows)
+
         while added < target:
             batch = min(_PAGE_SIZE, target - added)
             try:
@@ -104,6 +128,17 @@ async def _run_search_phase(campaign_id: int) -> None:
                     skipped += 1
                     _log_action(db, campaign.id, None, "search_add", "skipped", "No urn_id in result")
                     continue
+
+                # Skip already-connected + Linky-sent pending invitations.
+                if campaign.exclude_connected:
+                    if person.get("distance") == "DISTANCE_1":
+                        skipped += 1
+                        _log_action(db, campaign.id, None, "search_add", "skipped", "Already connected (1st degree)")
+                        continue
+                    if urn_id in excluded_urns:
+                        skipped += 1
+                        _log_action(db, campaign.id, None, "search_add", "skipped", "Connected or pending invit")
+                        continue
 
                 existing = db.query(Contact).filter(
                     Contact.crm_id == campaign.crm_id,

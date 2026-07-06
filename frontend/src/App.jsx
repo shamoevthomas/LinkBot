@@ -21,6 +21,7 @@ const ContactsPage = lazy(() => import('./pages/ContactsPage'));
 const ConfigPage = lazy(() => import('./pages/ConfigPage'));
 const LeadMagnetsPage = lazy(() => import('./pages/LeadMagnetsPage'));
 const LeadMagnetDetailPage = lazy(() => import('./pages/LeadMagnetDetailPage'));
+const ContinuousConnectionPage = lazy(() => import('./pages/ContinuousConnectionPage'));
 
 function PageLoader() {
   return (
@@ -85,6 +86,9 @@ function AppRoutes() {
         } />
         <Route path="/dashboard/lead-magnets/:id" element={
           <ProtectedRoute><DashboardWrapper><LeadMagnetDetailPage /></DashboardWrapper></ProtectedRoute>
+        } />
+        <Route path="/dashboard/continuous-connection" element={
+          <ProtectedRoute><DashboardWrapper><ContinuousConnectionPage /></DashboardWrapper></ProtectedRoute>
         } />
         <Route path="/dashboard/config" element={
           <ProtectedRoute><DashboardWrapper><ConfigPage /></DashboardWrapper></ProtectedRoute>

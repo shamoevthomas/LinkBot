@@ -35,6 +35,11 @@ ENRICH_PICTURES_INTERVAL = 15 * 60  # 15 minutes
 _last_cookie_check: Optional[datetime] = None
 COOKIE_CHECK_INTERVAL = 2 * 3600  # 2 hours
 
+# Continuous Connection tick (runs every 3 minutes; the job itself decides
+# per-user whether to send anything).
+_last_continuous_conn: Optional[datetime] = None
+CONTINUOUS_CONN_INTERVAL = 3 * 60  # 3 minutes
+
 
 # ---------------------------------------------------------------------------
 # Campaign job runner
@@ -114,6 +119,19 @@ async def _run_cookie_validation():
         logger.exception("Error in cookie validation")
 
 
+async def _run_continuous_connection():
+    """Tick each enabled ContinuousConnection config. Marks the last-run stamp
+    BEFORE running so a slow LinkedIn call can't re-fire us on the next loop
+    iteration."""
+    global _last_continuous_conn
+    _last_continuous_conn = datetime.utcnow()
+    try:
+        from app.jobs.continuous_connection import run_continuous_connection
+        await run_continuous_connection()
+    except Exception:
+        logger.exception("Error in continuous connection tick")
+
+
 # ---------------------------------------------------------------------------
 # Main background loop
 # ---------------------------------------------------------------------------
@@ -152,6 +170,11 @@ async def _main_loop():
             if (_last_cookie_check is None or
                     (now - _last_cookie_check).total_seconds() >= COOKIE_CHECK_INTERVAL):
                 _spawn_side("cookie_check", _run_cookie_validation)
+
+            # Continuous connection tick (every 3 minutes) — non-blocking
+            if (_last_continuous_conn is None or
+                    (now - _last_continuous_conn).total_seconds() >= CONTINUOUS_CONN_INTERVAL):
+                _spawn_side("continuous_conn", _run_continuous_connection)
 
             # Check each registered campaign
             for cid, info in list(_campaigns.items()):
@@ -557,16 +580,23 @@ def get_next_schedule_start(user_id: int, db_session=None):
 
 
 def get_user_actions_today(action_types: list, user_id: int, db_session=None) -> int:
-    """Count today's successful actions for ONE user (joined via campaign.user_id)."""
+    """Count today's successful actions for ONE user.
+
+    Sums two sources so the daily quota reflects everything the tenant did today:
+    - Campaign actions (linked via campaign_action.campaign_id -> campaign.user_id).
+    - Continuous Connection actions (linked via campaign_action.continuous_connection_id
+      -> continuous_connection.user_id) — these have campaign_id NULL so they don't
+      show up in the campaign join.
+    """
     from datetime import datetime as _dt, date as _date
     from sqlalchemy import func
     from app.database import SessionLocal
-    from app.models import CampaignAction, Campaign
+    from app.models import CampaignAction, Campaign, ContinuousConnection
 
     db = db_session or SessionLocal()
     try:
         today_start = _dt.combine(_date.today(), _dt.min.time())
-        count = (
+        campaign_count = (
             db.query(func.count(CampaignAction.id))
             .join(Campaign, CampaignAction.campaign_id == Campaign.id)
             .filter(
@@ -578,7 +608,19 @@ def get_user_actions_today(action_types: list, user_id: int, db_session=None) ->
             .scalar()
             or 0
         )
-        return count
+        continuous_count = (
+            db.query(func.count(CampaignAction.id))
+            .join(ContinuousConnection, CampaignAction.continuous_connection_id == ContinuousConnection.id)
+            .filter(
+                CampaignAction.action_type.in_(action_types),
+                CampaignAction.status == "success",
+                CampaignAction.created_at >= today_start,
+                ContinuousConnection.user_id == user_id,
+            )
+            .scalar()
+            or 0
+        )
+        return campaign_count + continuous_count
     except Exception:
         return 0
     finally:

@@ -268,6 +268,9 @@ export default function NewDMCampaignPage() {
         if (searchConnectionDMConfig.search_regions?.length) {
           payload.search_regions = searchConnectionDMConfig.search_regions;
         }
+        if (searchConnectionDMConfig.exclude_connected !== undefined) {
+          payload.exclude_connected = searchConnectionDMConfig.exclude_connected;
+        }
       } else if (connectionConfig) {
         payload.keywords = connectionConfig.keywords || '';
         payload.is_connection_dm = true;

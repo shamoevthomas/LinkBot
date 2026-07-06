@@ -160,6 +160,7 @@ from app.routers import blacklist as blacklist_router
 from app.routers import tags as tags_router
 from app.routers import notifications as notifications_router
 from app.routers import lead_magnets as lead_magnets_router
+from app.routers import continuous_connection as continuous_connection_router
 
 app.include_router(auth_router.router)
 app.include_router(user_router.router)
@@ -172,6 +173,7 @@ app.include_router(blacklist_router.router)
 app.include_router(tags_router.router)
 app.include_router(notifications_router.router)
 app.include_router(lead_magnets_router.router)
+app.include_router(continuous_connection_router.router)
 
 
 @app.get("/api/health")

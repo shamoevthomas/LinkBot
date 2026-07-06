@@ -106,6 +106,7 @@ class CampaignCreate(BaseModel):
     spread_over_days: Optional[int] = None
     auto_connect: bool = False
     search_regions: Optional[List[str]] = None  # geo URN IDs for LinkedIn search
+    exclude_connected: bool = True  # skip already-connected + pending-invit prospects
 
 class CampaignMessageSchema(BaseModel):
     sequence: int
@@ -131,6 +132,7 @@ class DMCampaignCreate(BaseModel):
     search_regions: Optional[List[str]] = None  # geo URN IDs for LinkedIn search
     dm_delay_hours: int = 0  # hours to wait after connection accepted before sending DM
     fallback_message: Optional[str] = None  # sent when AI fails after all retries
+    exclude_connected: bool = True  # skip already-connected + pending-invit prospects (search-connection-dm only)
 
 class GenerateCampaignMessagesRequest(BaseModel):
     ai_prompt: str
@@ -330,3 +332,23 @@ class LeadMagnetContactResponse(BaseModel):
 
 class ImportConnectionsRequest(BaseModel):
     crm_id: int
+
+
+# Continuous Connection
+class ContinuousConnectionUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    keywords: Optional[List[str]] = None
+    search_regions: Optional[List[str]] = None
+
+
+class ContinuousConnectionResponse(BaseModel):
+    id: int
+    enabled: bool
+    keywords: List[str]
+    search_regions: List[str]
+    crm_id: Optional[int] = None
+    crm_name: Optional[str] = None
+    total_sent: int
+    sent_today: int = 0
+    last_run_at: Optional[datetime] = None
+    last_error: Optional[str] = None
