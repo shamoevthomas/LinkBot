@@ -417,7 +417,21 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
-                db.commit()
+                # Mark the contact as handled. Without a CampaignContact row it
+                # stays outside `already_ids`, so the next iteration selects the
+                # very same contact — and since get_user_actions_today only
+                # counts *successful* actions, the while condition never moves
+                # either. The campaign spun on unresolvable profiles forever,
+                # burning LinkedIn calls without ever sending an invitation.
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=-1,
+                        main_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue
 
             # Blacklist check
@@ -425,7 +439,17 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "connection_request", "skipped", "Blacklisted")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_skipped = (campaign.total_skipped or 0) + 1
-                db.commit()
+                # Same trap as the URN failure above: no CampaignContact row means
+                # this contact gets re-selected on the next iteration forever.
+                try:
+                    db.add(CampaignContact(
+                        campaign_id=campaign_id, contact_id=contact.id,
+                        status="perdu", last_sequence_sent=-1,
+                        main_sent_at=datetime.utcnow(),
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
                 continue
 
             # Skip if already connected
