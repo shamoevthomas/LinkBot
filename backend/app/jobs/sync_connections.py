@@ -143,8 +143,32 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
             existing_urns.add(person_urn)
             total_new += 1
 
-        # Mark accepted connections in campaign tracking
         all_urns = set(p.get("urn_id") for p in all_connections if p.get("urn_id"))
+
+        # Flip connection_status on contacts that already live in one of the
+        # user's CRMs. The loop above only ever *creates* rows in "Mon Réseau",
+        # so a prospect sitting in a campaign CRM stayed "pending" forever even
+        # after accepting. connection_dm's phase 1 reads exactly this field to
+        # decide acceptance, so without this the invitation expired and the
+        # contact was marked "perdu" by mistake — acceptance only ever advanced
+        # when the user happened to run a manual sync.
+        updated = 0
+        if all_urns:
+            user_crm_ids = [r[0] for r in db.query(CRM.id).filter(CRM.user_id == user_id).all()]
+            if user_crm_ids:
+                for contact in (
+                    db.query(Contact)
+                    .filter(
+                        Contact.crm_id.in_(user_crm_ids),
+                        Contact.urn_id.in_(all_urns),
+                        Contact.connection_status != "connected",
+                    )
+                    .all()
+                ):
+                    contact.connection_status = "connected"
+                    updated += 1
+
+        # Mark accepted connections in campaign tracking
         accepted = _mark_accepted_campaign_contacts(db, all_urns, user_id)
 
         try:
@@ -152,7 +176,11 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
         except Exception:
             db.rollback()
 
-        print(f"[SYNC] User {user_id}: added {total_new} new connections, {accepted} campaign invitations accepted", flush=True)
+        print(
+            f"[SYNC] User {user_id}: added {total_new} new connections, "
+            f"{updated} statuses updated, {accepted} campaign invitations accepted",
+            flush=True,
+        )
 
     except Exception:
         logger.exception("sync_connections: unexpected error for user %d", user_id)

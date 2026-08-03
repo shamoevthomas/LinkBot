@@ -18,8 +18,21 @@ export default function LoginPage() {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch {
-      setError('Identifiants incorrects');
+    } catch (err) {
+      // Only a 401 actually means bad credentials. Timeouts / 5xx / network
+      // errors used to surface as "Identifiants incorrects" too, which sent
+      // users chasing a password problem while the server was just waking up
+      // (the API sleeps when idle and takes ~50s to cold-start).
+      const status = err.response?.status;
+      if (status === 401 || status === 403) {
+        setError('Identifiants incorrects');
+      } else if (!err.response) {
+        setError("Le serveur ne répond pas — il démarre peut-être. Réessaie dans une minute.");
+      } else if (status >= 500) {
+        setError('Le serveur a rencontré une erreur. Réessaie dans un instant.');
+      } else {
+        setError(err.response?.data?.detail || 'Connexion impossible. Réessaie.');
+      }
     } finally {
       setLoading(false);
     }

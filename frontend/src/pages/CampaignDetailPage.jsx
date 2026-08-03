@@ -109,8 +109,13 @@ export default function CampaignDetailPage() {
       toast.loading('Exécution manuelle...', { id: 'run-now' });
       const result = await runCampaignNow(id);
       toast.dismiss('run-now');
-      if (result.ok) toast.success(`Tick exécuté — traités: ${result.total_processed}`);
-      else toast.error(`Erreur: ${result.error}`);
+      if (result.ok) {
+        // Report what the tick actually did. It used to always claim success
+        // and echo the running total, so a tick that did nothing at all looked
+        // identical to one that sent a message.
+        if (result.processed_delta > 0) toast.success(result.note);
+        else toast(result.note || 'Rien à faire pour l’instant', { icon: 'ℹ️', duration: 6000 });
+      } else toast.error(`Erreur: ${result.error}`);
       load();
     } catch (err) {
       toast.dismiss('run-now');
@@ -344,8 +349,20 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
+        {campaign.crm_exhausted && (
+          <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg"
+            style={{ background: 'hsl(38 100% 94%)', border: '1px solid hsl(38 85% 78%)', color: 'hsl(28 80% 38%)' }}>
+            <AlertCircle size={14} />
+            <span className="text-[12.5px]">
+              Tous les contacts du CRM ont été traités ({campaign.total_processed ?? 0}/{campaign.total_target || '—'}).
+              Ajoute des contacts ou lance une nouvelle recherche pour que la campagne reprenne.
+              {' '}Les relances en cours continuent automatiquement.
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mt-4 flex-wrap">
-          {campaign.status === 'running' && !isSearch && !campaign.paused_reason && campaign.next_action_at && (
+          {campaign.status === 'running' && !isSearch && !campaign.paused_reason && !campaign.crm_exhausted && campaign.next_action_at && (
             <>
               <div className="chip blue" style={{ padding: '7px 12px' }}>
                 <Timer size={12} />

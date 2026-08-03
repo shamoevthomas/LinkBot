@@ -36,7 +36,7 @@ def _pick_contacts_missing_picture(db: Session, user_id: int, limit: int) -> Lis
             Contact.public_id.isnot(None),
             Contact.deleted_at.is_(None),
         )
-        .order_by(Contact.created_at.desc())
+        .order_by(Contact.added_at.desc())
         .limit(limit)
         .all()
     )

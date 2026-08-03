@@ -141,21 +141,59 @@ async def validate_cookies(li_at: str, jsessionid: str) -> Optional[bool]:
 _geo_urn_cache: Dict[str, str] = {}
 _GEO_URN_PATTERN = re.compile(r"urn:li:fsd_geo:(\d+)")
 
+# The jobs page only understands country names in English (or in the country's
+# own language). Given "Belgique" it does NOT fail — it silently falls back to
+# the *account's* country and embeds that geoUrn instead, so "Belgique",
+# "Allemagne" and "Espagne" all resolved to France (105015875) and campaigns
+# quietly targeted the wrong country. These aliases short-circuit the scrape
+# for the names users actually type. Verified against LinkedIn.
+_GEO_ALIASES: Dict[str, str] = {
+    "france": "105015875",
+    "belgique": "100565514",
+    "belgium": "100565514",
+    "suisse": "106693272",
+    "switzerland": "106693272",
+    "luxembourg": "104042105",
+    "allemagne": "101282230",
+    "germany": "101282230",
+    "espagne": "105646813",
+    "spain": "105646813",
+    "italie": "103350119",
+    "italy": "103350119",
+    "royaume-uni": "101165590",
+    "royaume uni": "101165590",
+    "angleterre": "101165590",
+    "united kingdom": "101165590",
+    "pays-bas": "102890719",
+    "pays bas": "102890719",
+    "netherlands": "102890719",
+    "portugal": "100364837",
+    "maroc": "102787409",
+    "morocco": "102787409",
+    "tunisie": "102134353",
+    "tunisia": "102134353",
+    "algerie": "106395874",
+    "algérie": "106395874",
+    "algeria": "106395874",
+    "canada": "101174742",
+    "etats-unis": "103644278",
+    "états-unis": "103644278",
+    "usa": "103644278",
+    "united states": "103644278",
+    "irlande": "104738515",
+    "ireland": "104738515",
+}
 
-def resolve_geo_urn(name: str, li_at: str, jsessionid: str) -> Optional[str]:
-    """Resolve a free-text location ("Mulhouse", "Île-de-France", "Lyon") to
-    a LinkedIn geoUrn ID by scraping the public jobs-search page. Cached.
-    Returns None if no URN could be extracted.
-    """
-    if not name:
-        return None
-    key = name.strip().lower()
-    if not key:
-        return None
-    if key in _geo_urn_cache:
-        return _geo_urn_cache[key]
-    if not li_at:
-        return None
+# Probing with a nonsense location tells us which geoUrn this account falls
+# back to. Anything that resolves to the same value is a silent fallback, not
+# a real match. Cached per process.
+_GEO_FALLBACK_PROBE = "zzq-linky-invalid-location-zzq"
+_geo_fallback_urn: Optional[str] = None
+_geo_fallback_probed = False
+
+
+def _scrape_geo_urn(name: str, li_at: str, jsessionid: str) -> Optional[str]:
+    """Raw scrape: ask the public jobs-search page for a location's geoUrn."""
     try:
         sess = requests.Session()
         raw_jsessionid = jsessionid or ""
@@ -170,13 +208,60 @@ def resolve_geo_urn(name: str, li_at: str, jsessionid: str) -> Optional[str]:
         if resp.status_code != 200:
             return None
         match = _GEO_URN_PATTERN.search(resp.text)
-        if match:
-            urn = match.group(1)
-            _geo_urn_cache[key] = urn
-            return urn
+        return match.group(1) if match else None
     except Exception:
         logger.exception("resolve_geo_urn failed for %r", name)
-    return None
+        return None
+
+
+def _get_fallback_urn(li_at: str, jsessionid: str) -> Optional[str]:
+    """geoUrn LinkedIn returns for an unparseable location (= account country)."""
+    global _geo_fallback_urn, _geo_fallback_probed
+    if not _geo_fallback_probed:
+        _geo_fallback_probed = True
+        _geo_fallback_urn = _scrape_geo_urn(_GEO_FALLBACK_PROBE, li_at, jsessionid)
+        logger.info("resolve_geo_urn: account fallback geoUrn = %s", _geo_fallback_urn)
+    return _geo_fallback_urn
+
+
+def resolve_geo_urn(name: str, li_at: str, jsessionid: str) -> Optional[str]:
+    """Resolve a free-text location ("Mulhouse", "Île-de-France", "Lyon") to
+    a LinkedIn geoUrn ID. Returns None when the location can't be resolved —
+    including when LinkedIn silently substitutes the account's own country.
+    """
+    if not name:
+        return None
+    key = name.strip().lower()
+    if not key:
+        return None
+
+    alias = _GEO_ALIASES.get(key)
+    if alias:
+        return alias
+
+    if key in _geo_urn_cache:
+        return _geo_urn_cache[key]
+    if not li_at:
+        return None
+
+    urn = _scrape_geo_urn(name, li_at, jsessionid)
+    if not urn:
+        return None
+
+    # Reject the silent fallback. A location that is genuinely the account's
+    # own country is covered by _GEO_ALIASES above, so reaching here with the
+    # fallback URN means LinkedIn didn't understand the name.
+    fallback = _get_fallback_urn(li_at, jsessionid)
+    if fallback and urn == fallback:
+        logger.warning(
+            "resolve_geo_urn: %r resolved to the account's fallback geoUrn (%s) "
+            "— treating as unresolved rather than silently targeting it",
+            name, urn,
+        )
+        return None
+
+    _geo_urn_cache[key] = urn
+    return urn
 
 
 async def search_people(

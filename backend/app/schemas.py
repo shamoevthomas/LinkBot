@@ -183,6 +183,10 @@ class CampaignResponse(BaseModel):
     connection_rate: Optional[float] = None
     next_action_at: Optional[datetime] = None
     paused_reason: Optional[str] = None
+    # Set on the detail endpoint when the campaign is running but its CRM has
+    # no unprocessed contact left, so the UI can say so instead of showing a
+    # countdown to an action that will never happen.
+    crm_exhausted: Optional[bool] = None
 
 class CampaignActionResponse(BaseModel):
     id: int

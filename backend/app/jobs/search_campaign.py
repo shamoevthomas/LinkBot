@@ -125,11 +125,26 @@ async def run_search_campaign(campaign_id: int) -> None:
             )
             return
 
+        # Two distinct location names can map to the same geoUrn (e.g. a region
+        # and the city it contains). per_city_* below are keyed by geoUrn, so
+        # duplicates would collapse to fewer entries than n_cities and break the
+        # "every city exhausted" check in pass 2. Dedupe, keeping order.
+        if len(set(resolved_geos)) != len(resolved_geos):
+            _seen_geo: set[str] = set()
+            deduped = [g for g in resolved_geos if not (g in _seen_geo or _seen_geo.add(g))]
+            print(
+                f"[SEARCH JOB] Campaign {campaign_id}: deduped geoUrns "
+                f"{resolved_geos} -> {deduped}",
+                flush=True,
+            )
+            resolved_geos = deduped
+
         # Partial failure: some resolved, some didn't — proceed with what we have
         # but warn via error_message so it surfaces in the campaign detail page.
         if unresolved:
             campaign.error_message = (
-                f"Localisations ignorées (introuvables): {', '.join(unresolved)}"
+                f"Localisations ignorées (introuvables): {', '.join(unresolved)}. "
+                "Essaie le nom anglais du pays ou une ville."
             )
             db.commit()
 
@@ -341,6 +356,28 @@ async def run_search_campaign(campaign_id: int) -> None:
             )
 
         skipped = nonlocal_skipped[0]
+
+        # A search that runs dry far below its target is almost always a keyword
+        # problem (a brand name instead of a job title, or a spelling LinkedIn
+        # tokenises differently) — not an empty market. Say so, otherwise the
+        # campaign just reports "terminée 15/300" and the user assumes the pool
+        # is exhausted.
+        if added < target * 0.5 and not unresolved:
+            shortfall_msg = (
+                f"Recherche épuisée à {added}/{target}. LinkedIn n'a plus de "
+                f"résultats pour « {campaign.keywords or ''} » — vérifie le mot-clé "
+                "(un nom de marque ou une orthographe collée trouve très peu de "
+                "monde ; essaie un intitulé de poste, ou le nom en deux mots)."
+            )
+            campaign.error_message = shortfall_msg
+            try:
+                create_notification(
+                    db, campaign.user_id, "campaign_warning",
+                    f'Recherche "{campaign.name}" : {added}/{target} seulement',
+                    shortfall_msg,
+                )
+            except Exception:
+                logger.exception("Failed to create shortfall notification")
 
         # Update counters and complete
         campaign.search_offset = offset

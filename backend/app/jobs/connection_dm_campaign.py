@@ -35,7 +35,10 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_STATUSES = {"envoye"} | {f"relance_{i}" for i in range(1, 8)}
 FINAL_STATUSES = {"reussi", "perdu"}
-CONNECTION_WAIT_DAYS = 5
+# LinkedIn invitations stay pending for months; 5 days was far too aggressive
+# and buried real prospects under "perdu" before they ever got a chance to
+# accept. Per-user override via the connection_wait_days setting.
+DEFAULT_CONNECTION_WAIT_DAYS = 14
 
 
 async def run_connection_dm_campaign(campaign_id: int) -> None:
@@ -63,6 +66,15 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             int(get_setting(db, campaign.user_id, "max_dms_per_day", "50") or "50"),
             campaign.user_id, db,
         )
+
+        try:
+            connection_wait_days = int(
+                get_setting(db, campaign.user_id, "connection_wait_days",
+                            str(DEFAULT_CONNECTION_WAIT_DAYS))
+                or DEFAULT_CONNECTION_WAIT_DAYS
+            )
+        except (TypeError, ValueError):
+            connection_wait_days = DEFAULT_CONNECTION_WAIT_DAYS
 
         dm_action_types = ["dm_send"]
         global_connections_today = get_user_actions_today(["connection_request"], campaign.user_id, db)
@@ -110,11 +122,18 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             cc.last_checked_at = datetime.utcnow()
 
             # `sync_connections` is the source of truth for acceptance: it
-            # pulls the user's real LinkedIn connections list and flips
-            # contact.connection_status to "connected". get_profile() does
-            # not surface connection distance, so polling it here was a
-            # no-op that left every invitation stuck in en_attente.
-            accepted = (contact.connection_status == "connected")
+            # pulls the user's real LinkedIn connections list, flips
+            # contact.connection_status to "connected" AND stamps
+            # cc.connection_accepted_at. get_profile() does not surface
+            # connection distance, so polling it here was a no-op that left
+            # every invitation stuck in en_attente.
+            # Either signal counts — relying on connection_status alone meant a
+            # sync that stamped the timestamp but missed the status left the
+            # invitation to rot until it expired.
+            accepted = (
+                contact.connection_status == "connected"
+                or cc.connection_accepted_at is not None
+            )
 
             if accepted:
                 contact.connection_status = "connected"
@@ -224,11 +243,14 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     cc.last_sequence_sent = -1  # DM not yet sent
                     db.commit()
 
-            elif cc.main_sent_at and datetime.utcnow() - cc.main_sent_at > timedelta(days=CONNECTION_WAIT_DAYS):
-                # Connection not accepted after 5 days → perdu
+            elif cc.main_sent_at and datetime.utcnow() - cc.main_sent_at > timedelta(days=connection_wait_days):
+                # Invitation still pending after the wait window → perdu
                 cc.status = "perdu"
                 _log_action(db, campaign_id, contact.id, "connection_expired", "success")
-                logger.info("Campaign %d: contact %d connection expired (5 days)", campaign_id, contact.id)
+                logger.info(
+                    "Campaign %d: contact %d connection expired (%d days)",
+                    campaign_id, contact.id, connection_wait_days,
+                )
 
         db.commit()
 
