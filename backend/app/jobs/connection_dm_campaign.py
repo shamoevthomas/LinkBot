@@ -100,6 +100,23 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         )
         max_followup_seq = max((f.sequence for f in followups), default=0)
 
+        # The reconfigure screen writes the main DM to CampaignMessage
+        # sequence 0, while this job historically read Campaign.message_template.
+        # When they disagree the row is the one the user actually edited last,
+        # so prefer it — a campaign whose message was updated (a link added, say)
+        # kept sending the stale copy otherwise.
+        _main_row = (
+            db.query(CampaignMessage)
+            .filter(CampaignMessage.campaign_id == campaign_id, CampaignMessage.sequence == 0)
+            .first()
+        )
+        main_template = (
+            (_main_row.message_template or "").strip()
+            if _main_row and (_main_row.message_template or "").strip()
+            and _main_row.message_template != "__FULL_AI__"
+            else (campaign.message_template or "")
+        )
+
         # =====================================================================
         # PHASE 1: Check pending connections (en_attente) for acceptance
         # =====================================================================
@@ -150,7 +167,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     continue  # Not yet time to send DM
 
                 if get_user_actions_today(dm_action_types, campaign.user_id, db) < dm_limit:
-                    template = campaign.message_template or ""
+                    template = main_template
                     try:
                         message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                         if message_body and message_body.strip():
@@ -279,7 +296,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 if not contact:
                     continue
 
-                template = campaign.message_template or ""
+                template = main_template
                 try:
                     message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                 except Exception as exc:

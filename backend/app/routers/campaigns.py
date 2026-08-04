@@ -829,6 +829,13 @@ def update_campaign(
                 fallback_template=msg.get("fallback_template"),
                 delay_days=msg.get("delay_days", 0),
             ))
+        # The main DM lives in two places: CampaignMessage sequence 0 (what the
+        # reconfigure screen edits) and Campaign.message_template (what the jobs
+        # actually send). Saving only the former let them drift — an edited
+        # message was stored correctly and then silently ignored at send time.
+        main = next((m for m in body["messages"] if m.get("sequence", 0) == 0), None)
+        if main is not None and "message_template" not in body:
+            campaign.message_template = main.get("message_template", "") or ""
     db.commit()
     db.refresh(campaign)
     return _campaign_to_response(campaign, db)
