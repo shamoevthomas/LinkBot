@@ -218,6 +218,10 @@ class CampaignContactResponse(BaseModel):
     main_sent_at: Optional[datetime] = None
     last_sent_at: Optional[datetime] = None
     replied_at: Optional[datetime] = None
+    # An accepted invitation keeps the "en_attente" status until the DM goes
+    # out (dm_delay_hours later), so without this the UI could not tell
+    # "not accepted yet" from "accepted, waiting out the delay".
+    connection_accepted_at: Optional[datetime] = None
     # Contact info
     contact_first_name: Optional[str] = None
     contact_last_name: Optional[str] = None

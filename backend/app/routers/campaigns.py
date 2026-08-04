@@ -1292,6 +1292,7 @@ def list_campaign_contacts(
             main_sent_at=cc.main_sent_at,
             last_sent_at=cc.last_sent_at,
             replied_at=cc.replied_at,
+            connection_accepted_at=cc.connection_accepted_at,
             contact_first_name=c.first_name if c else None,
             contact_last_name=c.last_name if c else None,
             contact_headline=c.headline if c else None,

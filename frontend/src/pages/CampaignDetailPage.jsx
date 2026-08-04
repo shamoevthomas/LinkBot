@@ -178,8 +178,14 @@ export default function CampaignDetailPage() {
   const showReplyRate = ['dm', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
   const showConnectionRate = ['connection', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
 
+  // An accepted invitation keeps the "en_attente" status until the DM fires
+  // dm_delay_hours later, so it must be counted apart — otherwise an accepted
+  // connection is indistinguishable from one nobody answered.
+  const isAccepted = (c) => c.status === 'en_attente' && !!c.connection_accepted_at;
+
   const counts = {
-    en_attente: contacts.filter((c) => c.status === 'en_attente' || c.status === 'pending').length,
+    accepte: contacts.filter(isAccepted).length,
+    en_attente: contacts.filter((c) => (c.status === 'en_attente' && !isAccepted(c)) || c.status === 'pending').length,
     envoye: contacts.filter((c) => c.status === 'envoye' || c.status === 'demande_envoyee').length,
     relance: contacts.filter((c) => c.status?.startsWith('relance_')).length,
     reussi: contacts.filter((c) => c.status === 'reussi').length,
@@ -210,7 +216,10 @@ export default function CampaignDetailPage() {
     ];
   } else if (contacts.length > 0) {
     STATS = [
-      ...(isConnectionDM ? [{ label: 'En attente', value: counts.en_attente, icon: Clock, tone: 'amber' }] : []),
+      ...(isConnectionDM ? [
+        { label: 'En attente', value: counts.en_attente, icon: Clock, tone: 'amber' },
+        { label: 'Acceptés', value: counts.accepte, icon: UserCheck, tone: 'blue' },
+      ] : []),
       { label: 'Envoyés', value: counts.envoye, icon: Send, tone: 'accent' },
       { label: 'En relance', value: counts.relance, icon: Clock, tone: 'amber' },
       { label: 'Répondu', value: counts.reussi, icon: UserCheck, tone: 'emerald' },
@@ -580,7 +589,7 @@ export default function CampaignDetailPage() {
                   </>
                 ) : isConnection ? (
                   <>
-                    <div><StatusChip status={cc.status} /></div>
+                    <div><StatusChip status={isAccepted(cc) ? 'envoye' : cc.status} label={isAccepted(cc) ? 'Accepté · DM à venir' : undefined} /></div>
                     <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.main_sent_at)}</div>
                     <div>
                       {cc.contact_linkedin_url ? (
@@ -593,7 +602,7 @@ export default function CampaignDetailPage() {
                   </>
                 ) : (
                   <>
-                    <div><StatusChip status={cc.status} /></div>
+                    <div><StatusChip status={isAccepted(cc) ? 'envoye' : cc.status} label={isAccepted(cc) ? 'Accepté · DM à venir' : undefined} /></div>
                     <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.main_sent_at)}</div>
                     <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.last_sent_at)}</div>
                     <div className="mono text-[11.5px]"
