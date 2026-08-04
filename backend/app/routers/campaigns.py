@@ -203,6 +203,7 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
         connection_rate=connection_rate,
         next_action_at=next_action_at,
         paused_reason=paused_reason,
+        dm_delay_hours=c.dm_delay_hours if c.type in ("connection_dm", "search_connection_dm") else None,
     )
 
 

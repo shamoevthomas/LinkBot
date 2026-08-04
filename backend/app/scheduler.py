@@ -75,10 +75,13 @@ async def _run_campaign_tick(campaign_id: int, campaign_type: str):
 async def _run_sync_connections():
     """Run the periodic connection sync."""
     global _last_sync_connections
+    # Stamp before running, like the other side jobs: on failure a timestamp
+    # left at None makes the loop re-fire on every pass, hammering LinkedIn
+    # with a full connections pull each time.
+    _last_sync_connections = datetime.utcnow()
     try:
         from app.jobs.sync_connections import sync_new_connections
         await sync_new_connections()
-        _last_sync_connections = datetime.utcnow()
         print("[SCHEDULER] sync_connections completed", flush=True)
     except Exception:
         logger.exception("Error in sync_connections")
@@ -155,6 +158,16 @@ async def _main_loop():
     while not _shutdown:
         try:
             now = datetime.utcnow()
+
+            # Import new connections and detect accepted invitations (every 6h).
+            # This was defined, documented and given an interval — but never
+            # wired into the loop, so it never ran on its own. connection_dm
+            # phase 1 reads the acceptance signal this job writes, so without
+            # it invitations were accepted on LinkedIn while Linky kept showing
+            # "en attente" and no follow-up DM ever fired.
+            if (_last_sync_connections is None or
+                    (now - _last_sync_connections).total_seconds() >= SYNC_CONNECTIONS_INTERVAL):
+                _spawn_side("sync_connections", _run_sync_connections)
 
             # Check replies (every 5 minutes) — non-blocking
             if (_last_reply_check is None or

@@ -187,6 +187,10 @@ class CampaignResponse(BaseModel):
     # no unprocessed contact left, so the UI can say so instead of showing a
     # countdown to an action that will never happen.
     crm_exhausted: Optional[bool] = None
+    # Hours the campaign waits after an invitation is accepted before sending
+    # the first DM. It was stored and enforced but never returned, so a
+    # campaign sitting out its delay looked identical to a broken one.
+    dm_delay_hours: Optional[int] = None
 
 class CampaignActionResponse(BaseModel):
     id: int

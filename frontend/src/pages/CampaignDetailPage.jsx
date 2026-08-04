@@ -349,6 +349,17 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
+        {campaign.dm_delay_hours > 0 && campaign.status === 'running' && (
+          <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg w-fit"
+            style={{ background: 'hsl(210 100% 96%)', border: '1px solid hsl(210 85% 85%)', color: 'hsl(215 70% 40%)' }}>
+            <Timer size={14} />
+            <span className="text-[12.5px]">
+              Le DM part <strong>{campaign.dm_delay_hours}h après l'acceptation</strong> de l'invitation.
+              Une invitation acceptée reste donc « En attente » pendant ce délai — c'est normal.
+            </span>
+          </div>
+        )}
+
         {campaign.crm_exhausted && (
           <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg"
             style={{ background: 'hsl(38 100% 94%)', border: '1px solid hsl(38 85% 78%)', color: 'hsl(28 80% 38%)' }}>
