@@ -10,7 +10,7 @@ import logging
 
 from app.database import SessionLocal
 from datetime import datetime
-from app.models import CRM, Campaign, CampaignContact, Contact, User
+from app.models import CRM, Campaign, CampaignAction, CampaignContact, Contact, User
 from app.linkedin_service import get_linkedin_client, validate_cookies
 from app.routers.notifications import create_notification
 from app.scheduler import pause_campaign_job
@@ -56,6 +56,17 @@ def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> i
         cc.connection_accepted_at = now
         if cc.status == "demande_envoyee":
             cc.status = "reussi"
+        # Record it in the campaign journal. Acceptance was only ever logged by
+        # connection_dm's phase 1, and only when it discovered the acceptance
+        # itself — since this job stamps the timestamp first, that branch never
+        # runs and the journal showed nothing between "connection_request" and
+        # the DM, as if the invitation had never been accepted.
+        db.add(CampaignAction(
+            campaign_id=cc.campaign_id,
+            contact_id=cc.contact_id,
+            action_type="connection_accepted",
+            status="success",
+        ))
 
     return len(pending_ccs)
 
