@@ -1,0 +1,57 @@
+name: Keep API awake
+
+# The API runs on Render's free plan, which suspends the container after ~15
+# minutes of inactivity. The scheduler is an in-process asyncio loop, so it
+# dies with the container and campaigns stop sending.
+#
+# cron-job.org cannot do this job: its timeout caps at 30s on the free tier
+# while a cold start takes ~51s, so every wake-up ping was recorded as a
+# failure and the task eventually got auto-disabled. GitHub Actions has no
+# such cap, and Actions minutes are free on public repositories.
+#
+# Window is 08:00-20:00 Europe/Paris on purpose. Render's free plan allows
+# 750 instance-hours per month; staying up round the clock burns ~744h and
+# exhausts the quota mid-month, which is exactly what suspended the service
+# on 24 July. 13h/day is ~403h/month, a comfortable margin.
+
+on:
+  schedule:
+    # Paris is UTC+2 in summer / UTC+1 in winter. 6-18 UTC covers 08:00-20:00
+    # (summer) and 07:00-19:00 (winter) — both inside working hours.
+    - cron: "*/10 6-18 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake the API
+        run: |
+          set -u
+          URL="https://linkbot-api.onrender.com/api/health"
+
+          # A sleeping instance needs ~51s to boot. --max-time 150 leaves room
+          # for that; --retry covers the case where Render's router returns a
+          # transient 502 while the container is still starting.
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' \
+                   --max-time 150 \
+                   --retry 3 --retry-delay 20 --retry-all-errors \
+                   "$URL" || echo "000")
+          total=$(curl -sS -o /dev/null -w '%{time_total}' --max-time 150 "$URL" || echo "n/a")
+
+          echo "status=$code  second_call_time=${total}s"
+          echo "body=$(cat /tmp/body 2>/dev/null | head -c 200)"
+
+          if [ "$code" != "200" ]; then
+            echo "::error::API did not return 200 (got $code)"
+            exit 1
+          fi
+          echo "::notice::API awake (HTTP $code, warm call ${total}s)"

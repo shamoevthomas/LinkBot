@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sys
@@ -102,15 +103,33 @@ def _recover_running_campaigns():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup. Uvicorn does not accept a single request until this returns, so
+    # everything here lands on the cold-start critical path — and on Render's
+    # free plan the container is suspended after ~15 min, meaning every wake-up
+    # pays it. Keep only what must exist before the first request; anything
+    # else is kicked off in the background right after.
     init_db()
     seed_db()
     from app.scheduler import init_scheduler, shutdown_scheduler
     await init_scheduler()
-    _recover_running_campaigns()
-    yield
-    # Shutdown
-    shutdown_scheduler()
+
+    async def _post_start():
+        # Re-registering running campaigns is pure bookkeeping in the
+        # scheduler's in-memory registry — a tick that fires a second later is
+        # indistinguishable from one that fired on time, and holding the whole
+        # API closed for it made the health endpoint miss keep-alive timeouts.
+        try:
+            await asyncio.to_thread(_recover_running_campaigns)
+        except Exception:
+            logging.getLogger(__name__).exception("Campaign recovery failed on startup")
+
+    recovery_task = asyncio.create_task(_post_start())
+    try:
+        yield
+    finally:
+        # Shutdown
+        recovery_task.cancel()
+        shutdown_scheduler()
 
 
 app = FastAPI(title="Linky", version="1.0.0", lifespan=lifespan)
