@@ -428,10 +428,10 @@ export default function NewDMCampaignPage() {
                 Si l'IA échoue après 3 tentatives, ce message sera envoyé à la place.
               </p>
               <textarea value={fallbackMessage} onChange={(e) => setFallbackMessage(e.target.value)}
-                rows={3} placeholder={`Bonjour {first_name},\n\nJ'aimerais échanger avec vous sur…`}
+                rows={3} placeholder={`Bonjour {prenom},\n\nJ'aimerais échanger avec vous sur…`}
                 className="input-glass w-full resize-none" style={{ fontSize: 12.5 }} />
               <div className="flex flex-wrap gap-1.5">
-                {['{first_name}', '{last_name}', '{headline}'].map((v) => (
+                {['{prenom}', '{nom}', '{titre}'].map((v) => (
                   <span key={v} className="chip amber mono" style={{ fontSize: 10 }}>{v}</span>
                 ))}
               </div>
@@ -584,12 +584,12 @@ export default function NewDMCampaignPage() {
                     <div style={{ padding: 16 }}>
                       <textarea value={msg.message_template} onChange={(e) => updateMessage(idx, 'message_template', e.target.value)}
                         rows={3} placeholder={idx === 0
-                          ? `Bonjour {first_name},\n{compliment}\n…`
-                          : `Bonjour {first_name}, je me permets de revenir vers vous…`}
+                          ? `Bonjour {prenom},\n{compliment}\n…`
+                          : `Bonjour {prenom}, je me permets de revenir vers vous…`}
                         className="input-glass w-full resize-none"
                         style={{ fontSize: 12.5, lineHeight: 1.55 }} />
                       <div className="flex flex-wrap gap-1.5 mt-2.5">
-                        {['{first_name}', '{last_name}', '{headline}', '{location}'].map((v) => (
+                        {['{prenom}', '{nom}', '{titre}', '{ville}'].map((v) => (
                           <span key={v} className="chip slate mono" style={{ fontSize: 10 }}>{v}</span>
                         ))}
                         {useAi && (
@@ -685,10 +685,10 @@ export default function NewDMCampaignPage() {
                         </span>
                       </div>
                       <textarea value={fallbacks[0] || ''} onChange={(e) => setFallbacks({ ...fallbacks, 0: e.target.value })}
-                        rows={2} placeholder={`Bonjour {first_name}, j'aimerais échanger avec vous…`}
+                        rows={2} placeholder={`Bonjour {prenom}, j'aimerais échanger avec vous…`}
                         className="input-glass w-full resize-none" style={{ fontSize: 11.5 }} />
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {['{first_name}', '{last_name}', '{headline}'].map((v) => (
+                        {['{prenom}', '{nom}', '{titre}'].map((v) => (
                           <span key={v} className="chip amber mono" style={{ fontSize: 9.5 }}>{v}</span>
                         ))}
                       </div>
@@ -771,10 +771,10 @@ export default function NewDMCampaignPage() {
                             </span>
                           </div>
                           <textarea value={fallbacks[i + 1] || ''} onChange={(e) => setFallbacks({ ...fallbacks, [i + 1]: e.target.value })}
-                            rows={2} placeholder={`Bonjour {first_name}, je me permets de vous relancer…`}
+                            rows={2} placeholder={`Bonjour {prenom}, je me permets de vous relancer…`}
                             className="input-glass w-full resize-none" style={{ fontSize: 11.5 }} />
                           <div className="flex flex-wrap gap-1 mt-2">
-                            {['{first_name}', '{last_name}', '{headline}'].map((v) => (
+                            {['{prenom}', '{last_name}', '{headline}'].map((v) => (
                               <span key={v} className="chip amber mono" style={{ fontSize: 9.5 }}>{v}</span>
                             ))}
                           </div>

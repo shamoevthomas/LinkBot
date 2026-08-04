@@ -736,10 +736,10 @@ export default function CampaignsPage() {
             <div>
               <label className="form-label">Template de message</label>
               <textarea value={form.message_template} onChange={(e) => set('message_template', e.target.value)}
-                rows={3} className="input-sm" placeholder="Bonjour {first_name}, ..." />
+                rows={3} className="input-sm" placeholder="Bonjour {prenom}, ..." />
               <p className="text-[11px] mt-1" style={{ color: 'hsl(var(--muted))' }}>
                 {form.use_ai ? "Décrivez le ton et le but. L'IA personnalise pour chaque contact."
-                  : <>Variables : {'{first_name}'}, {'{last_name}'}, {'{headline}'}</>}
+                  : <>Variables : {'{prenom}'}, {'{nom}'}, {'{titre}'}</>}
               </p>
               {aiAvailable && (
                 <label className="flex items-center gap-3 mt-3 p-3 rounded-lg cursor-pointer"
