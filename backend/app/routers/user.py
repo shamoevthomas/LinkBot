@@ -3,6 +3,7 @@ User routes: profile retrieval, update, and LinkedIn cookie management.
 """
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -14,6 +15,8 @@ from app.scheduler import pause_campaign_job
 from app.linkedin_service import validate_cookies
 from app.auth import hash_password, verify_password
 from app.storage import upload_file
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -98,6 +101,47 @@ async def update_profile(
     )
 
 
+# Wording used by the job runners when they stop a campaign for dead cookies,
+# past and present. Only campaigns carrying one of these are auto-resumed —
+# anything the user paused deliberately must stay paused.
+_COOKIE_STOP_MARKERS = ("No valid LinkedIn cookies", "Cookies LinkedIn invalides")
+
+
+def _resume_cookie_stopped_campaigns(db: Session, user: User) -> int:
+    """Restart campaigns that a cookie outage stopped, now that it's over.
+
+    Pasting a working session used to only flip a flag: every campaign the
+    outage had stopped stayed down until the user reopened each one and hit
+    resume, which is not obvious when nothing on screen says so.
+    """
+    from app.models import Campaign as _Campaign
+    from app.scheduler import _campaigns, schedule_campaign_job, resume_campaign_job
+
+    stopped = (
+        db.query(_Campaign)
+        .filter(_Campaign.user_id == user.id, _Campaign.status.in_(("paused", "failed")))
+        .all()
+    )
+    resumed = 0
+    for c in stopped:
+        msg = c.error_message or ""
+        if not any(marker in msg for marker in _COOKIE_STOP_MARKERS):
+            continue
+        c.status = "running"
+        c.error_message = None
+        resumed += 1
+        try:
+            if c.id not in _campaigns:
+                schedule_campaign_job(c.id, c.type)
+            else:
+                resume_campaign_job(c.id)
+        except Exception:
+            logger.exception("Could not re-register campaign %s after cookie refresh", c.id)
+    if resumed:
+        db.commit()
+    return resumed
+
+
 @router.put("/cookies", response_model=CookiesStatus)
 async def update_cookies(
     body: CookiesUpdate,
@@ -124,6 +168,10 @@ async def update_cookies(
     user.cookies_valid = cookies_valid
     db.commit()
     db.refresh(user)
+
+    resumed = 0
+    if cookies_valid:
+        resumed = _resume_cookie_stopped_campaigns(db, user)
 
     if not cookies_valid:
         raise HTTPException(
