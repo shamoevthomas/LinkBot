@@ -2,6 +2,8 @@
 User routes: profile retrieval, update, and LinkedIn cookie management.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -103,27 +105,35 @@ async def update_cookies(
     user: User = Depends(get_current_user),
 ):
     """Update the user's LinkedIn session cookies and validate them."""
-    # validate_cookies returns True / False / None (transient).
-    # Retry once on transient before declaring failure: a single redirect
-    # glitch shouldn't make the user think their cookies are bad.
-    result = await validate_cookies(body.li_at, body.jsessionid)
-    if result is None:
+    # validate_cookies returns True / False / None (transient), and a dead
+    # LinkedIn session shows up as transient — it answers with a redirect loop.
+    # Saving optimistically on that told users their cookies were fine while
+    # every campaign action kept failing. Retry a few times a moment apart: a
+    # real glitch does not survive that, a dead session fails every time.
+    result = None
+    for attempt in range(3):
         result = await validate_cookies(body.li_at, body.jsessionid)
+        if result is not None:
+            break
+        if attempt < 2:
+            await asyncio.sleep(3)
 
     user.li_at_cookie = body.li_at
     user.jsessionid_cookie = body.jsessionid
-    # On persistent transient (still None after retry) treat as valid —
-    # the periodic validator will catch a truly dead session, but we don't
-    # want to lock the user out because LinkedIn was flaky for a few seconds.
-    cookies_valid = True if result is None else bool(result)
+    cookies_valid = bool(result)  # persistent transient -> invalid, and say so
     user.cookies_valid = cookies_valid
     db.commit()
     db.refresh(user)
 
-    if result is False:
+    if not cookies_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="LinkedIn cookies are invalid or expired. They have been saved but marked as invalid.",
+            detail=(
+                "LinkedIn refuse cette session (boucle de redirections). Les cookies "
+                "ont été enregistrés mais marqués invalides. Reconnecte-toi à LinkedIn, "
+                "recopie li_at et JSESSIONID, et évite de te déconnecter ensuite — "
+                "LinkedIn révoque la session quand elle est utilisée depuis deux endroits."
+            ),
         )
 
     return CookiesStatus(valid=cookies_valid)
