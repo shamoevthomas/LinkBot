@@ -64,12 +64,28 @@ async def run_cookie_validation() -> None:
             # log anyone out, and the flag flips back on the next successful
             # check, so a false positive self-heals.
             if bool(u.cookies_valid) != result:
+                was_valid = bool(u.cookies_valid)
                 u.cookies_valid = result
                 db.commit()
                 logger.info(
                     "cookie_validator: user %d cookies_valid -> %s",
                     user.id, result,
                 )
+                # A session that comes back on its own — LinkedIn lifting a
+                # throttle, say — used to leave every campaign paused until the
+                # user noticed and restarted each one. Recovery is the moment to
+                # restart them, not something to make the user watch for.
+                if result and not was_valid:
+                    from app.utils.campaign_recovery import resume_cookie_stopped_campaigns
+                    try:
+                        n = resume_cookie_stopped_campaigns(db, user.id)
+                        if n:
+                            logger.info(
+                                "cookie_validator: user %d session recovered — %d campaign(s) resumed",
+                                user.id, n,
+                            )
+                    except Exception:
+                        logger.exception("Could not resume campaigns for user %d", user.id)
         finally:
             db.close()
         await asyncio.sleep(random.uniform(*DELAY_BETWEEN_USERS))
