@@ -148,6 +148,17 @@ async def sync_new_connections(light: bool = False) -> None:
     try:
         users = db.query(User).filter(User.cookies_valid == True, User.li_at_cookie.isnot(None)).all()
         for user in users:
+            # Check the interval FIRST. This used to validate cookies before
+            # asking whether a sync was even due, so a throttled sync still
+            # spent a LinkedIn request every pass — pressure on an account that
+            # is throttled precisely because of too many requests.
+            _gate = SessionLocal()
+            try:
+                if not _sync_allowed(_gate, user.id, False, light):
+                    continue
+            finally:
+                _gate.close()
+
             # Proactive cookie validation. Tri-state result:
             #   True  → proceed
             #   False → cookies definitely dead, pause campaigns
