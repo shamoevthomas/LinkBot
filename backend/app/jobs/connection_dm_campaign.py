@@ -394,6 +394,14 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 6: Send connection request to next unprocessed contact
         # =====================================================================
+        # A dead LinkedIn session makes resolve_contact_urn fail for *every*
+        # contact, not just unreachable ones. Marking each failure "perdu" then
+        # burns through the whole CRM — 444 prospects were lost that way in a
+        # single cookie outage. Bound the damage and check the session before
+        # blaming the prospect.
+        urn_failures = 0
+        MAX_URN_FAILURES_PER_TICK = 3
+
         while get_user_actions_today(["connection_request"], campaign.user_id, db) < conn_limit:
             total_contacted = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
@@ -431,6 +439,41 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             # Resolve URN
             resolved_urn = await resolve_contact_urn(client, contact)
             if not resolved_urn:
+                # Before writing this prospect off, make sure it is the profile
+                # that is unreachable and not our own session. validate_cookies
+                # is tri-state: False = definitely dead, None = transient.
+                from app.linkedin_service import validate_cookies as _validate, mark_cookies_invalid as _mark_invalid
+                session_state = await _validate(user.li_at_cookie, user.jsessionid_cookie)
+                if session_state is False:
+                    _mark_invalid(campaign.user_id)
+                    campaign.status = "paused"
+                    campaign.error_message = (
+                        "Cookies LinkedIn invalides — recolle-les dans Configuration, "
+                        "puis reprends la campagne."
+                    )
+                    db.commit()
+                    cancel_campaign_job(campaign_id)
+                    logger.warning(
+                        "Campaign %d: URN resolution failed and the session is dead — "
+                        "pausing instead of marking contacts lost", campaign_id,
+                    )
+                    return
+                if session_state is None:
+                    # Flaky LinkedIn, not a bad profile. Leave the contact alone.
+                    logger.info(
+                        "Campaign %d: URN resolution failed during a transient LinkedIn "
+                        "glitch — leaving contact %d untouched", campaign_id, contact.id,
+                    )
+                    break
+
+                urn_failures += 1
+                if urn_failures > MAX_URN_FAILURES_PER_TICK:
+                    logger.warning(
+                        "Campaign %d: %d URN resolution failures this tick — stopping "
+                        "early rather than consuming the CRM", campaign_id, urn_failures,
+                    )
+                    break
+
                 _log_action(db, campaign_id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
