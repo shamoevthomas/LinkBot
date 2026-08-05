@@ -308,6 +308,15 @@ async def search_people(
 # URN resolution with fallback
 # ---------------------------------------------------------------------------
 
+# LinkedIn member URNs look like "ACoAADRyNK0BIl-IHVizIb3CEgBV6Nsdxlsq8MA":
+# a fixed ACoA prefix followed by ~35 URL-safe base64 characters.
+_PROFILE_URN_RE = re.compile(r"^ACoA[A-Za-z0-9_-]{20,}$")
+
+
+def _looks_like_profile_urn(urn_id: Optional[str]) -> bool:
+    return bool(urn_id) and bool(_PROFILE_URN_RE.match(urn_id.strip()))
+
+
 async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
     """Try to resolve a valid urn_id for a contact.
 
@@ -319,6 +328,19 @@ async def resolve_contact_urn(client: Linkedin, contact) -> Optional[str]:
     Returns the resolved urn_id or None if all strategies fail.
     Updates contact fields in-place (caller must commit).
     """
+    # Strategy 0: trust a well-formed URN we already hold.
+    #
+    # Search results already carry a valid profile URN, so fetching the profile
+    # merely to confirm it spends a profile view per prospect — the scarcest
+    # thing on a LinkedIn account, capped monthly by the commercial-use limit.
+    # Once that cap is hit LinkedIn redirect-loops every profile fetch, and this
+    # function then returns None for everyone: campaigns stop even though the
+    # session is fine and the URN in hand was correct all along.
+    # Sending with the stored URN costs nothing extra; if it turns out to be
+    # stale the send fails and is logged, which is the same outcome as before.
+    if _looks_like_profile_urn(contact.urn_id):
+        return contact.urn_id
+
     # Strategy 1: existing urn_id (skip if purely numeric – wrong format)
     if contact.urn_id and not contact.urn_id.isdigit():
         try:
