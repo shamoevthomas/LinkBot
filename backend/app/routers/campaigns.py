@@ -1081,7 +1081,12 @@ def resume_campaign(
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
-    if campaign.status != "paused":
+    # "failed" is also resumable. Campaigns land there on causes that are almost
+    # always temporary — dead cookies above all — and until now that was a
+    # dead end: start rejects anything but "pending" and resume rejected
+    # anything but "paused", so a cookie outage stranded the campaign for good
+    # and the only way out was to duplicate it.
+    if campaign.status not in ("paused", "failed"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot resume a campaign with status '{campaign.status}'.",
@@ -1092,6 +1097,9 @@ def resume_campaign(
     enforce_campaign_limit(db, _user)
 
     campaign.status = "running"
+    # Clear the stale failure note, otherwise the campaign runs again while the
+    # page still shows the error that stopped it.
+    campaign.error_message = None
     db.commit()
     db.refresh(campaign)
 
