@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from app.database import SessionLocal
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.models import CRM, Campaign, CampaignAction, CampaignContact, Contact, User
 from app.linkedin_service import get_linkedin_client, validate_cookies
 from app.routers.notifications import create_notification
@@ -17,6 +17,59 @@ from app.scheduler import pause_campaign_job
 from app.utils.sync_lock import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
+
+# A sync paginates the user's ENTIRE connections list — 1700+ profiles in one
+# burst. Run from a datacenter IP six times an hour, which is what an external
+# cron set to 5 minutes produces, that reads as scraping and LinkedIn answers by
+# revoking the session: the user gets logged out and every campaign stops.
+# The interval is enforced here rather than left to whatever schedule the cron
+# happens to carry, so no external configuration can put the account at risk.
+MIN_SYNC_INTERVAL = timedelta(hours=6)
+_LAST_SYNC_SETTING = "last_connections_sync_at"
+
+
+def _sync_allowed(db, user_id: int, force: bool = False) -> bool:
+    """False when the last full sync for this user is too recent."""
+    if force or not user_id:
+        return True
+    from app.utils.settings import get_setting
+    raw = get_setting(db, user_id, _LAST_SYNC_SETTING, "") or ""
+    if not raw:
+        return True
+    try:
+        last = datetime.fromisoformat(raw)
+    except ValueError:
+        return True
+    age = datetime.utcnow() - last
+    if age < MIN_SYNC_INTERVAL:
+        print(
+            f"[SYNC] User {user_id}: skipped, last sync {int(age.total_seconds() // 60)} min ago "
+            f"(minimum {int(MIN_SYNC_INTERVAL.total_seconds() // 3600)}h)",
+            flush=True,
+        )
+        return False
+    return True
+
+
+def _record_sync(user_id: int) -> None:
+    """Stamp the sync time in its own transaction.
+
+    Deliberately not the caller's session: the sync body rolls back on error,
+    which would erase the stamp and let the next cron tick pull again — the
+    throttle would then never hold precisely when syncs are failing.
+    """
+    if not user_id:
+        return
+    from app.utils.settings import set_setting
+    db = SessionLocal()
+    try:
+        set_setting(db, user_id, _LAST_SYNC_SETTING, datetime.utcnow().isoformat())
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Could not record last sync time for user %d", user_id)
+    finally:
+        db.close()
 
 
 def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> int:
@@ -107,8 +160,15 @@ async def sync_new_connections() -> None:
         db.close()
 
 
-async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> None:
+async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str, force: bool = False) -> None:
     """Sync connections for a single user using dedicated connections endpoint."""
+    _gate = SessionLocal()
+    try:
+        if not _sync_allowed(_gate, user_id, force):
+            return
+    finally:
+        _gate.close()
+
     if not acquire_lock(user_id, "syncing"):
         print(f"[SYNC] User {user_id}: skipped, lock held", flush=True)
         return
@@ -117,6 +177,7 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
         crm = db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user_id).first()
         if not crm:
             return
+        _record_sync(user_id)
 
         client = get_linkedin_client(li_at, jsessionid)
 
@@ -201,14 +262,29 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> N
         db.close()
 
 
-async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = None) -> None:
-    """Manual sync: import new connections to user's 'Mon Réseau' + update statuses across user's CRMs."""
+async def sync_and_update_statuses(
+    li_at: str, jsessionid: str, user_id: int = None, force: bool = False
+) -> None:
+    """Manual sync: import new connections to user's 'Mon Réseau' + update statuses across user's CRMs.
+
+    `force` is for the button in Configuration — a person clicking it is not the
+    traffic pattern LinkedIn objects to. The external cron does not set it, so
+    however often it fires, at most one full pull per MIN_SYNC_INTERVAL runs.
+    """
+    _gate = SessionLocal()
+    try:
+        if not _sync_allowed(_gate, user_id, force):
+            return
+    finally:
+        _gate.close()
+
     if user_id and not acquire_lock(user_id, "syncing"):
         print(f"[SYNC] Manual sync skipped for user {user_id}: lock held", flush=True)
         return
     print(f"[SYNC] Manual sync_and_update_statuses started for user {user_id}", flush=True)
     db = SessionLocal()
     try:
+        _record_sync(user_id)
         client = get_linkedin_client(li_at, jsessionid)
 
         # Step 1: Fetch all connections using dedicated connections endpoint
@@ -265,6 +341,11 @@ async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = N
 
         # Step 4: Update connection_status across user's CRMs only
         updated = 0
+        # Initialised here on purpose: it used to be assigned only inside the
+        # `if all_connection_urns:` branch below, so a sync returning no
+        # connections — which is exactly what a dead session produces — crashed
+        # on the summary line with UnboundLocalError, aborting the whole job.
+        accepted = 0
         if all_connection_urns:
             user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == user_id).all()] if user_id else []
             contact_filter = [
