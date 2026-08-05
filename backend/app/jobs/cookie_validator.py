@@ -8,6 +8,7 @@ the server IP all at once.
 import asyncio
 import logging
 import random
+from datetime import datetime, timedelta
 
 from app.database import SessionLocal
 from app.models import User
@@ -18,6 +19,10 @@ logger = logging.getLogger(__name__)
 DELAY_BETWEEN_USERS = (2, 5)  # seconds
 # How many consecutive transient results before we call the session dead.
 TRANSIENT_RETRIES = 3
+# Once dead, probe rarely and with a single call — we are only watching for
+# recovery, and hammering a flagged account is what caused the problem.
+DEAD_PROBE_INTERVAL = timedelta(hours=6)
+_last_dead_probe: dict[int, datetime] = {}
 
 
 async def run_cookie_validation() -> None:
@@ -30,6 +35,18 @@ async def run_cookie_validation() -> None:
     for user in users:
         db = SessionLocal()
         try:
+            # Back off once a session is known dead. Probing a revoked cookie
+            # three times every two hours is 36 requests a day at an account
+            # that is being refused precisely for making too many — it keeps the
+            # flag warm instead of letting it lapse. A single call every few
+            # hours is enough to notice recovery.
+            attempts = TRANSIENT_RETRIES
+            if not user.cookies_valid:
+                last = _last_dead_probe.get(user.id)
+                if last and (datetime.utcnow() - last) < DEAD_PROBE_INTERVAL:
+                    continue
+                _last_dead_probe[user.id] = datetime.utcnow()
+                attempts = 1
             # A transient result used to be taken at face value, so a dead
             # session — which LinkedIn signals with a redirect loop, the very
             # thing classified as transient — was never detected. Campaigns
@@ -37,7 +54,7 @@ async def run_cookie_validation() -> None:
             # A genuine glitch does not survive three attempts seconds apart;
             # a dead session fails every single time.
             result = None
-            for attempt in range(TRANSIENT_RETRIES):
+            for attempt in range(attempts):
                 try:
                     result = await validate_cookies(user.li_at_cookie, user.jsessionid_cookie or "")
                 except Exception:
@@ -45,13 +62,13 @@ async def run_cookie_validation() -> None:
                     result = None
                 if result is not None:
                     break
-                if attempt < TRANSIENT_RETRIES - 1:
+                if attempt < attempts - 1:
                     await asyncio.sleep(random.uniform(3, 6))
             if result is None:
                 logger.warning(
-                    "cookie_validator: user %d returned a transient error %d times in a row "
+                    "cookie_validator: user %d returned a transient error %d time(s) in a row "
                     "— treating the session as dead rather than leaving campaigns to fail",
-                    user.id, TRANSIENT_RETRIES,
+                    user.id, attempts,
                 )
                 result = False
 
