@@ -70,7 +70,10 @@ function CampaignCard({ c, onOpen, onDelete }) {
   const tone = c.status === 'completed' ? 'emerald' : c.status === 'paused' ? 'amber' : '';
   const icon = TYPE_ICON[c.type] || '·';
   const hue = TYPE_HUE[c.type] || 'slate';
-  const accepted = c.total_sent || 0;
+  // total_sent counts invitations SENT (main_sent_at), not accepted ones — using
+  // it here showed "500 accepted" for 500 invitations. total_accepted is the
+  // real figure; fall back only for older campaign types that don't report it.
+  const accepted = c.total_accepted ?? 0;
   const replied = c.total_succeeded || 0;
 
   return (

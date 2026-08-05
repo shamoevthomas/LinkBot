@@ -187,6 +187,10 @@ class CampaignResponse(BaseModel):
     # no unprocessed contact left, so the UI can say so instead of showing a
     # countdown to an action that will never happen.
     crm_exhausted: Optional[bool] = None
+    # Contacts who actually accepted the invitation. The list card used
+    # total_sent for this, which counts invitations *sent* — so a campaign
+    # showed "500 accepted" out of 500 sent, whatever the real figure.
+    total_accepted: Optional[int] = None
     # Hours the campaign waits after an invitation is accepted before sending
     # the first DM. It was stored and enforced but never returned, so a
     # campaign sitting out its delay looked identical to a broken one.

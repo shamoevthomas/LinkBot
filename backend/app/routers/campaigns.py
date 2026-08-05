@@ -204,6 +204,10 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
         next_action_at=next_action_at,
         paused_reason=paused_reason,
         dm_delay_hours=c.dm_delay_hours if c.type in ("connection_dm", "search_connection_dm") else None,
+        total_accepted=(
+            stats["reussi"] if c.type == "connection"
+            else (stats["accepted"] if c.type in ("connection_dm", "search_connection_dm") else None)
+        ),
     )
 
 
