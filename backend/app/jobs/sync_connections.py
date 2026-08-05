@@ -27,13 +27,25 @@ logger = logging.getLogger(__name__)
 MIN_SYNC_INTERVAL = timedelta(hours=6)
 _LAST_SYNC_SETTING = "last_connections_sync_at"
 
+# Detecting an acceptance does not need the whole list. The connections endpoint
+# is sorted RECENTLY_ADDED, so whoever just accepted is on the first page —
+# one request instead of eighteen. Cheap enough to run every few minutes, which
+# is what matters: dm_delay_hours counts from the moment we NOTICE the
+# acceptance, so a slow detection is added to the delay rather than absorbed by
+# it. On a 6h detection cycle a 2h delay meant an 8h wait; here it is ~2h15.
+LIGHT_SYNC_COUNT = 100
+MIN_LIGHT_SYNC_INTERVAL = timedelta(minutes=15)
+_LAST_LIGHT_SYNC_SETTING = "last_light_connections_sync_at"
 
-def _sync_allowed(db, user_id: int, force: bool = False) -> bool:
-    """False when the last full sync for this user is too recent."""
+
+def _sync_allowed(db, user_id: int, force: bool = False, light: bool = False) -> bool:
+    """False when the last sync of this kind for this user is too recent."""
     if force or not user_id:
         return True
     from app.utils.settings import get_setting
-    raw = get_setting(db, user_id, _LAST_SYNC_SETTING, "") or ""
+    key = _LAST_LIGHT_SYNC_SETTING if light else _LAST_SYNC_SETTING
+    interval = MIN_LIGHT_SYNC_INTERVAL if light else MIN_SYNC_INTERVAL
+    raw = get_setting(db, user_id, key, "") or ""
     if not raw:
         return True
     try:
@@ -41,17 +53,18 @@ def _sync_allowed(db, user_id: int, force: bool = False) -> bool:
     except ValueError:
         return True
     age = datetime.utcnow() - last
-    if age < MIN_SYNC_INTERVAL:
+    if age < interval:
         print(
-            f"[SYNC] User {user_id}: skipped, last sync {int(age.total_seconds() // 60)} min ago "
-            f"(minimum {int(MIN_SYNC_INTERVAL.total_seconds() // 3600)}h)",
+            f"[SYNC] User {user_id}: {'light ' if light else ''}sync skipped, last one "
+            f"{int(age.total_seconds() // 60)} min ago "
+            f"(minimum {int(interval.total_seconds() // 60)} min)",
             flush=True,
         )
         return False
     return True
 
 
-def _record_sync(user_id: int) -> None:
+def _record_sync(user_id: int, light: bool = False) -> None:
     """Stamp the sync time in its own transaction.
 
     Deliberately not the caller's session: the sync body rolls back on error,
@@ -61,9 +74,13 @@ def _record_sync(user_id: int) -> None:
     if not user_id:
         return
     from app.utils.settings import set_setting
+    key = _LAST_LIGHT_SYNC_SETTING if light else _LAST_SYNC_SETTING
     db = SessionLocal()
     try:
-        set_setting(db, user_id, _LAST_SYNC_SETTING, datetime.utcnow().isoformat())
+        set_setting(db, user_id, key, datetime.utcnow().isoformat())
+        # A full pull also covers everything a light one would have done.
+        if not light:
+            set_setting(db, user_id, _LAST_LIGHT_SYNC_SETTING, datetime.utcnow().isoformat())
         db.commit()
     except Exception:
         db.rollback()
@@ -124,9 +141,9 @@ def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> i
     return len(pending_ccs)
 
 
-async def sync_new_connections() -> None:
+async def sync_new_connections(light: bool = False) -> None:
     """Check for new LinkedIn connections for ALL users with valid cookies."""
-    print("[SYNC] Starting sync_new_connections for all users", flush=True)
+    print(f"[SYNC] Starting {'light ' if light else ''}sync for all users", flush=True)
     db = SessionLocal()
     try:
         users = db.query(User).filter(User.cookies_valid == True, User.li_at_cookie.isnot(None)).all()
@@ -155,16 +172,24 @@ async def sync_new_connections() -> None:
                     pause_campaign_job(c.id)
                 db.commit()
                 continue
-            await _sync_user_connections(user.id, user.li_at_cookie, user.jsessionid_cookie)
+            await _sync_user_connections(
+                user.id, user.li_at_cookie, user.jsessionid_cookie, light=light
+            )
     finally:
         db.close()
 
 
-async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str, force: bool = False) -> None:
-    """Sync connections for a single user using dedicated connections endpoint."""
+async def _sync_user_connections(
+    user_id: int, li_at: str, jsessionid: str, force: bool = False, light: bool = False
+) -> None:
+    """Sync connections for a single user using dedicated connections endpoint.
+
+    `light` fetches only the most recently added page instead of paginating the
+    whole list — enough to spot acceptances, at a fraction of the request cost.
+    """
     _gate = SessionLocal()
     try:
-        if not _sync_allowed(_gate, user_id, force):
+        if not _sync_allowed(_gate, user_id, force, light):
             return
     finally:
         _gate.close()
@@ -177,7 +202,7 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str, forc
         crm = db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user_id).first()
         if not crm:
             return
-        _record_sync(user_id)
+        _record_sync(user_id, light)
 
         client = get_linkedin_client(li_at, jsessionid)
 
@@ -188,7 +213,9 @@ async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str, forc
 
         # Use dedicated connections endpoint instead of search API
         try:
-            all_connections = await asyncio.to_thread(client.get_all_connections)
+            all_connections = await asyncio.to_thread(
+                client.get_all_connections, LIGHT_SYNC_COUNT if light else -1
+            )
         except Exception:
             logger.exception("sync_connections: error fetching connections for user %d", user_id)
             return
