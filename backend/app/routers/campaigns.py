@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
 
-from sqlalchemy import func, case, and_, or_
+from sqlalchemy import func, case, and_
 from app.dependencies import get_db, get_current_user
 from app.models import User, Campaign, CampaignAction, CampaignMessage, CampaignContact, CRM, Contact, AppSettings
 from app.schemas import (
@@ -61,18 +61,6 @@ def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
         func.count(case((CampaignContact.status.like("relance_%"), 1))).label("relance"),
         func.count(case((CampaignContact.status.notin_(["pending", "en_attente"]), 1))).label("messaged"),
         func.count(case((CampaignContact.status != "pending", 1))).label("not_pending"),
-        # "pending" is never a CampaignContact.status (the values are en_attente,
-        # envoye, relance_1..7, reussi, perdu) — it belongs to
-        # Contact.connection_status. So messaged/not_pending above counted every
-        # row that wasn't still awaiting acceptance, which lumped expired
-        # invitations in with people who actually got a DM: connection rate read
-        # 100% and reply rate was diluted by prospects who never received a
-        # message. These two count what they say they do.
-        func.count(case((or_(
-            CampaignContact.connection_accepted_at.isnot(None),
-            CampaignContact.last_sequence_sent >= 0,
-        ), 1))).label("accepted"),
-        func.count(case((CampaignContact.last_sequence_sent >= 0, 1))).label("dm_sent"),
         func.count(case((CampaignContact.status == "demande_envoyee", 1))).label("demande_envoyee"),
         func.count(case((and_(CampaignContact.status == "perdu", CampaignContact.last_sequence_sent == 0), 1))).label("failed_no_send"),
     ).filter(
@@ -85,10 +73,9 @@ def _batch_campaign_stats(campaign_ids: list[int], db: Session) -> dict:
         "messaged": r.messaged, "not_pending": r.not_pending,
         "demande_envoyee": r.demande_envoyee,
         "failed_no_send": r.failed_no_send,
-        "accepted": r.accepted, "dm_sent": r.dm_sent,
     } for r in rows}
 
-_EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0, "demande_envoyee": 0, "failed_no_send": 0, "accepted": 0, "dm_sent": 0}
+_EMPTY_STATS = {"total": 0, "reussi": 0, "perdu": 0, "sent": 0, "relance": 0, "messaged": 0, "not_pending": 0, "demande_envoyee": 0, "failed_no_send": 0}
 
 
 def _compute_limit_info(db: Session, user_id: int) -> dict:
@@ -124,20 +111,14 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
     connection_rate = None
 
     if db and c.type in ("dm", "connection_dm", "search_connection_dm"):
-        if c.type == "dm":
-            messaged = stats["messaged"] - stats["failed_no_send"]
-        else:
-            # Only prospects who actually received a DM belong in the
-            # denominator — counting invitations that expired before acceptance
-            # dragged the rate toward zero.
-            messaged = stats["dm_sent"]
+        messaged = stats["messaged"] - stats["failed_no_send"]
         replied = stats["reussi"]
         reply_rate = round(replied / messaged * 100, 1) if messaged > 0 else None
 
     if db and c.type in ("connection", "connection_dm", "search_connection_dm"):
         if c.type in ("connection_dm", "search_connection_dm"):
-            total_requests = stats["total"]
-            accepted = stats["accepted"]
+            total_requests = stats["not_pending"]
+            accepted = stats["messaged"]
             connection_rate = round(accepted / total_requests * 100, 1) if total_requests > 0 else None
         else:
             sent = stats["demande_envoyee"] + stats["reussi"]
@@ -203,11 +184,6 @@ def _campaign_to_response(c: Campaign, db: Session = None, stats: dict = None, l
         connection_rate=connection_rate,
         next_action_at=next_action_at,
         paused_reason=paused_reason,
-        dm_delay_hours=c.dm_delay_hours if c.type in ("connection_dm", "search_connection_dm") else None,
-        total_accepted=(
-            stats["reussi"] if c.type == "connection"
-            else (stats["accepted"] if c.type in ("connection_dm", "search_connection_dm") else None)
-        ),
     )
 
 
@@ -772,32 +748,7 @@ def get_campaign(
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == _user.id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
-    resp = _campaign_to_response(campaign, db)
-    resp.crm_exhausted = _is_crm_exhausted(campaign, db)
-    return resp
-
-
-def _is_crm_exhausted(c: Campaign, db: Session) -> bool:
-    """True when a running CRM-fed campaign has no contact left to process.
-
-    The job just breaks out of its loop in that case, so the UI kept showing a
-    countdown and a "run now" button that could not do anything.
-    """
-    if c.status != "running" or not c.crm_id:
-        return False
-    if c.type not in ("dm", "connection", "connection_dm", "search_connection_dm"):
-        return False
-    already = (
-        db.query(CampaignContact.contact_id)
-        .filter(CampaignContact.campaign_id == c.id)
-        .subquery()
-    )
-    remaining = (
-        db.query(Contact.id)
-        .filter(Contact.crm_id == c.crm_id, ~Contact.id.in_(db.query(already.c.contact_id)))
-        .first()
-    )
-    return remaining is None
+    return _campaign_to_response(campaign, db)
 
 
 @router.patch("/{campaign_id}", response_model=CampaignResponse)
@@ -833,13 +784,6 @@ def update_campaign(
                 fallback_template=msg.get("fallback_template"),
                 delay_days=msg.get("delay_days", 0),
             ))
-        # The main DM lives in two places: CampaignMessage sequence 0 (what the
-        # reconfigure screen edits) and Campaign.message_template (what the jobs
-        # actually send). Saving only the former let them drift — an edited
-        # message was stored correctly and then silently ignored at send time.
-        main = next((m for m in body["messages"] if m.get("sequence", 0) == 0), None)
-        if main is not None and "message_template" not in body:
-            campaign.message_template = main.get("message_template", "") or ""
     db.commit()
     db.refresh(campaign)
     return _campaign_to_response(campaign, db)
@@ -964,7 +908,6 @@ async def run_campaign_now(
         raise HTTPException(status_code=400, detail=f"Campaign status is '{campaign.status}', must be 'running'")
 
     _logger.info("=== MANUAL RUN: campaign %d type=%s ===", campaign_id, campaign.type)
-    processed_before = campaign.total_processed or 0
 
     try:
         if campaign.type == "dm":
@@ -991,19 +934,8 @@ async def run_campaign_now(
         # Re-read campaign to get updated state
         db.expire_all()
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
-        processed_delta = (campaign.total_processed or 0) - (processed_before or 0)
-        if processed_delta > 0:
-            note = f"{processed_delta} contact(s) traité(s)"
-        elif _is_crm_exhausted(campaign, db):
-            note = ("Aucun contact restant dans le CRM — ajoute des contacts ou "
-                    "lance une nouvelle recherche pour que la campagne reprenne.")
-        else:
-            note = ("Rien à faire pour l'instant (limite quotidienne, fenêtre horaire, "
-                    "ou relances en attente gérées automatiquement).")
         return {
             "ok": True,
-            "note": note,
-            "processed_delta": processed_delta,
             "total_processed": campaign.total_processed,
             "total_succeeded": campaign.total_succeeded,
             "total_failed": campaign.total_failed,
@@ -1085,12 +1017,7 @@ def resume_campaign(
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
-    # "failed" is also resumable. Campaigns land there on causes that are almost
-    # always temporary — dead cookies above all — and until now that was a
-    # dead end: start rejects anything but "pending" and resume rejected
-    # anything but "paused", so a cookie outage stranded the campaign for good
-    # and the only way out was to duplicate it.
-    if campaign.status not in ("paused", "failed"):
+    if campaign.status != "paused":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot resume a campaign with status '{campaign.status}'.",
@@ -1101,9 +1028,6 @@ def resume_campaign(
     enforce_campaign_limit(db, _user)
 
     campaign.status = "running"
-    # Clear the stale failure note, otherwise the campaign runs again while the
-    # page still shows the error that stopped it.
-    campaign.error_message = None
     db.commit()
     db.refresh(campaign)
 
@@ -1311,7 +1235,6 @@ def list_campaign_contacts(
             main_sent_at=cc.main_sent_at,
             last_sent_at=cc.last_sent_at,
             replied_at=cc.replied_at,
-            connection_accepted_at=cc.connection_accepted_at,
             contact_first_name=c.first_name if c else None,
             contact_last_name=c.last_name if c else None,
             contact_headline=c.headline if c else None,

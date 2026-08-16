@@ -370,11 +370,11 @@ export default function LeadMagnetsPage() {
               <span style={{ color: 'hsl(var(--muted))', fontWeight: 400 }}>(envoyé à tous les déclencheurs)</span>
             </label>
             <textarea className="input-sm" rows={3}
-              placeholder="Salut {prenom}, voici le lien…"
+              placeholder="Salut {first_name}, voici le lien…"
               value={form.dm_template} onChange={(e) => set('dm_template', e.target.value)} />
             <p className="text-[11px] mt-1.5" style={{ color: 'hsl(var(--muted))' }}>
               Variables disponibles&nbsp;:{' '}
-              <span className="mono" style={{ color: 'hsl(var(--accent))' }}>{'{prenom}'}</span>{', '}
+              <span className="mono" style={{ color: 'hsl(var(--accent))' }}>{'{first_name}'}</span>{', '}
               <span className="mono" style={{ color: 'hsl(var(--accent))' }}>{'{last_name}'}</span>{', '}
               <span className="mono" style={{ color: 'hsl(var(--accent))' }}>{'{name}'}</span>
             </p>
@@ -383,7 +383,7 @@ export default function LeadMagnetsPage() {
           <div>
             <label className="form-label">Réponse au commentaire (connecté)</label>
             <textarea className="input-sm" rows={2}
-              placeholder="Merci {prenom} ! Je t'envoie ça en DM"
+              placeholder="Merci {first_name} ! Je t'envoie ça en DM"
               value={form.reply_template_connected} onChange={(e) => set('reply_template_connected', e.target.value)} />
           </div>
 
@@ -399,7 +399,7 @@ export default function LeadMagnetsPage() {
               <span style={{ color: 'hsl(var(--muted))', fontWeight: 400 }}> (optionnel, 300 car. max)</span>
             </label>
             <textarea className="input-sm" rows={2} maxLength={300}
-              placeholder="Salut {prenom}, je t'envoie le document dès qu'on est connectés !"
+              placeholder="Salut {first_name}, je t'envoie le document dès qu'on est connectés !"
               value={form.connection_message} onChange={(e) => set('connection_message', e.target.value)} />
           </div>
 

@@ -1573,7 +1573,7 @@ export default function LandingPage() {
             },
             {
               q: 'Comment Linky personnalise les messages ?',
-              a: "Chaque message peut être généré par IA (Gemini) à partir du profil du contact, de son expérience et de ses publications récentes. Vous pouvez aussi écrire vos propres templates avec variables ({prenom}, {entreprise}, etc.). Vous gardez le contrôle, même sur les générations IA — un aperçu des 3 premiers messages est toujours proposé avant lancement.",
+              a: "Chaque message peut être généré par IA (Gemini) à partir du profil du contact, de son expérience et de ses publications récentes. Vous pouvez aussi écrire vos propres templates avec variables ({first_name}, {company}, etc.). Vous gardez le contrôle, même sur les générations IA — un aperçu des 3 premiers messages est toujours proposé avant lancement.",
             },
             {
               q: 'Puis-je annuler à tout moment ?',

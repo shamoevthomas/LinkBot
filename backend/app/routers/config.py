@@ -171,7 +171,6 @@ def sync_connections_manual(
         li_at=user.li_at_cookie,
         jsessionid=user.jsessionid_cookie,
         user_id=user.id,
-        force=True,  # a human clicking the button bypasses the interval guard
     )
     return {"message": "Sync started"}
 

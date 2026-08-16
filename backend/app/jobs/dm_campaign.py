@@ -65,11 +65,8 @@ async def run_dm_campaign(campaign_id: int) -> None:
         # --- get LinkedIn client (from campaign owner) ---
         user = db.query(User).filter(User.id == campaign.user_id).first()
         if not user or not user.li_at_cookie or not user.cookies_valid:
-            campaign.status = "paused"
-            campaign.error_message = (
-                "Cookies LinkedIn invalides — recolle-les dans Configuration, "
-                "puis reprends la campagne."
-            )
+            campaign.status = "failed"
+            campaign.error_message = "No valid LinkedIn cookies"
             db.commit()
             cancel_campaign_job(campaign_id)
             return

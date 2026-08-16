@@ -183,18 +183,6 @@ class CampaignResponse(BaseModel):
     connection_rate: Optional[float] = None
     next_action_at: Optional[datetime] = None
     paused_reason: Optional[str] = None
-    # Set on the detail endpoint when the campaign is running but its CRM has
-    # no unprocessed contact left, so the UI can say so instead of showing a
-    # countdown to an action that will never happen.
-    crm_exhausted: Optional[bool] = None
-    # Contacts who actually accepted the invitation. The list card used
-    # total_sent for this, which counts invitations *sent* — so a campaign
-    # showed "500 accepted" out of 500 sent, whatever the real figure.
-    total_accepted: Optional[int] = None
-    # Hours the campaign waits after an invitation is accepted before sending
-    # the first DM. It was stored and enforced but never returned, so a
-    # campaign sitting out its delay looked identical to a broken one.
-    dm_delay_hours: Optional[int] = None
 
 class CampaignActionResponse(BaseModel):
     id: int
@@ -222,10 +210,6 @@ class CampaignContactResponse(BaseModel):
     main_sent_at: Optional[datetime] = None
     last_sent_at: Optional[datetime] = None
     replied_at: Optional[datetime] = None
-    # An accepted invitation keeps the "en_attente" status until the DM goes
-    # out (dm_delay_hours later), so without this the UI could not tell
-    # "not accepted yet" from "accepted, waiting out the delay".
-    connection_accepted_at: Optional[datetime] = None
     # Contact info
     contact_first_name: Optional[str] = None
     contact_last_name: Optional[str] = None

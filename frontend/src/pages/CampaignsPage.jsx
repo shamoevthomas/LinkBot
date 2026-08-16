@@ -70,10 +70,7 @@ function CampaignCard({ c, onOpen, onDelete }) {
   const tone = c.status === 'completed' ? 'emerald' : c.status === 'paused' ? 'amber' : '';
   const icon = TYPE_ICON[c.type] || '·';
   const hue = TYPE_HUE[c.type] || 'slate';
-  // total_sent counts invitations SENT (main_sent_at), not accepted ones — using
-  // it here showed "500 accepted" for 500 invitations. total_accepted is the
-  // real figure; fall back only for older campaign types that don't report it.
-  const accepted = c.total_accepted ?? 0;
+  const accepted = c.total_sent || 0;
   const replied = c.total_succeeded || 0;
 
   return (
@@ -739,10 +736,10 @@ export default function CampaignsPage() {
             <div>
               <label className="form-label">Template de message</label>
               <textarea value={form.message_template} onChange={(e) => set('message_template', e.target.value)}
-                rows={3} className="input-sm" placeholder="Bonjour {prenom}, ..." />
+                rows={3} className="input-sm" placeholder="Bonjour {first_name}, ..." />
               <p className="text-[11px] mt-1" style={{ color: 'hsl(var(--muted))' }}>
                 {form.use_ai ? "Décrivez le ton et le but. L'IA personnalise pour chaque contact."
-                  : <>Variables : {'{prenom}'}, {'{nom}'}, {'{titre}'}</>}
+                  : <>Variables : {'{first_name}'}, {'{last_name}'}, {'{headline}'}</>}
               </p>
               {aiAvailable && (
                 <label className="flex items-center gap-3 mt-3 p-3 rounded-lg cursor-pointer"

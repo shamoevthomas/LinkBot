@@ -9,84 +9,14 @@ import asyncio
 import logging
 
 from app.database import SessionLocal
-from datetime import datetime, timedelta
-from app.models import CRM, Campaign, CampaignAction, CampaignContact, Contact, User
+from datetime import datetime
+from app.models import CRM, Campaign, CampaignContact, Contact, User
 from app.linkedin_service import get_linkedin_client, validate_cookies
 from app.routers.notifications import create_notification
 from app.scheduler import pause_campaign_job
 from app.utils.sync_lock import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
-
-# A sync paginates the user's ENTIRE connections list — 1700+ profiles in one
-# burst. Run from a datacenter IP six times an hour, which is what an external
-# cron set to 5 minutes produces, that reads as scraping and LinkedIn answers by
-# revoking the session: the user gets logged out and every campaign stops.
-# The interval is enforced here rather than left to whatever schedule the cron
-# happens to carry, so no external configuration can put the account at risk.
-MIN_SYNC_INTERVAL = timedelta(hours=6)
-_LAST_SYNC_SETTING = "last_connections_sync_at"
-
-# Detecting an acceptance does not need the whole list. The connections endpoint
-# is sorted RECENTLY_ADDED, so whoever just accepted is on the first page —
-# one request instead of eighteen. Cheap enough to run every few minutes, which
-# is what matters: dm_delay_hours counts from the moment we NOTICE the
-# acceptance, so a slow detection is added to the delay rather than absorbed by
-# it. On a 6h detection cycle a 2h delay meant an 8h wait; here it is ~2h15.
-LIGHT_SYNC_COUNT = 100
-MIN_LIGHT_SYNC_INTERVAL = timedelta(minutes=15)
-_LAST_LIGHT_SYNC_SETTING = "last_light_connections_sync_at"
-
-
-def _sync_allowed(db, user_id: int, force: bool = False, light: bool = False) -> bool:
-    """False when the last sync of this kind for this user is too recent."""
-    if force or not user_id:
-        return True
-    from app.utils.settings import get_setting
-    key = _LAST_LIGHT_SYNC_SETTING if light else _LAST_SYNC_SETTING
-    interval = MIN_LIGHT_SYNC_INTERVAL if light else MIN_SYNC_INTERVAL
-    raw = get_setting(db, user_id, key, "") or ""
-    if not raw:
-        return True
-    try:
-        last = datetime.fromisoformat(raw)
-    except ValueError:
-        return True
-    age = datetime.utcnow() - last
-    if age < interval:
-        print(
-            f"[SYNC] User {user_id}: {'light ' if light else ''}sync skipped, last one "
-            f"{int(age.total_seconds() // 60)} min ago "
-            f"(minimum {int(interval.total_seconds() // 60)} min)",
-            flush=True,
-        )
-        return False
-    return True
-
-
-def _record_sync(user_id: int, light: bool = False) -> None:
-    """Stamp the sync time in its own transaction.
-
-    Deliberately not the caller's session: the sync body rolls back on error,
-    which would erase the stamp and let the next cron tick pull again — the
-    throttle would then never hold precisely when syncs are failing.
-    """
-    if not user_id:
-        return
-    from app.utils.settings import set_setting
-    key = _LAST_LIGHT_SYNC_SETTING if light else _LAST_SYNC_SETTING
-    db = SessionLocal()
-    try:
-        set_setting(db, user_id, key, datetime.utcnow().isoformat())
-        # A full pull also covers everything a light one would have done.
-        if not light:
-            set_setting(db, user_id, _LAST_LIGHT_SYNC_SETTING, datetime.utcnow().isoformat())
-        db.commit()
-    except Exception:
-        db.rollback()
-        logger.exception("Could not record last sync time for user %d", user_id)
-    finally:
-        db.close()
 
 
 def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> int:
@@ -126,39 +56,17 @@ def _mark_accepted_campaign_contacts(db, connected_urns: set, user_id: int) -> i
         cc.connection_accepted_at = now
         if cc.status == "demande_envoyee":
             cc.status = "reussi"
-        # Record it in the campaign journal. Acceptance was only ever logged by
-        # connection_dm's phase 1, and only when it discovered the acceptance
-        # itself — since this job stamps the timestamp first, that branch never
-        # runs and the journal showed nothing between "connection_request" and
-        # the DM, as if the invitation had never been accepted.
-        db.add(CampaignAction(
-            campaign_id=cc.campaign_id,
-            contact_id=cc.contact_id,
-            action_type="connection_accepted",
-            status="success",
-        ))
 
     return len(pending_ccs)
 
 
-async def sync_new_connections(light: bool = False) -> None:
+async def sync_new_connections() -> None:
     """Check for new LinkedIn connections for ALL users with valid cookies."""
-    print(f"[SYNC] Starting {'light ' if light else ''}sync for all users", flush=True)
+    print("[SYNC] Starting sync_new_connections for all users", flush=True)
     db = SessionLocal()
     try:
         users = db.query(User).filter(User.cookies_valid == True, User.li_at_cookie.isnot(None)).all()
         for user in users:
-            # Check the interval FIRST. This used to validate cookies before
-            # asking whether a sync was even due, so a throttled sync still
-            # spent a LinkedIn request every pass — pressure on an account that
-            # is throttled precisely because of too many requests.
-            _gate = SessionLocal()
-            try:
-                if not _sync_allowed(_gate, user.id, False, light):
-                    continue
-            finally:
-                _gate.close()
-
             # Proactive cookie validation. Tri-state result:
             #   True  → proceed
             #   False → cookies definitely dead, pause campaigns
@@ -183,28 +91,13 @@ async def sync_new_connections(light: bool = False) -> None:
                     pause_campaign_job(c.id)
                 db.commit()
                 continue
-            await _sync_user_connections(
-                user.id, user.li_at_cookie, user.jsessionid_cookie, light=light
-            )
+            await _sync_user_connections(user.id, user.li_at_cookie, user.jsessionid_cookie)
     finally:
         db.close()
 
 
-async def _sync_user_connections(
-    user_id: int, li_at: str, jsessionid: str, force: bool = False, light: bool = False
-) -> None:
-    """Sync connections for a single user using dedicated connections endpoint.
-
-    `light` fetches only the most recently added page instead of paginating the
-    whole list — enough to spot acceptances, at a fraction of the request cost.
-    """
-    _gate = SessionLocal()
-    try:
-        if not _sync_allowed(_gate, user_id, force, light):
-            return
-    finally:
-        _gate.close()
-
+async def _sync_user_connections(user_id: int, li_at: str, jsessionid: str) -> None:
+    """Sync connections for a single user using dedicated connections endpoint."""
     if not acquire_lock(user_id, "syncing"):
         print(f"[SYNC] User {user_id}: skipped, lock held", flush=True)
         return
@@ -213,7 +106,6 @@ async def _sync_user_connections(
         crm = db.query(CRM).filter(CRM.name == "Mon Réseau", CRM.user_id == user_id).first()
         if not crm:
             return
-        _record_sync(user_id, light)
 
         client = get_linkedin_client(li_at, jsessionid)
 
@@ -224,9 +116,7 @@ async def _sync_user_connections(
 
         # Use dedicated connections endpoint instead of search API
         try:
-            all_connections = await asyncio.to_thread(
-                client.get_all_connections, LIGHT_SYNC_COUNT if light else -1
-            )
+            all_connections = await asyncio.to_thread(client.get_all_connections)
         except Exception:
             logger.exception("sync_connections: error fetching connections for user %d", user_id)
             return
@@ -253,32 +143,8 @@ async def _sync_user_connections(
             existing_urns.add(person_urn)
             total_new += 1
 
-        all_urns = set(p.get("urn_id") for p in all_connections if p.get("urn_id"))
-
-        # Flip connection_status on contacts that already live in one of the
-        # user's CRMs. The loop above only ever *creates* rows in "Mon Réseau",
-        # so a prospect sitting in a campaign CRM stayed "pending" forever even
-        # after accepting. connection_dm's phase 1 reads exactly this field to
-        # decide acceptance, so without this the invitation expired and the
-        # contact was marked "perdu" by mistake — acceptance only ever advanced
-        # when the user happened to run a manual sync.
-        updated = 0
-        if all_urns:
-            user_crm_ids = [r[0] for r in db.query(CRM.id).filter(CRM.user_id == user_id).all()]
-            if user_crm_ids:
-                for contact in (
-                    db.query(Contact)
-                    .filter(
-                        Contact.crm_id.in_(user_crm_ids),
-                        Contact.urn_id.in_(all_urns),
-                        Contact.connection_status != "connected",
-                    )
-                    .all()
-                ):
-                    contact.connection_status = "connected"
-                    updated += 1
-
         # Mark accepted connections in campaign tracking
+        all_urns = set(p.get("urn_id") for p in all_connections if p.get("urn_id"))
         accepted = _mark_accepted_campaign_contacts(db, all_urns, user_id)
 
         try:
@@ -286,11 +152,7 @@ async def _sync_user_connections(
         except Exception:
             db.rollback()
 
-        print(
-            f"[SYNC] User {user_id}: added {total_new} new connections, "
-            f"{updated} statuses updated, {accepted} campaign invitations accepted",
-            flush=True,
-        )
+        print(f"[SYNC] User {user_id}: added {total_new} new connections, {accepted} campaign invitations accepted", flush=True)
 
     except Exception:
         logger.exception("sync_connections: unexpected error for user %d", user_id)
@@ -300,29 +162,14 @@ async def _sync_user_connections(
         db.close()
 
 
-async def sync_and_update_statuses(
-    li_at: str, jsessionid: str, user_id: int = None, force: bool = False
-) -> None:
-    """Manual sync: import new connections to user's 'Mon Réseau' + update statuses across user's CRMs.
-
-    `force` is for the button in Configuration — a person clicking it is not the
-    traffic pattern LinkedIn objects to. The external cron does not set it, so
-    however often it fires, at most one full pull per MIN_SYNC_INTERVAL runs.
-    """
-    _gate = SessionLocal()
-    try:
-        if not _sync_allowed(_gate, user_id, force):
-            return
-    finally:
-        _gate.close()
-
+async def sync_and_update_statuses(li_at: str, jsessionid: str, user_id: int = None) -> None:
+    """Manual sync: import new connections to user's 'Mon Réseau' + update statuses across user's CRMs."""
     if user_id and not acquire_lock(user_id, "syncing"):
         print(f"[SYNC] Manual sync skipped for user {user_id}: lock held", flush=True)
         return
     print(f"[SYNC] Manual sync_and_update_statuses started for user {user_id}", flush=True)
     db = SessionLocal()
     try:
-        _record_sync(user_id)
         client = get_linkedin_client(li_at, jsessionid)
 
         # Step 1: Fetch all connections using dedicated connections endpoint
@@ -379,11 +226,6 @@ async def sync_and_update_statuses(
 
         # Step 4: Update connection_status across user's CRMs only
         updated = 0
-        # Initialised here on purpose: it used to be assigned only inside the
-        # `if all_connection_urns:` branch below, so a sync returning no
-        # connections — which is exactly what a dead session produces — crashed
-        # on the summary line with UnboundLocalError, aborting the whole job.
-        accepted = 0
         if all_connection_urns:
             user_crm_ids = [c.id for c in db.query(CRM.id).filter(CRM.user_id == user_id).all()] if user_id else []
             contact_filter = [

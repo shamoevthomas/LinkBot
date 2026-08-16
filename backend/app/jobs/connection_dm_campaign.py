@@ -35,10 +35,7 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_STATUSES = {"envoye"} | {f"relance_{i}" for i in range(1, 8)}
 FINAL_STATUSES = {"reussi", "perdu"}
-# LinkedIn invitations stay pending for months; 5 days was far too aggressive
-# and buried real prospects under "perdu" before they ever got a chance to
-# accept. Per-user override via the connection_wait_days setting.
-DEFAULT_CONNECTION_WAIT_DAYS = 14
+CONNECTION_WAIT_DAYS = 5
 
 
 async def run_connection_dm_campaign(campaign_id: int) -> None:
@@ -67,15 +64,6 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             campaign.user_id, db,
         )
 
-        try:
-            connection_wait_days = int(
-                get_setting(db, campaign.user_id, "connection_wait_days",
-                            str(DEFAULT_CONNECTION_WAIT_DAYS))
-                or DEFAULT_CONNECTION_WAIT_DAYS
-            )
-        except (TypeError, ValueError):
-            connection_wait_days = DEFAULT_CONNECTION_WAIT_DAYS
-
         dm_action_types = ["dm_send"]
         global_connections_today = get_user_actions_today(["connection_request"], campaign.user_id, db)
         global_dms_today = get_user_actions_today(dm_action_types, campaign.user_id, db)
@@ -83,11 +71,8 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         # --- get LinkedIn client (from campaign owner) ---
         user = db.query(User).filter(User.id == campaign.user_id).first()
         if not user or not user.li_at_cookie or not user.cookies_valid:
-            campaign.status = "paused"
-            campaign.error_message = (
-                "Cookies LinkedIn invalides — recolle-les dans Configuration, "
-                "puis reprends la campagne."
-            )
+            campaign.status = "failed"
+            campaign.error_message = "No valid LinkedIn cookies"
             db.commit()
             cancel_campaign_job(campaign_id)
             return
@@ -102,23 +87,6 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             .all()
         )
         max_followup_seq = max((f.sequence for f in followups), default=0)
-
-        # The reconfigure screen writes the main DM to CampaignMessage
-        # sequence 0, while this job historically read Campaign.message_template.
-        # When they disagree the row is the one the user actually edited last,
-        # so prefer it — a campaign whose message was updated (a link added, say)
-        # kept sending the stale copy otherwise.
-        _main_row = (
-            db.query(CampaignMessage)
-            .filter(CampaignMessage.campaign_id == campaign_id, CampaignMessage.sequence == 0)
-            .first()
-        )
-        main_template = (
-            (_main_row.message_template or "").strip()
-            if _main_row and (_main_row.message_template or "").strip()
-            and _main_row.message_template != "__FULL_AI__"
-            else (campaign.message_template or "")
-        )
 
         # =====================================================================
         # PHASE 1: Check pending connections (en_attente) for acceptance
@@ -142,18 +110,11 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             cc.last_checked_at = datetime.utcnow()
 
             # `sync_connections` is the source of truth for acceptance: it
-            # pulls the user's real LinkedIn connections list, flips
-            # contact.connection_status to "connected" AND stamps
-            # cc.connection_accepted_at. get_profile() does not surface
-            # connection distance, so polling it here was a no-op that left
-            # every invitation stuck in en_attente.
-            # Either signal counts — relying on connection_status alone meant a
-            # sync that stamped the timestamp but missed the status left the
-            # invitation to rot until it expired.
-            accepted = (
-                contact.connection_status == "connected"
-                or cc.connection_accepted_at is not None
-            )
+            # pulls the user's real LinkedIn connections list and flips
+            # contact.connection_status to "connected". get_profile() does
+            # not surface connection distance, so polling it here was a
+            # no-op that left every invitation stuck in en_attente.
+            accepted = (contact.connection_status == "connected")
 
             if accepted:
                 contact.connection_status = "connected"
@@ -170,7 +131,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     continue  # Not yet time to send DM
 
                 if get_user_actions_today(dm_action_types, campaign.user_id, db) < dm_limit:
-                    template = main_template
+                    template = campaign.message_template or ""
                     try:
                         message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                         if message_body and message_body.strip():
@@ -263,14 +224,11 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                     cc.last_sequence_sent = -1  # DM not yet sent
                     db.commit()
 
-            elif cc.main_sent_at and datetime.utcnow() - cc.main_sent_at > timedelta(days=connection_wait_days):
-                # Invitation still pending after the wait window → perdu
+            elif cc.main_sent_at and datetime.utcnow() - cc.main_sent_at > timedelta(days=CONNECTION_WAIT_DAYS):
+                # Connection not accepted after 5 days → perdu
                 cc.status = "perdu"
                 _log_action(db, campaign_id, contact.id, "connection_expired", "success")
-                logger.info(
-                    "Campaign %d: contact %d connection expired (%d days)",
-                    campaign_id, contact.id, connection_wait_days,
-                )
+                logger.info("Campaign %d: contact %d connection expired (5 days)", campaign_id, contact.id)
 
         db.commit()
 
@@ -299,7 +257,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 if not contact:
                     continue
 
-                template = main_template
+                template = campaign.message_template or ""
                 try:
                     message_body = await _render_message(campaign, template, contact, client, api_key=user.gemini_api_key or "")
                 except Exception as exc:
@@ -397,14 +355,6 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
         # =====================================================================
         # PHASE 6: Send connection request to next unprocessed contact
         # =====================================================================
-        # A dead LinkedIn session makes resolve_contact_urn fail for *every*
-        # contact, not just unreachable ones. Marking each failure "perdu" then
-        # burns through the whole CRM — 444 prospects were lost that way in a
-        # single cookie outage. Bound the damage and check the session before
-        # blaming the prospect.
-        urn_failures = 0
-        MAX_URN_FAILURES_PER_TICK = 3
-
         while get_user_actions_today(["connection_request"], campaign.user_id, db) < conn_limit:
             total_contacted = db.query(CampaignContact).filter(
                 CampaignContact.campaign_id == campaign_id
@@ -442,59 +392,10 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
             # Resolve URN
             resolved_urn = await resolve_contact_urn(client, contact)
             if not resolved_urn:
-                # Before writing this prospect off, make sure it is the profile
-                # that is unreachable and not our own session. validate_cookies
-                # is tri-state: False = definitely dead, None = transient.
-                from app.linkedin_service import validate_cookies as _validate, mark_cookies_invalid as _mark_invalid
-                session_state = await _validate(user.li_at_cookie, user.jsessionid_cookie)
-                if session_state is False:
-                    _mark_invalid(campaign.user_id)
-                    campaign.status = "paused"
-                    campaign.error_message = (
-                        "Cookies LinkedIn invalides — recolle-les dans Configuration, "
-                        "puis reprends la campagne."
-                    )
-                    db.commit()
-                    cancel_campaign_job(campaign_id)
-                    logger.warning(
-                        "Campaign %d: URN resolution failed and the session is dead — "
-                        "pausing instead of marking contacts lost", campaign_id,
-                    )
-                    return
-                if session_state is None:
-                    # Flaky LinkedIn, not a bad profile. Leave the contact alone.
-                    logger.info(
-                        "Campaign %d: URN resolution failed during a transient LinkedIn "
-                        "glitch — leaving contact %d untouched", campaign_id, contact.id,
-                    )
-                    break
-
-                urn_failures += 1
-                if urn_failures > MAX_URN_FAILURES_PER_TICK:
-                    logger.warning(
-                        "Campaign %d: %d URN resolution failures this tick — stopping "
-                        "early rather than consuming the CRM", campaign_id, urn_failures,
-                    )
-                    break
-
                 _log_action(db, campaign_id, contact.id, "connection_request", "failed", "Could not resolve LinkedIn URN")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_failed = (campaign.total_failed or 0) + 1
-                # Mark the contact as handled. Without a CampaignContact row it
-                # stays outside `already_ids`, so the next iteration selects the
-                # very same contact — and since get_user_actions_today only
-                # counts *successful* actions, the while condition never moves
-                # either. The campaign spun on unresolvable profiles forever,
-                # burning LinkedIn calls without ever sending an invitation.
-                try:
-                    db.add(CampaignContact(
-                        campaign_id=campaign_id, contact_id=contact.id,
-                        status="perdu", last_sequence_sent=-1,
-                        main_sent_at=datetime.utcnow(),
-                    ))
-                    db.commit()
-                except IntegrityError:
-                    db.rollback()
+                db.commit()
                 continue
 
             # Blacklist check
@@ -502,17 +403,7 @@ async def run_connection_dm_campaign(campaign_id: int) -> None:
                 _log_action(db, campaign_id, contact.id, "connection_request", "skipped", "Blacklisted")
                 campaign.total_processed = (campaign.total_processed or 0) + 1
                 campaign.total_skipped = (campaign.total_skipped or 0) + 1
-                # Same trap as the URN failure above: no CampaignContact row means
-                # this contact gets re-selected on the next iteration forever.
-                try:
-                    db.add(CampaignContact(
-                        campaign_id=campaign_id, contact_id=contact.id,
-                        status="perdu", last_sequence_sent=-1,
-                        main_sent_at=datetime.utcnow(),
-                    ))
-                    db.commit()
-                except IntegrityError:
-                    db.rollback()
+                db.commit()
                 continue
 
             # Skip if already connected

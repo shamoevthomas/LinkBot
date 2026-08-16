@@ -21,9 +21,7 @@ _shutdown = False
 
 # Sync connections tracking
 _last_sync_connections: Optional[datetime] = None
-SYNC_CONNECTIONS_INTERVAL = 6 * 3600  # 6 hours (full pull, ~18 requests)
-_last_light_sync: Optional[datetime] = None
-LIGHT_SYNC_INTERVAL = 15 * 60  # 15 minutes (1 request — acceptance detection)
+SYNC_CONNECTIONS_INTERVAL = 6 * 3600  # 6 hours
 
 # Reply checker tracking (runs every 5 minutes)
 _last_reply_check: Optional[datetime] = None
@@ -75,35 +73,15 @@ async def _run_campaign_tick(campaign_id: int, campaign_type: str):
 
 
 async def _run_sync_connections():
-    """Full connection sync: paginate everything into 'Mon Réseau'."""
+    """Run the periodic connection sync."""
     global _last_sync_connections
-    # Stamp before running, like the other side jobs: on failure a timestamp
-    # left at None makes the loop re-fire on every pass, hammering LinkedIn
-    # with a full connections pull each time.
-    _last_sync_connections = datetime.utcnow()
     try:
         from app.jobs.sync_connections import sync_new_connections
         await sync_new_connections()
+        _last_sync_connections = datetime.utcnow()
         print("[SCHEDULER] sync_connections completed", flush=True)
     except Exception:
         logger.exception("Error in sync_connections")
-
-
-async def _run_light_sync_connections():
-    """Cheap acceptance check: one page of most-recently-added connections.
-
-    dm_delay_hours counts from when an acceptance is *noticed*, so detection lag
-    adds to the delay instead of overlapping it — on the 6h full-sync cycle a 2h
-    delay meant an 8h wait before the first DM. This costs a single request, so
-    it can run often and keep that lag down to minutes.
-    """
-    global _last_light_sync
-    _last_light_sync = datetime.utcnow()
-    try:
-        from app.jobs.sync_connections import sync_new_connections
-        await sync_new_connections(light=True)
-    except Exception:
-        logger.exception("Error in light sync_connections")
 
 
 async def _run_reply_checks():
@@ -177,21 +155,6 @@ async def _main_loop():
     while not _shutdown:
         try:
             now = datetime.utcnow()
-
-            # Import new connections and detect accepted invitations (every 6h).
-            # This was defined, documented and given an interval — but never
-            # wired into the loop, so it never ran on its own. connection_dm
-            # phase 1 reads the acceptance signal this job writes, so without
-            # it invitations were accepted on LinkedIn while Linky kept showing
-            # "en attente" and no follow-up DM ever fired.
-            if (_last_sync_connections is None or
-                    (now - _last_sync_connections).total_seconds() >= SYNC_CONNECTIONS_INTERVAL):
-                _spawn_side("sync_connections", _run_sync_connections)
-
-            # Cheap acceptance check between full pulls.
-            if (_last_light_sync is None or
-                    (now - _last_light_sync).total_seconds() >= LIGHT_SYNC_INTERVAL):
-                _spawn_side("light_sync", _run_light_sync_connections)
 
             # Check replies (every 5 minutes) — non-blocking
             if (_last_reply_check is None or

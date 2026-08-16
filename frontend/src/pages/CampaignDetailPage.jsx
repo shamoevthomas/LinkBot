@@ -109,13 +109,8 @@ export default function CampaignDetailPage() {
       toast.loading('Exécution manuelle...', { id: 'run-now' });
       const result = await runCampaignNow(id);
       toast.dismiss('run-now');
-      if (result.ok) {
-        // Report what the tick actually did. It used to always claim success
-        // and echo the running total, so a tick that did nothing at all looked
-        // identical to one that sent a message.
-        if (result.processed_delta > 0) toast.success(result.note);
-        else toast(result.note || 'Rien à faire pour l’instant', { icon: 'ℹ️', duration: 6000 });
-      } else toast.error(`Erreur: ${result.error}`);
+      if (result.ok) toast.success(`Tick exécuté — traités: ${result.total_processed}`);
+      else toast.error(`Erreur: ${result.error}`);
       load();
     } catch (err) {
       toast.dismiss('run-now');
@@ -178,14 +173,8 @@ export default function CampaignDetailPage() {
   const showReplyRate = ['dm', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
   const showConnectionRate = ['connection', 'connection_dm', 'search_connection_dm'].includes(campaign.type);
 
-  // An accepted invitation keeps the "en_attente" status until the DM fires
-  // dm_delay_hours later, so it must be counted apart — otherwise an accepted
-  // connection is indistinguishable from one nobody answered.
-  const isAccepted = (c) => c.status === 'en_attente' && !!c.connection_accepted_at;
-
   const counts = {
-    accepte: contacts.filter(isAccepted).length,
-    en_attente: contacts.filter((c) => (c.status === 'en_attente' && !isAccepted(c)) || c.status === 'pending').length,
+    en_attente: contacts.filter((c) => c.status === 'en_attente' || c.status === 'pending').length,
     envoye: contacts.filter((c) => c.status === 'envoye' || c.status === 'demande_envoyee').length,
     relance: contacts.filter((c) => c.status?.startsWith('relance_')).length,
     reussi: contacts.filter((c) => c.status === 'reussi').length,
@@ -216,10 +205,7 @@ export default function CampaignDetailPage() {
     ];
   } else if (contacts.length > 0) {
     STATS = [
-      ...(isConnectionDM ? [
-        { label: 'En attente', value: counts.en_attente, icon: Clock, tone: 'amber' },
-        { label: 'Acceptés', value: counts.accepte, icon: UserCheck, tone: 'blue' },
-      ] : []),
+      ...(isConnectionDM ? [{ label: 'En attente', value: counts.en_attente, icon: Clock, tone: 'amber' }] : []),
       { label: 'Envoyés', value: counts.envoye, icon: Send, tone: 'accent' },
       { label: 'En relance', value: counts.relance, icon: Clock, tone: 'amber' },
       { label: 'Répondu', value: counts.reussi, icon: UserCheck, tone: 'emerald' },
@@ -358,31 +344,8 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
-        {campaign.dm_delay_hours > 0 && campaign.status === 'running' && (
-          <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg w-fit"
-            style={{ background: 'hsl(210 100% 96%)', border: '1px solid hsl(210 85% 85%)', color: 'hsl(215 70% 40%)' }}>
-            <Timer size={14} />
-            <span className="text-[12.5px]">
-              Le DM part <strong>{campaign.dm_delay_hours}h après l'acceptation</strong> de l'invitation.
-              Une invitation acceptée reste donc « En attente » pendant ce délai — c'est normal.
-            </span>
-          </div>
-        )}
-
-        {campaign.crm_exhausted && (
-          <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg"
-            style={{ background: 'hsl(38 100% 94%)', border: '1px solid hsl(38 85% 78%)', color: 'hsl(28 80% 38%)' }}>
-            <AlertCircle size={14} />
-            <span className="text-[12.5px]">
-              Tous les contacts du CRM ont été traités ({campaign.total_processed ?? 0}/{campaign.total_target || '—'}).
-              Ajoute des contacts ou lance une nouvelle recherche pour que la campagne reprenne.
-              {' '}Les relances en cours continuent automatiquement.
-            </span>
-          </div>
-        )}
-
         <div className="flex items-center gap-2 mt-4 flex-wrap">
-          {campaign.status === 'running' && !isSearch && !campaign.paused_reason && !campaign.crm_exhausted && campaign.next_action_at && (
+          {campaign.status === 'running' && !isSearch && !campaign.paused_reason && campaign.next_action_at && (
             <>
               <div className="chip blue" style={{ padding: '7px 12px' }}>
                 <Timer size={12} />
@@ -589,7 +552,7 @@ export default function CampaignDetailPage() {
                   </>
                 ) : isConnection ? (
                   <>
-                    <div><StatusChip status={isAccepted(cc) ? 'envoye' : cc.status} label={isAccepted(cc) ? 'Accepté · DM à venir' : undefined} /></div>
+                    <div><StatusChip status={cc.status} /></div>
                     <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.main_sent_at)}</div>
                     <div>
                       {cc.contact_linkedin_url ? (
@@ -602,7 +565,7 @@ export default function CampaignDetailPage() {
                   </>
                 ) : (
                   <>
-                    <div><StatusChip status={isAccepted(cc) ? 'envoye' : cc.status} label={isAccepted(cc) ? 'Accepté · DM à venir' : undefined} /></div>
+                    <div><StatusChip status={cc.status} /></div>
                     <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.main_sent_at)}</div>
                     <div className="mono text-[11.5px]" style={{ color: 'hsl(var(--muted))' }}>{fmtDate(cc.last_sent_at)}</div>
                     <div className="mono text-[11.5px]"
